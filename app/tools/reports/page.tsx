@@ -203,7 +203,7 @@ export default function ReportsPage() {
   const altarCallText = formatAltarCalls(currentData.altar_calls)
 
   const generateReport = () => {
-    return `**${title} (${date})**
+    return `*${title} (${date})*
 1. Pastor and Speaker:
 2. Guest:
 3. Volunteer: ${effectiveVolunteerCount}

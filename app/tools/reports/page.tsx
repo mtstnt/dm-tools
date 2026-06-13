@@ -203,11 +203,10 @@ export default function ReportsPage() {
   const altarCallText = formatAltarCalls(currentData.altar_calls)
 
   const generateReport = () => {
-    return `${title} (${date})
-
-1. Pastor and Speaker :
-2. Guest :
-3. Volunteer : ${effectiveVolunteerCount}
+    return `**${title} (${date})**
+1. Pastor and Speaker:
+2. Guest:
+3. Volunteer: ${effectiveVolunteerCount}
 4. Jemaat: ${currentData.congregation_count} ; TC: ${currentData.congregation_tc_count} (Altarcall ${altarCallText})
 5. Baptisan:
 6. WHL:   (Bersedia Join CG: )

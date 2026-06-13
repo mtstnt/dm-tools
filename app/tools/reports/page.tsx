@@ -1,0 +1,362 @@
+"use client"
+
+import { useState } from "react"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { Copy, Check, CalendarIcon, ChevronDown } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+
+interface VolunteerData {
+  DM: string
+  Crowd: string
+  Usher: string
+  PAW: string
+  Prayer: string
+  MM: string
+  SM: string
+  MUA: string
+  "First Aid": string
+  Sound: string
+  Photography: string
+  Lighting: string
+  Greeter: string
+  Sosmed: string
+  Baptisan: string
+  Companion: string
+  Stylist: string
+  Hospitality: string
+  GA: string
+  WHL: string
+}
+
+interface ReportData {
+  volunteer_count: string
+  congregation_count: string
+  congregation_tc_count: string
+  altar_call_text: string
+  altar_call_count: string
+  volunteers: VolunteerData
+}
+
+const volunteerMinistries: (keyof VolunteerData)[] = [
+  "DM", "Crowd", "Usher", "PAW", "Prayer", "MM", "SM", "MUA",
+  "First Aid", "Sound", "Photography", "Lighting", "Greeter",
+  "Sosmed", "Baptisan", "Companion", "Stylist", "Hospitality",
+  "GA", "WHL",
+]
+
+const defaultVolunteers: VolunteerData = {
+  DM: "",
+  Crowd: "",
+  Usher: "",
+  PAW: "",
+  Prayer: "",
+  MM: "",
+  SM: "",
+  MUA: "",
+  "First Aid": "",
+  Sound: "",
+  Photography: "",
+  Lighting: "",
+  Greeter: "",
+  Sosmed: "",
+  Baptisan: "",
+  Companion: "",
+  Stylist: "",
+  Hospitality: "",
+  GA: "",
+  WHL: "",
+}
+
+const defaultData: ReportData = {
+  volunteer_count: "",
+  congregation_count: "",
+  congregation_tc_count: "",
+  altar_call_text: "",
+  altar_call_count: "",
+  volunteers: { ...defaultVolunteers },
+}
+
+const serviceLabels: Record<string, string> = {
+  teen: "AOG Teen South",
+  youth: "AOG Youth South",
+  event: "Event",
+}
+
+function formatDateDisplay(date: Date) {
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  ]
+  return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`
+}
+
+function calculateVolunteerSum(volunteers: VolunteerData): number {
+  return volunteerMinistries.reduce((sum, ministry) => {
+    const value = parseInt(volunteers[ministry] || "0", 10)
+    return sum + (isNaN(value) ? 0 : value)
+  }, 0)
+}
+
+export default function ReportsPage() {
+  const [serviceType, setServiceType] = useState("teen")
+  const [eventName, setEventName] = useState("")
+  const [reportDate, setReportDate] = useState<Date>(new Date())
+  const [dataMap, setDataMap] = useState<Record<string, ReportData>>({
+    teen: { ...defaultData },
+    youth: { ...defaultData },
+    event: { ...defaultData },
+  })
+  const [copied, setCopied] = useState(false)
+  const [showVolunteerSum, setShowVolunteerSum] = useState(false)
+  const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(false)
+
+  const currentData = dataMap[serviceType]
+
+  const handleChange = (field: keyof Omit<ReportData, "volunteers">, value: string) => {
+    setDataMap((prev) => ({
+      ...prev,
+      [serviceType]: { ...prev[serviceType], [field]: value },
+    }))
+  }
+
+  const handleVolunteerChange = (ministry: keyof VolunteerData, value: string) => {
+    setDataMap((prev) => ({
+      ...prev,
+      [serviceType]: {
+        ...prev[serviceType],
+        volunteers: {
+          ...prev[serviceType].volunteers,
+          [ministry]: value,
+        },
+      },
+    }))
+  }
+
+  const volunteerSum = calculateVolunteerSum(currentData.volunteers)
+  const effectiveVolunteerCount = useVolunteerMinistries
+    ? String(volunteerSum)
+    : currentData.volunteer_count
+
+  const title = serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType]
+  const date = formatDateDisplay(reportDate)
+
+  const generateReport = () => {
+    return `${title} (${date})
+
+1. Pastor and Speaker :
+2. Guest :
+3. Volunteer : ${effectiveVolunteerCount}
+4. Jemaat: ${currentData.congregation_count} ; TC: ${currentData.congregation_tc_count} (Altarcall ${currentData.altar_call_text}: ${currentData.altar_call_count})
+5. Baptisan:
+6. WHL:   (Bersedia Join CG: )
+7. Prayer Station:
+8. One Minute Prayer: `
+  }
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(generateReport())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <h1 className="text-2xl font-bold">DM Service Report</h1>
+        <Select value={serviceLabels[serviceType]} onValueChange={(value) => value && setServiceType(value)}>
+          <SelectTrigger className="min-w-[240px]">
+            <SelectValue placeholder={serviceLabels[serviceType]} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="teen">AOG Teen South</SelectItem>
+            <SelectItem value="youth">AOG Youth South</SelectItem>
+            <SelectItem value="event">Event</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="flex flex-col gap-4">
+          <h2 className="text-lg font-semibold">Input Fields</h2>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Date</label>
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 size-4" />
+                    {formatDateDisplay(reportDate)}
+                  </Button>
+                }
+              />
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={reportDate}
+                  onSelect={(date) => date && setReportDate(date)}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {serviceType === "event" && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Event Name</label>
+              <Input
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                placeholder="Enter event name"
+              />
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">3. Volunteer</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {useVolunteerMinistries ? "Ministries" : "Total"}
+                  </span>
+                  <Switch
+                    checked={useVolunteerMinistries}
+                    onCheckedChange={setUseVolunteerMinistries}
+                  />
+                </div>
+              </div>
+
+              {useVolunteerMinistries ? (
+                <Collapsible>
+                  <CollapsibleTrigger
+                    render={
+                      <Button variant="outline" className="w-full justify-between">
+                        <span>Volunteer Ministries</span>
+                        <div className="flex items-center gap-2">
+                          {volunteerSum > 0 && (
+                            <span className="text-xs text-muted-foreground">Sum: {volunteerSum}</span>
+                          )}
+                          <ChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                        </div>
+                      </Button>
+                    }
+                  />
+                  <CollapsibleContent className="space-y-2 pt-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      {volunteerMinistries.map((ministry) => (
+                        <div key={ministry} className="space-y-1">
+                          <label className="text-xs text-muted-foreground">{ministry}</label>
+                          <Input
+                            value={currentData.volunteers[ministry]}
+                            onChange={(e) => handleVolunteerChange(ministry, e.target.value)}
+                            placeholder="0"
+                            className="h-8"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowVolunteerSum(!showVolunteerSum)}
+                    >
+                      {showVolunteerSum ? "Hide" : "Show"} Volunteer Sum
+                    </Button>
+                    {showVolunteerSum && (
+                      <div className="text-center text-sm font-medium text-muted-foreground">
+                        Total Volunteers: {volunteerSum}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : (
+                <Input
+                  value={currentData.volunteer_count}
+                  onChange={(e) => handleChange("volunteer_count", e.target.value)}
+                  placeholder="e.g. 18"
+                />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">4. Jemaat</label>
+              <Input
+                value={currentData.congregation_count}
+                onChange={(e) => handleChange("congregation_count", e.target.value)}
+                placeholder="e.g. 11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">4. TC</label>
+              <Input
+                value={currentData.congregation_tc_count}
+                onChange={(e) => handleChange("congregation_tc_count", e.target.value)}
+                placeholder="e.g. 11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">4. Altarcall Text</label>
+              <Input
+                value={currentData.altar_call_text}
+                onChange={(e) => handleChange("altar_call_text", e.target.value)}
+                placeholder="e.g. Menerima Tuhan"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">4. Altarcall Count</label>
+              <Input
+                value={currentData.altar_call_count}
+                onChange={(e) => handleChange("altar_call_count", e.target.value)}
+                placeholder="e.g. 1"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Preview</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopy}
+              className="gap-2"
+            >
+              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {copied ? "Copied!" : "Copy"}
+            </Button>
+          </div>
+          <pre className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap font-mono">
+            {generateReport()}
+          </pre>
+        </div>
+      </div>
+    </div>
+  )
+}

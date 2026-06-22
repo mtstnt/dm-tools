@@ -1,7 +1,8 @@
+"use client"
+
 import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
-import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCUS0o4FoOIJR0yNMTeVwKiQd5X8DXZSh8",
@@ -18,7 +19,6 @@ if (!getApps().length) {
 }
 
 const app = getApp()
-const analytics = getAnalytics(app);
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 

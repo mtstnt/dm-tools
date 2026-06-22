@@ -11,8 +11,8 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { Home, LogOut, FileText, Settings } from "lucide-react"
-import { logout } from "@/app/actions"
+import { Home, FileText } from "lucide-react"
+import { LogoutButton } from "./logout-button"
 
 export function AppSidebar() {
   return (
@@ -47,16 +47,11 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <form action={logout}>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton type="submit">
-                <LogOut />
-                <span>Logout</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </form>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <LogoutButton />
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

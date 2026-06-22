@@ -269,7 +269,7 @@ export default function ReportsPage() {
 
   return (
     <>
-    <div className="flex flex-col gap-8 max-w-5xl animate-stagger pb-24 lg:pb-0">
+    <div className="flex flex-col gap-8 animate-stagger pb-24 lg:pb-0">
       <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
         <div>
           <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">

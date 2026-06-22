@@ -10,7 +10,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { FileText, LayoutGrid } from "lucide-react"
+import { FileText, History, LayoutGrid } from "lucide-react"
 
 export function AppSidebar() {
   return (
@@ -44,6 +44,15 @@ export function AppSidebar() {
                 >
                   <FileText className="size-4 text-muted-foreground" />
                   <span className="text-sm">Reports</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<a href="/tools/reports-history" />}
+                  className="gap-3 rounded-md transition-colors hover:bg-accent/60"
+                >
+                  <History className="size-4 text-muted-foreground" />
+                  <span className="text-sm">Reports History</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

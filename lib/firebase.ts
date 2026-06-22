@@ -1,14 +1,16 @@
 import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
+import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyCUS0o4FoOIJR0yNMTeVwKiQd5X8DXZSh8",
+  authDomain: "dataministry-c1e34.firebaseapp.com",
+  projectId: "dataministry-c1e34",
+  storageBucket: "dataministry-c1e34.firebasestorage.app",
+  messagingSenderId: "6966551131",
+  appId: "1:6966551131:web:92922d586bf6e08433557e",
+  measurementId: "G-HP7XW8L7E2"
 }
 
 if (!getApps().length) {
@@ -16,7 +18,7 @@ if (!getApps().length) {
 }
 
 const app = getApp()
-
+const analytics = getAnalytics(app);
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 

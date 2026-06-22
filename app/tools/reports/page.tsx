@@ -268,6 +268,7 @@ export default function ReportsPage() {
   };
 
   return (
+    <>
     <div className="flex flex-col gap-8 max-w-5xl animate-stagger pb-24 lg:pb-0">
       <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
         <div>
@@ -464,10 +465,10 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
-        </div>
+      </div>
 
-        {/* Mobile spacer so TC/Altar Calls aren't hidden behind expanded preview */}
-        <div className="h-[20vh] lg:hidden" aria-hidden="true" />
+      {/* Mobile spacer so TC/Altar Calls aren't hidden behind expanded preview */}
+      <div className="h-[20vh] lg:hidden" aria-hidden="true" />
 
         <div className="hidden lg:flex flex-col gap-4 lg:col-span-2">
           <div className="sticky top-6 flex flex-col gap-4">
@@ -495,50 +496,51 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Mobile fixed preview bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
-        <div
-          className={`bg-card border-t border-border/70 shadow-lg transition-all duration-300 ${mobilePreviewOpen ? "max-h-[70vh]" : "max-h-none"}`}
-        >
-          {mobilePreviewOpen && (
-            <div className="overflow-y-auto max-h-[calc(70vh-3.5rem)] p-4 border-b border-border/40">
-              <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
-                {generateReport()}
-              </pre>
-            </div>
-          )}
-          <div className="flex items-center gap-3 px-4 py-3">
-            <button
-              onClick={() => setMobilePreviewOpen(!mobilePreviewOpen)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
-            >
-              <ChevronUp
-                className={`size-4 transition-transform duration-300 ${mobilePreviewOpen ? "" : "rotate-180"}`}
-              />
-              <span>Preview</span>
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground truncate font-mono">
-                {title} {date}
-              </p>
-            </div>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleCopy}
-              className="gap-1.5 text-xs h-8 shrink-0"
-            >
-              {copied ? (
-                <Check className="size-3.5" />
-              ) : (
-                <Copy className="size-3.5" />
-              )}
-              {copied ? "Copied!" : "Copy"}
-            </Button>
+    {/* Mobile fixed preview bar */}
+    <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
+      <div
+        className={`bg-card border-t border-border/70 shadow-lg transition-all duration-300 ${mobilePreviewOpen ? "max-h-[70vh]" : "max-h-none"}`}
+      >
+        {mobilePreviewOpen && (
+          <div className="overflow-y-auto max-h-[calc(70vh-3.5rem)] p-4 border-b border-border/40">
+            <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
+              {generateReport()}
+            </pre>
           </div>
+        )}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={() => setMobilePreviewOpen(!mobilePreviewOpen)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
+          >
+            <ChevronUp
+              className={`size-4 transition-transform duration-300 ${mobilePreviewOpen ? "" : "rotate-180"}`}
+            />
+            <span>Preview</span>
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground truncate font-mono">
+              {title} {date}
+            </p>
+          </div>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleCopy}
+            className="gap-1.5 text-xs h-8 shrink-0"
+          >
+            {copied ? (
+              <Check className="size-3.5" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+            {copied ? "Copied!" : "Copy"}
+          </Button>
         </div>
       </div>
     </div>
+    </>
   );
 }

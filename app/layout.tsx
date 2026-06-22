@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { Instrument_Serif, DM_Sans, IBM_Plex_Mono } from "next/font/google"
+import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
 const instrumentSerif = Instrument_Serif({
@@ -36,8 +37,11 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${instrumentSerif.variable} ${dmSans.variable} ${ibmPlexMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   )
 }

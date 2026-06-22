@@ -270,28 +270,13 @@ export default function ReportsPage() {
   return (
     <>
     <div className="flex flex-col gap-8 animate-stagger pb-24 lg:pb-0">
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-        <div>
-          <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">
-            Service Report
-          </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Fill in the details below to generate your report.
-          </p>
-        </div>
-        <Select
-          value={serviceLabels[serviceType]}
-          onValueChange={(value) => value && setServiceType(value)}
-        >
-          <SelectTrigger className="min-w-[220px] sm:ml-auto">
-            <SelectValue placeholder={serviceLabels[serviceType]} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="teen">AOG Teen South</SelectItem>
-            <SelectItem value="youth">AOG Youth South</SelectItem>
-            <SelectItem value="event">Event</SelectItem>
-          </SelectContent>
-        </Select>
+      <div>
+        <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">
+          Service Report
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Fill in the details below to generate your report.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
@@ -301,6 +286,28 @@ export default function ReportsPage() {
           </h2>
 
           <div className="rounded-xl border border-border/60 bg-card p-6 space-y-5">
+            <div className="space-y-2">
+              <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                Service Type
+              </label>
+              <Select
+                value={serviceLabels[serviceType]}
+                onValueChange={(value) => {
+                  const key = Object.entries(serviceLabels).find(([, v]) => v === value)?.[0];
+                  if (key) setServiceType(key);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AOG Teen South">AOG Teen South</SelectItem>
+                  <SelectItem value="AOG Youth South">AOG Youth South</SelectItem>
+                  <SelectItem value="Event">Event</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
                 Date

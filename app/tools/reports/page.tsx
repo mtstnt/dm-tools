@@ -42,7 +42,6 @@ interface VolunteerData {
   SM: string;
   MUA: string;
   "First Aid": string;
-  Sound: string;
   Photography: string;
   Lighting: string;
   Greeter: string;
@@ -52,7 +51,11 @@ interface VolunteerData {
   Stylist: string;
   Hospitality: string;
   GA: string;
+  Drama: string;
+  Konseptor: string;
   WHL: string;
+  Sound: string;
+  Choir: string;
 }
 
 interface ReportData {
@@ -73,7 +76,6 @@ const volunteerMinistries: (keyof VolunteerData)[] = [
   "SM",
   "MUA",
   "First Aid",
-  "Sound",
   "Photography",
   "Lighting",
   "Greeter",
@@ -83,7 +85,11 @@ const volunteerMinistries: (keyof VolunteerData)[] = [
   "Stylist",
   "Hospitality",
   "GA",
+  "Drama",
+  "Konseptor",
   "WHL",
+  "Sound",
+  "Choir",
 ];
 
 const defaultVolunteers: VolunteerData = {
@@ -107,6 +113,9 @@ const defaultVolunteers: VolunteerData = {
   Hospitality: "",
   GA: "",
   WHL: "",
+  Drama: "",
+  Konseptor: "",
+  Choir: "",
 };
 
 const defaultData: ReportData = {

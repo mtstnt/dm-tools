@@ -501,25 +501,26 @@ export default function ReportsPage() {
     {/* Mobile fixed preview bar */}
     <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
       <div
-        className={`bg-card border-t border-border/70 shadow-lg transition-all duration-300 ${mobilePreviewOpen ? "max-h-[70vh]" : "max-h-none"}`}
+        className={`bg-card border-t border-border/70 shadow-lg transition-all duration-300 cursor-pointer ${mobilePreviewOpen ? "max-h-[70vh]" : "max-h-none"}`}
+        onClick={() => setMobilePreviewOpen(!mobilePreviewOpen)}
       >
         {mobilePreviewOpen && (
-          <div className="overflow-y-auto max-h-[calc(70vh-3.5rem)] p-4 border-b border-border/40">
+          <div
+            className="overflow-y-auto max-h-[calc(70vh-3.5rem)] p-4 border-b border-border/40"
+            onClick={(e) => e.stopPropagation()}
+          >
             <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
               {generateReport()}
             </pre>
           </div>
         )}
         <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => setMobilePreviewOpen(!mobilePreviewOpen)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
-          >
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
             <ChevronUp
               className={`size-4 transition-transform duration-300 ${mobilePreviewOpen ? "" : "rotate-180"}`}
             />
             <span>Preview</span>
-          </button>
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground truncate font-mono">
               {title} {date}
@@ -528,7 +529,10 @@ export default function ReportsPage() {
           <Button
             variant="default"
             size="sm"
-            onClick={handleCopy}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleCopy()
+            }}
             className="gap-1.5 text-xs h-8 shrink-0"
           >
             {copied ? (

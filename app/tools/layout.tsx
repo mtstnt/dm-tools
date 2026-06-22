@@ -11,11 +11,13 @@ export default function ToolsLayout({
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
-        <main className="flex-1 flex flex-col">
-          <header className="flex h-16 items-center gap-2 border-b px-4">
-            <SidebarTrigger />
+        <main className="flex-1 flex flex-col min-w-0">
+          <header className="flex h-14 items-center border-b border-border/60 px-6">
+            <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           </header>
-          <div className="flex-1 p-4">{children}</div>
+          <div className="flex-1 p-6 md:p-8 lg:p-10 animate-page-enter">
+            {children}
+          </div>
         </main>
       </SidebarProvider>
     </TooltipProvider>

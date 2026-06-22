@@ -1,72 +1,90 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
+} from "@/components/ui/popover";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { Copy, Check, CalendarIcon, ChevronDown, Plus, Trash2 } from "lucide-react"
-import { Switch } from "@/components/ui/switch"
+  Copy,
+  Check,
+  CalendarIcon,
+  ChevronUp,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface AltarCallEntry {
-  text: string
-  count: string
+  text: string;
+  count: string;
 }
 
 interface VolunteerData {
-  DM: string
-  Crowd: string
-  Usher: string
-  PAW: string
-  Prayer: string
-  MM: string
-  SM: string
-  MUA: string
-  "First Aid": string
-  Sound: string
-  Photography: string
-  Lighting: string
-  Greeter: string
-  Sosmed: string
-  Baptisan: string
-  Companion: string
-  Stylist: string
-  Hospitality: string
-  GA: string
-  WHL: string
+  DM: string;
+  Crowd: string;
+  Usher: string;
+  PAW: string;
+  Prayer: string;
+  MM: string;
+  SM: string;
+  MUA: string;
+  "First Aid": string;
+  Sound: string;
+  Photography: string;
+  Lighting: string;
+  Greeter: string;
+  Sosmed: string;
+  Baptisan: string;
+  Companion: string;
+  Stylist: string;
+  Hospitality: string;
+  GA: string;
+  WHL: string;
 }
 
 interface ReportData {
-  volunteer_count: string
-  congregation_count: string
-  congregation_tc_count: string
-  altar_calls: AltarCallEntry[]
-  volunteers: VolunteerData
+  volunteer_count: string;
+  congregation_count: string;
+  congregation_tc_count: string;
+  altar_calls: AltarCallEntry[];
+  volunteers: VolunteerData;
 }
 
 const volunteerMinistries: (keyof VolunteerData)[] = [
-  "DM", "Crowd", "Usher", "PAW", "Prayer", "MM", "SM", "MUA",
-  "First Aid", "Sound", "Photography", "Lighting", "Greeter",
-  "Sosmed", "Baptisan", "Companion", "Stylist", "Hospitality",
-  "GA", "WHL",
-]
+  "DM",
+  "Crowd",
+  "Usher",
+  "PAW",
+  "Prayer",
+  "MM",
+  "SM",
+  "MUA",
+  "First Aid",
+  "Sound",
+  "Photography",
+  "Lighting",
+  "Greeter",
+  "Sosmed",
+  "Baptisan",
+  "Companion",
+  "Stylist",
+  "Hospitality",
+  "GA",
+  "WHL",
+];
 
 const defaultVolunteers: VolunteerData = {
   DM: "",
@@ -89,7 +107,7 @@ const defaultVolunteers: VolunteerData = {
   Hospitality: "",
   GA: "",
   WHL: "",
-}
+};
 
 const defaultData: ReportData = {
   volunteer_count: "",
@@ -97,58 +115,76 @@ const defaultData: ReportData = {
   congregation_tc_count: "",
   altar_calls: [{ text: "", count: "" }],
   volunteers: { ...defaultVolunteers },
-}
+};
 
 const serviceLabels: Record<string, string> = {
   teen: "AOG Teen South",
   youth: "AOG Youth South",
   event: "Event",
-}
+};
 
 function formatDateDisplay(date: Date) {
   const monthNames = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-  ]
-  return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+  return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function calculateVolunteerSum(volunteers: VolunteerData): number {
   return volunteerMinistries.reduce((sum, ministry) => {
-    const value = parseInt(volunteers[ministry] || "0", 10)
-    return sum + (isNaN(value) ? 0 : value)
-  }, 0)
+    const value = parseInt(volunteers[ministry] || "0", 10);
+    return sum + (isNaN(value) ? 0 : value);
+  }, 0);
 }
 
 function formatAltarCalls(altarCalls: AltarCallEntry[]): string {
-  const validEntries = altarCalls.filter((e) => e.text.trim() || e.count.trim())
-  if (validEntries.length === 0) return ""
-  return validEntries.map((e) => `${e.text}: ${e.count}`).join("; ")
+  const validEntries = altarCalls.filter(
+    (e) => e.text.trim() || e.count.trim(),
+  );
+  if (validEntries.length === 0) return "";
+  return validEntries.map((e) => `${e.text}: ${e.count}`).join("; ");
 }
 
 export default function ReportsPage() {
-  const [serviceType, setServiceType] = useState("teen")
-  const [eventName, setEventName] = useState("")
-  const [reportDate, setReportDate] = useState<Date>(new Date())
+  const [serviceType, setServiceType] = useState("teen");
+  const [eventName, setEventName] = useState("");
+  const [reportDate, setReportDate] = useState<Date>(new Date());
   const [dataMap, setDataMap] = useState<Record<string, ReportData>>({
     teen: { ...defaultData },
     youth: { ...defaultData },
     event: { ...defaultData },
-  })
-  const [copied, setCopied] = useState(false)
-  const [showVolunteerSum, setShowVolunteerSum] = useState(false)
-  const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(false)
+  });
+  const [copied, setCopied] = useState(false);
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(true);
+  const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(true);
 
-  const currentData = dataMap[serviceType]
+  const currentData = dataMap[serviceType];
 
-  const handleChange = (field: keyof Omit<ReportData, "volunteers" | "altar_calls">, value: string) => {
+  const handleChange = (
+    field: keyof Omit<ReportData, "volunteers" | "altar_calls">,
+    value: string,
+  ) => {
     setDataMap((prev) => ({
       ...prev,
       [serviceType]: { ...prev[serviceType], [field]: value },
-    }))
-  }
+    }));
+  };
 
-  const handleVolunteerChange = (ministry: keyof VolunteerData, value: string) => {
+  const handleVolunteerChange = (
+    ministry: keyof VolunteerData,
+    value: string,
+  ) => {
     setDataMap((prev) => ({
       ...prev,
       [serviceType]: {
@@ -158,52 +194,62 @@ export default function ReportsPage() {
           [ministry]: value,
         },
       },
-    }))
-  }
+    }));
+  };
 
   const addAltarCall = () => {
     setDataMap((prev) => ({
       ...prev,
       [serviceType]: {
         ...prev[serviceType],
-        altar_calls: [...prev[serviceType].altar_calls, { text: "", count: "" }],
+        altar_calls: [
+          ...prev[serviceType].altar_calls,
+          { text: "", count: "" },
+        ],
       },
-    }))
-  }
+    }));
+  };
 
   const removeAltarCall = (index: number) => {
     setDataMap((prev) => {
-      const newCalls = prev[serviceType].altar_calls.filter((_, i) => i !== index)
-      if (newCalls.length === 0) newCalls.push({ text: "", count: "" })
+      const newCalls = prev[serviceType].altar_calls.filter(
+        (_, i) => i !== index,
+      );
+      if (newCalls.length === 0) newCalls.push({ text: "", count: "" });
       return {
         ...prev,
         [serviceType]: { ...prev[serviceType], altar_calls: newCalls },
-      }
-    })
-  }
+      };
+    });
+  };
 
-  const updateAltarCall = (index: number, field: keyof AltarCallEntry, value: string) => {
+  const updateAltarCall = (
+    index: number,
+    field: keyof AltarCallEntry,
+    value: string,
+  ) => {
     setDataMap((prev) => {
-      const newCalls = [...prev[serviceType].altar_calls]
-      newCalls[index] = { ...newCalls[index], [field]: value }
+      const newCalls = [...prev[serviceType].altar_calls];
+      newCalls[index] = { ...newCalls[index], [field]: value };
       return {
         ...prev,
         [serviceType]: { ...prev[serviceType], altar_calls: newCalls },
-      }
-    })
-  }
+      };
+    });
+  };
 
-  const volunteerSum = calculateVolunteerSum(currentData.volunteers)
+  const volunteerSum = calculateVolunteerSum(currentData.volunteers);
   const effectiveVolunteerCount = useVolunteerMinistries
     ? String(volunteerSum)
-    : currentData.volunteer_count
+    : currentData.volunteer_count;
 
-  const title = serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType]
-  const date = formatDateDisplay(reportDate)
-  const altarCallText = formatAltarCalls(currentData.altar_calls)
+  const title =
+    serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
+  const date = formatDateDisplay(reportDate);
+  const altarCallText = formatAltarCalls(currentData.altar_calls);
 
   const generateReport = () => {
-    const altarCallLine = altarCallText ? ` (Altarcall ${altarCallText})` : ""
+    const altarCallLine = altarCallText ? ` (Altarcall ${altarCallText})` : "";
     return `*${title} ${date}*
 1. Pastor and Speaker:
 2. Guest:
@@ -212,21 +258,31 @@ export default function ReportsPage() {
 5. Baptisan:
 6. WHL:   (Bersedia Join CG: )
 7. Prayer Station:
-8. One Minute Prayer: `
-  }
+8. One Minute Prayer: `;
+  };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(generateReport())
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    await navigator.clipboard.writeText(generateReport());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-bold">DM Service Report</h1>
-        <Select value={serviceLabels[serviceType]} onValueChange={(value) => value && setServiceType(value)}>
-          <SelectTrigger className="min-w-[240px]">
+    <div className="flex flex-col gap-8 max-w-5xl animate-stagger pb-24 lg:pb-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+        <div>
+          <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">
+            Service Report
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Fill in the details below to generate your report.
+          </p>
+        </div>
+        <Select
+          value={serviceLabels[serviceType]}
+          onValueChange={(value) => value && setServiceType(value)}
+        >
+          <SelectTrigger className="min-w-[220px] sm:ml-auto">
             <SelectValue placeholder={serviceLabels[serviceType]} />
           </SelectTrigger>
           <SelectContent>
@@ -237,192 +293,252 @@ export default function ReportsPage() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold">Input Fields</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="flex flex-col gap-6 lg:col-span-3">
+          <h2 className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground/60">
+            Input Fields
+          </h2>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Date</label>
-            <Popover>
-              <PopoverTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                  >
-                    <CalendarIcon className="mr-2 size-4" />
-                    {formatDateDisplay(reportDate)}
-                  </Button>
-                }
-              />
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={reportDate}
-                  onSelect={(date) => date && setReportDate(date)}
+          <div className="rounded-xl border border-border/60 bg-card p-6 space-y-5">
+            <div className="space-y-2">
+              <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                Date
+              </label>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 size-4" />
+                      {formatDateDisplay(reportDate)}
+                    </Button>
+                  }
                 />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {serviceType === "event" && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Event Name</label>
-              <Input
-                value={eventName}
-                onChange={(e) => setEventName(e.target.value)}
-                placeholder="Enter event name"
-              />
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={reportDate}
+                    onSelect={(date) => date && setReportDate(date)}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
-          )}
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Volunteer</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {useVolunteerMinistries ? "Ministries" : "Total"}
-                  </span>
-                  <Switch
-                    checked={useVolunteerMinistries}
-                    onCheckedChange={setUseVolunteerMinistries}
-                  />
-                </div>
+            {serviceType === "event" && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                  Event Name
+                </label>
+                <Input
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                  placeholder="Enter event name"
+                />
               </div>
+            )}
 
-              {useVolunteerMinistries ? (
-                <Collapsible>
-                  <CollapsibleTrigger
-                    render={
-                      <Button variant="outline" className="w-full justify-between">
-                        <span>Volunteer Ministries</span>
-                        <div className="flex items-center gap-2">
-                          {volunteerSum > 0 && (
-                            <span className="text-xs text-muted-foreground">Sum: {volunteerSum}</span>
-                          )}
-                          <ChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                        </div>
-                      </Button>
-                    }
-                  />
-                  <CollapsibleContent className="space-y-2 pt-2">
-                    <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                    Volunteer
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {useVolunteerMinistries ? "Ministries" : "Total"}
+                    </span>
+                    <Switch
+                      checked={useVolunteerMinistries}
+                      onCheckedChange={setUseVolunteerMinistries}
+                    />
+                  </div>
+                </div>
+
+                {useVolunteerMinistries ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       {volunteerMinistries.map((ministry) => (
                         <div key={ministry} className="space-y-1">
-                          <label className="text-xs text-muted-foreground">{ministry}</label>
+                          <label className="text-xs text-muted-foreground">
+                            {ministry}
+                          </label>
                           <Input
                             value={currentData.volunteers[ministry]}
-                            onChange={(e) => handleVolunteerChange(ministry, e.target.value)}
+                            onChange={(e) =>
+                              handleVolunteerChange(ministry, e.target.value)
+                            }
                             placeholder="0"
                             className="h-8"
                           />
                         </div>
                       ))}
                     </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setShowVolunteerSum(!showVolunteerSum)}
-                    >
-                      {showVolunteerSum ? "Hide" : "Show"} Volunteer Sum
-                    </Button>
-                    {showVolunteerSum && (
-                      <div className="text-center text-sm font-medium text-muted-foreground">
-                        Total Volunteers: {volunteerSum}
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
-              ) : (
-                <Input
-                  value={currentData.volunteer_count}
-                  onChange={(e) => handleChange("volunteer_count", e.target.value)}
-                  placeholder="e.g. 18"
-                />
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Jemaat</label>
-              <Input
-                value={currentData.congregation_count}
-                onChange={(e) => handleChange("congregation_count", e.target.value)}
-                placeholder="e.g. 11"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">TC</label>
-              <Input
-                value={currentData.congregation_tc_count}
-                onChange={(e) => handleChange("congregation_tc_count", e.target.value)}
-                placeholder="e.g. 11"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Altar Calls</label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={addAltarCall}
-                  className="h-7 px-2"
-                >
-                  <Plus className="size-3" />
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {currentData.altar_calls.map((entry, index) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <Textarea
-                      value={entry.text}
-                      onChange={(e) => updateAltarCall(index, "text", e.target.value)}
-                      placeholder="Text"
-                      className="flex-1 min-h-[2.5rem]"
-                      rows={1}
-                    />
-                    <Input
-                      value={entry.count}
-                      onChange={(e) => updateAltarCall(index, "count", e.target.value)}
-                      placeholder="Count"
-                      className="w-20 h-10"
-                    />
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => removeAltarCall(index)}
-                      className="h-10 px-2 text-destructive"
-                    >
-                      <Trash2 className="size-3" />
-                    </Button>
+                    <div className="text-sm font-medium text-muted-foreground pt-1">
+                      Total: {volunteerSum}
+                    </div>
                   </div>
-                ))}
+                ) : (
+                  <Input
+                    value={currentData.volunteer_count}
+                    onChange={(e) =>
+                      handleChange("volunteer_count", e.target.value)
+                    }
+                    placeholder="e.g. 18"
+                  />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                  Jemaat
+                </label>
+                <Input
+                  value={currentData.congregation_count}
+                  onChange={(e) =>
+                    handleChange("congregation_count", e.target.value)
+                  }
+                  placeholder="e.g. 11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                  TC
+                </label>
+                <Input
+                  value={currentData.congregation_tc_count}
+                  onChange={(e) =>
+                    handleChange("congregation_tc_count", e.target.value)
+                  }
+                  placeholder="e.g. 11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                    Altar Calls
+                  </label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addAltarCall}
+                    className="h-7 px-2"
+                  >
+                    <Plus className="size-3" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {currentData.altar_calls.map((entry, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <Textarea
+                        value={entry.text}
+                        onChange={(e) =>
+                          updateAltarCall(index, "text", e.target.value)
+                        }
+                        placeholder="Text"
+                        className="flex-1 min-h-[2.5rem]"
+                        rows={1}
+                      />
+                      <Input
+                        value={entry.count}
+                        onChange={(e) =>
+                          updateAltarCall(index, "count", e.target.value)
+                        }
+                        placeholder="Count"
+                        className="w-20 h-10"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeAltarCall(index)}
+                        className="h-10 px-2 text-destructive"
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Preview</h2>
+        {/* Mobile spacer so TC/Altar Calls aren't hidden behind expanded preview */}
+        <div className="h-[20vh] lg:hidden" aria-hidden="true" />
+
+        <div className="hidden lg:flex flex-col gap-4 lg:col-span-2">
+          <div className="sticky top-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground/60">
+                Preview
+              </h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopy}
+                className="gap-2 text-xs h-8"
+              >
+                {copied ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
+                {copied ? "Copied!" : "Copy"}
+              </Button>
+            </div>
+            <pre className="bg-card border border-border/70 rounded-xl p-5 text-sm whitespace-pre-wrap font-mono leading-relaxed shadow-sm">
+              {generateReport()}
+            </pre>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile fixed preview bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
+        <div
+          className={`bg-card border-t border-border/70 shadow-lg transition-all duration-300 ${mobilePreviewOpen ? "max-h-[70vh]" : "max-h-none"}`}
+        >
+          {mobilePreviewOpen && (
+            <div className="overflow-y-auto max-h-[calc(70vh-3.5rem)] p-4 border-b border-border/40">
+              <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
+                {generateReport()}
+              </pre>
+            </div>
+          )}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button
+              onClick={() => setMobilePreviewOpen(!mobilePreviewOpen)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
+            >
+              <ChevronUp
+                className={`size-4 transition-transform duration-300 ${mobilePreviewOpen ? "" : "rotate-180"}`}
+              />
+              <span>Preview</span>
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground truncate font-mono">
+                {title} {date}
+              </p>
+            </div>
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
               onClick={handleCopy}
-              className="gap-2"
+              className="gap-1.5 text-xs h-8 shrink-0"
             >
-              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {copied ? (
+                <Check className="size-3.5" />
+              ) : (
+                <Copy className="size-3.5" />
+              )}
               {copied ? "Copied!" : "Copy"}
             </Button>
           </div>
-          <pre className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap font-mono">
-            {generateReport()}
-          </pre>
         </div>
       </div>
     </div>
-  )
+  );
 }

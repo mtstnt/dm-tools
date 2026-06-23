@@ -13,7 +13,7 @@ export function proxy(request: NextRequest) {
   if (pathname.startsWith("/tools")) {
     const authenticated = request.cookies.get("authenticated")
     if (!authenticated || authenticated.value !== "true") {
-      return NextResponse.redirect(new URL("/auth", request.url))
+      return NextResponse.redirect(new URL("/auth/login", request.url))
     }
   }
 

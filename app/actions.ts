@@ -17,5 +17,5 @@ export async function setAuthCookie() {
 export async function logout() {
   const cookieStore = await cookies()
   cookieStore.delete("authenticated")
-  redirect("/auth")
+  redirect("/auth/login")
 }

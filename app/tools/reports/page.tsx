@@ -24,38 +24,14 @@ import {
   ChevronUp,
   Plus,
   Trash2,
+  Settings2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { MinistriesDialog } from "@/components/ministries-dialog";
 
 interface AltarCallEntry {
   text: string;
   count: string;
-}
-
-interface VolunteerData {
-  DM: string;
-  Crowd: string;
-  Usher: string;
-  PAW: string;
-  Prayer: string;
-  MM: string;
-  SM: string;
-  MUA: string;
-  "First Aid": string;
-  Photography: string;
-  Lighting: string;
-  Greeter: string;
-  Sosmed: string;
-  Baptisan: string;
-  Companion: string;
-  Stylist: string;
-  Hospitality: string;
-  GA: string;
-  Drama: string;
-  Konseptor: string;
-  WHL: string;
-  Sound: string;
-  Choir: string;
 }
 
 interface ReportData {
@@ -63,10 +39,10 @@ interface ReportData {
   congregation_count: string;
   congregation_tc_count: string;
   altar_calls: AltarCallEntry[];
-  volunteers: VolunteerData;
+  volunteers: Record<string, string>;
 }
 
-const volunteerMinistries: (keyof VolunteerData)[] = [
+const DEFAULT_MINISTRIES = [
   "DM",
   "Crowd",
   "Usher",
@@ -92,31 +68,9 @@ const volunteerMinistries: (keyof VolunteerData)[] = [
   "Choir",
 ];
 
-const defaultVolunteers: VolunteerData = {
-  DM: "",
-  Crowd: "",
-  Usher: "",
-  PAW: "",
-  Prayer: "",
-  MM: "",
-  SM: "",
-  MUA: "",
-  "First Aid": "",
-  Sound: "",
-  Photography: "",
-  Lighting: "",
-  Greeter: "",
-  Sosmed: "",
-  Baptisan: "",
-  Companion: "",
-  Stylist: "",
-  Hospitality: "",
-  GA: "",
-  WHL: "",
-  Drama: "",
-  Konseptor: "",
-  Choir: "",
-};
+const defaultVolunteers: Record<string, string> = Object.fromEntries(
+  DEFAULT_MINISTRIES.map((m) => [m, ""]),
+);
 
 const defaultData: ReportData = {
   volunteer_count: "",
@@ -150,8 +104,11 @@ function formatDateDisplay(date: Date) {
   return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-function calculateVolunteerSum(volunteers: VolunteerData): number {
-  return volunteerMinistries.reduce((sum, ministry) => {
+function calculateVolunteerSum(
+  volunteers: Record<string, string>,
+  ministries: string[],
+): number {
+  return ministries.reduce((sum, ministry) => {
     const value = parseInt(volunteers[ministry] || "0", 10);
     return sum + (isNaN(value) ? 0 : value);
   }, 0);
@@ -177,6 +134,7 @@ export default function ReportsPage() {
   const [copied, setCopied] = useState(false);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(true);
   const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(true);
+  const [ministries, setMinistries] = useState<string[]>(DEFAULT_MINISTRIES);
 
   const currentData = dataMap[serviceType];
 
@@ -191,7 +149,7 @@ export default function ReportsPage() {
   };
 
   const handleVolunteerChange = (
-    ministry: keyof VolunteerData,
+    ministry: string,
     value: string,
   ) => {
     setDataMap((prev) => ({
@@ -247,7 +205,7 @@ export default function ReportsPage() {
     });
   };
 
-  const volunteerSum = calculateVolunteerSum(currentData.volunteers);
+  const volunteerSum = calculateVolunteerSum(currentData.volunteers, ministries);
   const effectiveVolunteerCount = useVolunteerMinistries
     ? String(volunteerSum)
     : currentData.volunteer_count;
@@ -370,13 +328,28 @@ export default function ReportsPage() {
                       checked={useVolunteerMinistries}
                       onCheckedChange={setUseVolunteerMinistries}
                     />
+                    {useVolunteerMinistries && (
+                      <MinistriesDialog
+                        ministries={ministries}
+                        onSave={setMinistries}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-6 text-muted-foreground"
+                          >
+                            <Settings2 className="size-3.5" />
+                          </Button>
+                        }
+                      />
+                    )}
                   </div>
                 </div>
 
                 {useVolunteerMinistries ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {volunteerMinistries.map((ministry) => (
+                      {ministries.map((ministry) => (
                         <div key={ministry} className="space-y-1">
                           <label className="text-xs text-muted-foreground">
                             {ministry}

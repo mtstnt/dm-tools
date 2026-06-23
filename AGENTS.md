@@ -23,7 +23,9 @@ Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4.
 app/
   layout.tsx          Root: fonts (Instrument Serif, DM Sans, IBM Plex Mono), ThemeProvider, QueryClient
   actions.ts          Server actions: setAuthCookie(), logout()
-  auth/page.tsx       Firebase email/password login
+  auth/
+    login/page.tsx    Firebase email/password login
+    forget-password/  Firebase password reset email
   tools/              Protected area (sidebar layout)
     reports/          Report text generator (client-only, no Firestore write)
     reports-history/  Firestore report browser

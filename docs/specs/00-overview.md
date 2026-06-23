@@ -20,7 +20,9 @@
 app/
   layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider
   actions.ts          Server actions: setAuthCookie(), logout()
-  auth/page.tsx       Login page (Firebase email/password)
+  auth/
+    login/page.tsx    Login page (Firebase email/password)
+    forget-password/  Password reset page (sendPasswordResetEmail)
   tools/
     layout.tsx        Sidebar shell — AppSidebar, ThemeToggle, AccountInfo
     page.tsx          Tools dashboard (card grid linking to features)
@@ -50,9 +52,10 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 
 1. User visits `/` → redirected to `/tools` (via proxy.ts logic, but middleware.ts is missing)
 2. `/tools/*` routes check for `authenticated` cookie
-3. If no cookie → redirect to `/auth`
-4. `/auth` page: Firebase `signInWithEmailAndPassword` → on success, server action sets cookie
-5. Cookie: `authenticated=true`, httpOnly, 7-day expiry
+3. If no cookie → redirect to `/auth/login`
+4. `/auth/login` page: Firebase `signInWithEmailAndPassword` → on success, server action sets cookie
+5. `/auth/forget-password` page: Firebase `sendPasswordResetEmail` → shows success state
+6. Cookie: `authenticated=true`, httpOnly, 7-day expiry
 
 ## Data Model
 
@@ -67,7 +70,8 @@ Firestore collection `reports`:
 
 | Feature | Route | Status |
 |---------|-------|--------|
-| Authentication | `/auth` | Working |
+| Authentication | `/auth/login` | Working |
+| Forget Password | `/auth/forget-password` | Working |
 | Reports Generator | `/tools/reports` | Working |
 | Reports History | `/tools/reports-history` | Working |
 | Firebase Debug | `/tools/test-firebase` | Working |

@@ -8,7 +8,9 @@ Simple email/password authentication using Firebase Auth. Session state stored a
 
 | File | Role |
 |------|------|
-| `app/auth/page.tsx` | Login form (client component) |
+| `app/auth/login/page.tsx` | Login form (client component) |
+| `app/auth/forget-password/page.tsx` | Password reset form (client component) |
+| `app/auth/page.tsx` | Redirects to `/auth/login` |
 | `app/actions.ts` | Server actions: `setAuthCookie()`, `logout()` |
 | `lib/firebase.ts` | Firebase client init, exports `auth` |
 | `components/account-info.tsx` | Displays logged-in user, handles logout |
@@ -18,18 +20,24 @@ Simple email/password authentication using Firebase Auth. Session state stored a
 ## Flow
 
 ### Sign In
-1. User enters email + password on `/auth`
+1. User enters email + password on `/auth/login`
 2. Calls `signInWithEmailAndPassword(auth, email, password)` from Firebase client SDK
 3. On success, calls `setAuthCookie()` server action
 4. Server action sets cookie `authenticated=true` (httpOnly, secure in prod, 7-day maxAge, path=/)
 5. Redirects to `/`
+
+### Forget Password
+1. User enters email on `/auth/forget-password`
+2. Calls `sendPasswordResetEmail(auth, email)` from Firebase client SDK
+3. On success, shows confirmation message with the email address
+4. User can click "Back to sign in" to return to `/auth/login`
 
 ### Sign Out
 1. User clicks logout in `AccountInfo` dropdown or `LogoutButton`
 2. Calls `signOut(auth)` from Firebase client SDK
 3. Calls `logout()` server action
 4. Server action deletes `authenticated` cookie
-5. Redirects to `/auth`
+5. Redirects to `/auth/login`
 
 ### Route Protection
 - `proxy.ts` exports a `proxy()` function and `config.matcher`

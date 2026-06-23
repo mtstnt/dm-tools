@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AccountInfo } from "@/components/account-info"
+import { RefreshCacheButton } from "@/components/refresh-cache-button"
 
 export default function ToolsLayout({
   children,
@@ -17,6 +18,7 @@ export default function ToolsLayout({
           <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border/60 px-6 bg-background/80 backdrop-blur-sm">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
             <div className="flex items-center gap-1">
+              <RefreshCacheButton />
               <ThemeToggle />
               <AccountInfo />
             </div>

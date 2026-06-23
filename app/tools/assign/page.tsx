@@ -454,10 +454,6 @@ export default function AssignPage(): React.ReactElement {
           )}
         </div>
       </div>
-
-      <div className="mt-6">
-        <Link href="/tools" className="text-sm text-primary underline">Kembali ke Tools</Link>
-      </div>
     </div>
   )
 }

@@ -10,7 +10,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { FileText, History, LayoutGrid } from "lucide-react"
+import { FileText, History, LayoutGrid, UserCheck } from "lucide-react"
 
 export function AppSidebar() {
   return (
@@ -53,6 +53,15 @@ export function AppSidebar() {
                 >
                   <History className="size-4 text-muted-foreground" />
                   <span className="text-sm">Reports History</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<a href="/tools/assign" />}
+                  className="gap-3 rounded-md transition-colors hover:bg-accent/60"
+                >
+                  <UserCheck className="size-4 text-muted-foreground" />
+                  <span className="text-sm">Assign</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

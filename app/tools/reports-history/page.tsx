@@ -135,7 +135,7 @@ export default function ReportsHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {reports.map((report) => (
+              {reports.map((report: Report) => (
                 <TableRow
                   key={report.id}
                   className="cursor-pointer"

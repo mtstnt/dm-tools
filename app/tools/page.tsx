@@ -1,4 +1,4 @@
-import { FileText, ArrowRight } from "lucide-react"
+import { FileText, ArrowRight, UserCheck } from "lucide-react"
 import Link from "next/link"
 
 const tools = [
@@ -7,6 +7,13 @@ const tools = [
     description: "Generate formatted reports for church services with volunteer counts, congregation data, and altar calls.",
     href: "/tools/reports",
     icon: FileText,
+    available: true,
+  },
+  {
+    name: "Assign",
+    description: "Open the assignment tool for service block allocation and counters.",
+    href: "/tools/assign",
+    icon: UserCheck,
     available: true,
   },
 ]

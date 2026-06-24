@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -86,10 +87,10 @@ const GEOM: Record<string, Geom> = {
   MAIN_STAGE: { t: "r", x: 215, y: 12,  w: 400, h: 84,  cx: 415, cy: 54,  nc: true },
   S1:  { t: "r", x: 8,   y: 12,  w: 180, h: 84,  cx: 98,  cy: 54  },
   S2:  { t: "r", x: 642, y: 12,  w: 180, h: 84,  cx: 732, cy: 54  },
-  A1:  { t: "p", pts: [[10,125],[172,108],[184,252],[122,280],[8,262]],        cx: 99,  cy: 205 },
-  A2:  { t: "r", x: 194, y: 108, w: 163, h: 183, cx: 275, cy: 199 },
-  A3:  { t: "p", pts: [[382,108],[520,128],[518,268],[456,292],[370,254]],     cx: 449, cy: 210 },
-  A4:  { t: "p", pts: [[540,115],[658,138],[653,290],[538,292]],               cx: 597, cy: 208 },
+  A2:  { t: "r", x: 268, y: 108, w: 163, h: 183, cx: 349, cy: 199 },
+  A3:  { t: "p", pts: [[456,108],[594,128],[592,268],[530,292],[444,254]],     cx: 523, cy: 210 },
+  A4:  { t: "p", pts: [[614,115],[732,138],[727,290],[612,292]],               cx: 671, cy: 208 },
+  A1:  { t: "p", pts: [[84,125],[246,108],[258,252],[196,280],[82,262]],        cx: 173,  cy: 205 },
   B1:  { t: "r", x: 8,   y: 352, w: 168, h: 126, cx: 92,  cy: 415 },
   B2:  { t: "r", x: 194, y: 352, w: 168, h: 126, cx: 278, cy: 415 },
   B3:  { t: "r", x: 380, y: 352, w: 230, h: 126, cx: 495, cy: 415 },
@@ -670,7 +671,7 @@ export default function AssignPage() {
         </text>
         <line x1={tx + 10} y1={ty + 22} x2={tx + w - 10} y2={ty + 22}
           stroke="var(--color-sidebar-border)" strokeWidth="0.5" />
-        {assignees.length === 0 ? (
+            {assignees.length === 0 ? (
           <text x={tx + w / 2} y={ty + 38} textAnchor="middle"
             fill="var(--color-sidebar-foreground)" fontSize="10" style={{ fontFamily: "DM Mono,monospace" }}>
             kosong
@@ -700,7 +701,7 @@ export default function AssignPage() {
             return (
               <g>
                 <line x1={tx + 8} y1={ty + h - 18} x2={tx + w - 8} y2={ty + h - 18}
-                  stroke="#0F2A4A" strokeWidth="0.5" />
+                  stroke="var(--assign-sep)" strokeWidth="0.5" />
                 <text x={tx + w / 2} y={ty + h - 6} textAnchor="middle"
                   fill={col} fontSize="8.5" fontWeight="600"
                   style={{ fontFamily: "DM Mono,monospace" }}>
@@ -732,7 +733,36 @@ export default function AssignPage() {
       }}
     >
       <style>{`
-        .assign-page { --assign-success: #10B981; --assign-warn: #F59E0B; --assign-fail: #EF4444; --assign-dim: var(--color-card); }
+        .assign-page {
+          --assign-success: #10B981;
+          --assign-warn: #F59E0B;
+          --assign-fail: #EF4444;
+          --assign-dim: var(--color-card);
+
+          /* availability & label tokens (local overrides) */
+          --assign-availability-teen: #FBBF24;
+          --assign-availability-youth: #93C5FD;
+          --assign-availability-teen-bg: #78350F55;
+          --assign-availability-youth-bg: #1E3A8A55;
+          --assign-availability-teen-border: #FBBF2444;
+          --assign-availability-youth-border: #93C5FD44;
+          --assign-ab-bg: #78350F44;
+          --assign-ab-fg: #FCD34D;
+
+          /* separators / misc */
+          --assign-sep: #0F2A4A;
+          --assign-bobot-text: #0B1E35;
+
+          /* manual / error banners */
+          --assign-manual-bg: #1A1200;
+          --assign-manual-border: #78350F55;
+          --assign-manual-text: #FDE68A;
+          --assign-manual-accent: #78350F;
+          --assign-error-bg: #1C0909;
+          --assign-error-border: #7F1D1D44;
+          --assign-error-text: #FCA5A5;
+        }
+
         ::-webkit-scrollbar{width:4px;}
         ::-webkit-scrollbar-track{background:transparent;}
         ::-webkit-scrollbar-thumb{background:var(--color-sidebar-border);border-radius:2px;}
@@ -818,7 +848,7 @@ export default function AssignPage() {
         {/* ════ SIDEBAR ════ */}
         <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
           {/* Input area */}
-          <div className="px-3 pb-3 border-b border-[#0A1929]">
+          <div className="px-3 pb-3 border-b border-sidebar-border">
             <div className="flex gap-2 mb-2">
               <Input
                 value={singleName}
@@ -835,8 +865,8 @@ export default function AssignPage() {
 
             {showImport && (
               <div className="mt-2">
-                <div className="text-[8px] text-[#1E3A5F] mb-1.5 leading-6 font-mono">
-                  Tambahkan <span className="text-[#FBBF24]">(T)</span> di akhir nama → hanya Teen. <span className="text-[#93C5FD]">(Y)</span> di akhir nama → hanya Youth. Tanpa tanda → bisa keduanya.
+                <div className="text-[8px] text-muted-foreground mb-1.5 leading-6 font-mono">
+                  Tambahkan <span className="text-[var(--assign-availability-teen)]">(T)</span> di akhir nama → hanya Teen. <span className="text-[var(--assign-availability-youth)]">(Y)</span> di akhir nama → hanya Youth. Tanpa tanda → bisa keduanya.
                 </div>
                 <Textarea
                   value={bulkText}
@@ -863,14 +893,14 @@ export default function AssignPage() {
           )}
 
           {/* Member list */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+          <div className="flex-1 overflow-y-auto p-2">
             {members.length === 0 ? (
-                <div style={{ textAlign: "center", color: "var(--color-muted-foreground)", padding: "30px 10px", fontSize: "10px", lineHeight: 2.5, fontFamily: "var(--font-mono)", letterSpacing: "1px" }}>
+                <div className="text-center text-muted-foreground py-8 px-2 text-[10px] leading-7 font-mono tracking-wide">
                 BELUM ADA ANGGOTA<br />Tambah di atas atau import
               </div>
             ) : (
               <>
-                <div style={{ fontSize: "8px", color: "var(--color-muted-foreground)", marginBottom: "8px", padding: "0 4px", fontFamily: "var(--font-mono)", letterSpacing: "1px" }}>
+                <div className="text-[8px] text-muted-foreground mb-2 px-1 font-mono tracking-wide">
                   {members.length} ANGGOTA · 2 TERATAS = KOORDINATOR ALL BLOCK
                 </div>
 
@@ -895,55 +925,57 @@ export default function AssignPage() {
                       key={m.id}
                       onMouseEnter={() => setHoveredMbr(m.id)}
                       onMouseLeave={() => setHoveredMbr(null)}
+                      className={`rounded-lg mb-1 overflow-hidden transition-all ${!isInEvt ? 'opacity-30' : isSR ? 'opacity-65' : 'opacity-100'}`}
                       style={{
-                        borderRadius: "8px", marginBottom: "3px",
-                        border: "1px solid " + (isSel ? "var(--color-primary)" : isHov ? "var(--color-muted-foreground)" : "transparent"),
-                        overflow: "hidden",
-                        opacity: !isInEvt ? 0.28 : isSR ? 0.65 : 1,
-                        transition: "all 0.15s",
+                        border: isSel ? "1px solid var(--color-primary)" : isHov ? "1px solid var(--color-muted-foreground)" : "1px solid transparent",
                         background: isSel ? "var(--color-card)" : isHov && isInEvt ? "var(--color-input)" : "transparent",
                       }}
                     >
                       {/* Main row */}
                       <div
                         onClick={() => { if (mode === "manual" && isCounter && isInEvt) { setSelected(isSel ? null : m); setError(""); } }}
-                        style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 8px 6px", cursor: mode === "manual" && isCounter ? "pointer" : "default" }}
+                        className={`flex items-center gap-2 p-2 ${mode === "manual" && isCounter ? 'cursor-pointer' : 'cursor-default'}`}
                       >
                         <div style={{ width: "10px", height: "10px", borderRadius: "50%", flexShrink: 0, background: m.color, boxShadow: `0 0 7px ${m.color}77` }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-foreground)" }}>{m.name}</span>
-                            {isABAny && <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: "#78350F44", color: "#FCD34D", fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>{abLabel}</span>}
-                            {isSR    && <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: "var(--color-sidebar-border)", color: "var(--color-muted-foreground)", fontFamily: "DM Mono,monospace" }}>SR</span>}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[12px] font-semibold text-foreground">{m.name}</span>
+                            {isABAny && <span className="text-[7px] px-1 rounded-sm font-mono" style={{ background: 'var(--assign-ab-bg)', color: 'var(--assign-ab-fg)', letterSpacing: '1px' }}>{abLabel}</span>}
+                            {isSR    && <span className="text-[7px] px-1 rounded-sm bg-sidebar-border text-muted-foreground font-mono">SR</span>}
                             {avail !== "both" && (
-                              <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: avail === "teen" ? "#78350F55" : "#1E3A8A55", color: avail === "teen" ? "#FBBF24" : "#93C5FD", fontFamily: "DM Mono,monospace", letterSpacing: "1px", border: "1px solid " + (avail === "teen" ? "#FBBF2444" : "#93C5FD44") }}>
+                              <span className="text-[7px] px-1 rounded-sm font-mono" style={{
+                                background: avail === "teen" ? 'var(--assign-availability-teen-bg)' : 'var(--assign-availability-youth-bg)',
+                                color: avail === "teen" ? 'var(--assign-availability-teen)' : 'var(--assign-availability-youth)',
+                                letterSpacing: '1px',
+                                border: avail === "teen" ? '1px solid var(--assign-availability-teen-border)' : '1px solid var(--assign-availability-youth-border)'
+                              }}>
                                 {avail === "teen" ? "T" : "Y"}
                               </span>
                             )}
                           </div>
                           <div style={{ fontSize: "9px", marginTop: "1px", color: isSR ? "var(--color-sidebar-foreground)" : role ? "var(--color-muted-foreground)" : blocks.length ? m.color + "BB" : "var(--color-sidebar-foreground)", fontFamily: "DM Mono,monospace", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                             {!isInEvt
-                              ? <span style={{ color: "#1E3A5F", fontStyle: "italic" }}>tidak ikut {EVT_NAMES[activeEvt]}</span>
+                              ? <span className="text-muted-foreground italic">tidak ikut {EVT_NAMES[activeEvt]}</span>
                               : role || (blocks.length ? `${blocks.join(" · ")} (${w.toFixed(2)})` : "–")}
                           </div>
                         </div>
-                        <span style={{ fontSize: "9px", color: "var(--color-sidebar-foreground)", fontFamily: "DM Mono,monospace", flexShrink: 0 }}>#{i + 1}</span>
+                        <span className="text-[9px] text-sidebar-foreground font-mono flex-shrink-0">#{i + 1}</span>
                       </div>
 
                       {/* Hover action bar */}
                       {isHov && (
-                        <div style={{ display: "flex", gap: "4px", padding: "5px 8px", borderTop: "1px solid var(--color-sidebar-border)", background: "var(--color-popover)" }}>
+                        <div className="flex gap-2 p-2 border-t border-sidebar-border bg-popover">
                           <button onClick={(e) => { e.stopPropagation(); moveMember(m.id, -1); }}
-                            style={{ flex: 1, padding: "5px 4px", background: "var(--color-input)", border: "1px solid var(--color-sidebar-border)", borderRadius: "5px", color: "var(--color-muted-foreground)", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
-                            <span style={{ fontSize: "12px" }}>↑</span><span style={{ fontSize: "8px", letterSpacing: "0.5px" }}>NAIK</span>
+                            className="flex-1 px-2 py-1 bg-input border border-sidebar-border rounded-md text-muted-foreground text-[10px] cursor-pointer flex items-center justify-center gap-2">
+                            <span className="text-[12px]">↑</span><span className="text-[8px] tracking-wider">NAIK</span>
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); moveMember(m.id, 1); }}
-                            style={{ flex: 1, padding: "5px 4px", background: "var(--color-input)", border: "1px solid var(--color-sidebar-border)", borderRadius: "5px", color: "var(--color-muted-foreground)", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
-                            <span style={{ fontSize: "12px" }}>↓</span><span style={{ fontSize: "8px", letterSpacing: "0.5px" }}>TURUN</span>
+                            className="flex-1 px-2 py-1 bg-input border border-sidebar-border rounded-md text-muted-foreground text-[10px] cursor-pointer flex items-center justify-center gap-2">
+                            <span className="text-[12px]">↓</span><span className="text-[8px] tracking-wider">TURUN</span>
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); removeMember(m.id); }}
-                            style={{ flex: 1, padding: "5px 4px", background: "var(--color-card)", border: "1px solid rgba(127,29,29,0.33)", borderRadius: "5px", color: "var(--assign-fail)", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
-                            <span style={{ fontSize: "12px" }}>×</span><span style={{ fontSize: "8px", letterSpacing: "0.5px" }}>HAPUS</span>
+                            className="flex-1 px-2 py-1 bg-card border border-[rgba(127,29,29,0.33)] rounded-md text-[10px] cursor-pointer flex items-center justify-center gap-2" style={{ color: 'var(--assign-fail)' }}>
+                            <span className="text-[12px]">×</span><span className="text-[8px] tracking-wider">HAPUS</span>
                           </button>
                         </div>
                       )}
@@ -956,72 +988,67 @@ export default function AssignPage() {
 
           {/* ── PERAN KHUSUS (manual SR assignment) ── */}
           {isReady && (() => {
-            const sr         = events[activeEvt].sr;
+            const sr = events[activeEvt].sr;
             const pickerOpen = srPicker && srPicker.ei === activeEvt;
 
             return (
-              <div style={{ borderTop: "1px solid #0A1929", flexShrink: 0 }}>
-                <div style={{ padding: "6px 12px 4px", background: "#040D1A", display: "flex", alignItems: "center" }}>
-                  <span style={{ fontSize: "7.5px", color: "#1E3A5F", letterSpacing: "1.5px", fontFamily: "DM Mono,monospace" }}>
-                    PERAN KHUSUS — {EVT_NAMES[activeEvt].toUpperCase()}
-                  </span>
+              <div className="border-t border-sidebar-border flex-shrink-0">
+                <div className="px-3 pt-2 pb-1 bg-sidebar">
+                  <span className="text-[7.5px] text-muted-foreground tracking-wider font-mono">PERAN KHUSUS — {EVT_NAMES[activeEvt].toUpperCase()}</span>
                 </div>
 
-                <div style={{ padding: "4px 8px 6px", background: "#040D1A", display: "flex", flexDirection: "column", gap: "3px" }}>
+                <div className="p-2 bg-sidebar flex flex-col gap-2">
                   {SR_KEYS.map((key, ki) => {
                     const assigned = sr[key];
-                    const aColor   = assigned ? colorOf(assigned) : null;
-                    const isOpen   = !!(pickerOpen && srPicker.role === key);
+                    const aColor = assigned ? colorOf(assigned) : null;
+                    const isOpen = !!(pickerOpen && srPicker.role === key);
                     const eligible = getSREligible(activeEvt, key);
 
                     return (
-                      <div key={key} style={{ position: "relative" }}>
-                        <div
-                          style={{ display: "flex", alignItems: "center", gap: "6px", padding: "5px 7px", borderRadius: "6px", background: isOpen ? "#0A1929" : "#060F1E", border: "1px solid " + (isOpen ? "#1D4ED855" : "#0F2A4A"), cursor: "pointer" }}
-                          onClick={() => setSRPicker(isOpen ? null : { ei: activeEvt, role: key })}
-                        >
-                          {aColor
-                            ? <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: aColor, boxShadow: `0 0 5px ${aColor}66`, flexShrink: 0 }} />
-                            : <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#0F2A4A", border: "1px dashed #1E3A5F", flexShrink: 0 }} />
-                          }
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "7.5px", color: "#1E3A5F", letterSpacing: "0.5px", fontFamily: "DM Mono,monospace" }}>{SR_SHORT[ki]}</div>
-                            <div style={{ fontSize: "10px", fontWeight: 700, color: aColor || "#334155", marginTop: "1px" }}>
-                              {assigned || <span style={{ fontSize: "8px", color: "#1E3A5F", fontStyle: "italic" }}>belum di-assign</span>}
+                      <Popover key={key} open={isOpen} onOpenChange={(v) => setSRPicker(v ? { ei: activeEvt, role: key } : null)}>
+                        <PopoverTrigger>
+                          <div role="button" className={`w-full flex items-center gap-3 p-2 rounded-md border ${isOpen ? 'bg-input border-sidebar-border' : 'bg-transparent border-transparent'}`}>
+                            {aColor ? (
+                              <span className="w-2.5 h-2.5 rounded-full" style={{ background: aColor, boxShadow: `0 0 6px ${aColor}66` }} />
+                            ) : (
+                              <span className="w-2.5 h-2.5 rounded-full border border-dashed border-sidebar-border bg-transparent" />
+                            )}
+                            <div className="flex-1 min-w-0 text-left">
+                              <div className="text-[7.5px] text-muted-foreground font-mono">{SR_SHORT[ki]}</div>
+                              <div className={`text-sm font-semibold mt-0.5 ${aColor ? '' : 'text-muted-foreground'}`}>
+                                {assigned || <span className="text-[8px] text-muted-foreground italic">belum di-assign</span>}
+                              </div>
                             </div>
+                            <span className="text-xs text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
                           </div>
-                          <span style={{ fontSize: "8px", color: "#1E3A5F", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
-                        </div>
+                        </PopoverTrigger>
 
-                        {isOpen && (
-                          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "#060F1E", border: "1px solid #1D4ED855", borderTop: "none", borderRadius: "0 0 6px 6px", maxHeight: "140px", overflowY: "auto", boxShadow: "0 8px 24px #000A" }}>
+                        <PopoverContent className="w-full p-0">
+                          <div className="bg-popover border border-sidebar-border rounded-b-md max-h-[140px] overflow-y-auto">
                             <div
                               onClick={() => setEventSR(activeEvt, key, null)}
-                              style={{ padding: "6px 10px", fontSize: "9px", color: "#475569", cursor: "pointer", borderBottom: "1px solid #0F2A4A", fontFamily: "DM Mono,monospace", letterSpacing: "0.5px" }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = "#0A1929")}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              className="px-3 py-2 text-sm text-muted-foreground hover:bg-input cursor-pointer border-b border-sidebar-border"
                             >
                               — Kosongkan slot ini
                             </div>
-                            {eligible.length === 0 && (
-                              <div style={{ padding: "8px 10px", fontSize: "9px", color: "#1E3A5F", fontFamily: "DM Mono,monospace" }}>Tidak ada anggota tersedia</div>
+                            {eligible.length === 0 ? (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">Tidak ada anggota tersedia</div>
+                            ) : (
+                              eligible.map((mb) => (
+                                <div
+                                  key={mb.id}
+                                  onClick={() => setEventSR(activeEvt, key, mb.name)}
+                                  className={`px-3 py-2 flex items-center gap-3 cursor-pointer hover:bg-input ${assigned === mb.name ? 'bg-input' : ''}`}
+                                >
+                                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: mb.color, boxShadow: `0 0 6px ${mb.color}66` }} />
+                                  <span className="text-sm font-semibold text-muted-foreground">{mb.name}</span>
+                                  {assigned === mb.name && <span className="ml-auto text-[8px] text-green-400">✓ terpilih</span>}
+                                </div>
+                              ))
                             )}
-                            {eligible.map((mb) => (
-                              <div
-                                key={mb.id}
-                                onClick={() => setEventSR(activeEvt, key, mb.name)}
-                                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 10px", cursor: "pointer", background: assigned === mb.name ? "#0A1929" : "transparent", borderBottom: "1px solid #0A1929" }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#0A1929")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = assigned === mb.name ? "#0A1929" : "transparent")}
-                              >
-                                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: mb.color, boxShadow: `0 0 5px ${mb.color}66`, flexShrink: 0 }} />
-                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#E2E8F0" }}>{mb.name}</span>
-                                {assigned === mb.name && <span style={{ marginLeft: "auto", fontSize: "8px", color: "#10B981" }}>✓ terpilih</span>}
-                              </div>
-                            ))}
                           </div>
-                        )}
-                      </div>
+                        </PopoverContent>
+                      </Popover>
                     );
                   })}
                 </div>
@@ -1030,18 +1057,18 @@ export default function AssignPage() {
           })()}
 
           {/* Bottom controls */}
-          <div style={{ padding: "10px", borderTop: "1px solid #0A1929" }}>
+          <div style={{ padding: "10px", borderTop: "1px solid var(--color-sidebar-border)" }}>
             {error && (
-              <div style={{ background: "#1C0909", border: "1px solid #7F1D1D44", borderRadius: "6px", padding: "8px", fontSize: "9px", color: "#FCA5A5", marginBottom: "8px", lineHeight: 1.6, fontFamily: "DM Mono,monospace" }}>
+              <div style={{ background: "var(--assign-error-bg)", border: "1px solid var(--assign-error-border)", borderRadius: "6px", padding: "8px", fontSize: "9px", color: "var(--assign-error-text)", marginBottom: "8px", lineHeight: 1.6, fontFamily: "DM Mono,monospace" }}>
                 ⚠ {error}
               </div>
             )}
 
             {mode === "manual" && isReady && (
-              <div style={{ background: "#1A1200", border: "1px solid #78350F55", borderRadius: "6px", padding: "8px", fontSize: "9px", color: "#FDE68A", marginBottom: "8px", lineHeight: 1.7, fontFamily: "DM Mono,monospace" }}>
+              <div style={{ background: "var(--assign-manual-bg)", border: "1px solid var(--assign-manual-border)", borderRadius: "6px", padding: "8px", fontSize: "9px", color: "var(--assign-manual-text)", marginBottom: "8px", lineHeight: 1.7, fontFamily: "DM Mono,monospace" }}>
                 {selected ? (
                   <>
-                    <span style={{ color: "#78350F" }}>MEMILIH: </span>
+                    <span style={{ color: "var(--assign-manual-accent)" }}>MEMILIH: </span>
                     <strong style={{ color: selected.color }}>{selected.name.toUpperCase()}</strong>
                     <br />Klik blok di peta untuk assign/unassign
                   </>
@@ -1072,7 +1099,7 @@ export default function AssignPage() {
                   {A_BL.map((key) => {
                     const g         = GEOM[key];
                     const assignees = getAssignees(key, activeEvt);
-                    const col       = assignees.length > 0 ? colorOf(assignees[0]) + "33" : "#0B1E35";
+                    const col       = assignees.length > 0 ? colorOf(assignees[0]) + "33" : "var(--color-sidebar-border)";
                     return (
                       <line key={key}
                         x1={g.cx} y1={g.cy - 28} x2="415" y2="96"
@@ -1086,7 +1113,7 @@ export default function AssignPage() {
                   {/* Tooltip layer (on top) */}
                   {renderTooltip()}
 
-                  <text x="824" y="486" textAnchor="end" fill="#0B1E35" fontSize="8"
+                  <text x="824" y="486" textAnchor="end" fill="var(--color-sidebar-foreground)" fontSize="8"
                     style={{ fontFamily: "DM Mono,monospace" }}>
                     bobot blok: {EVT_NAMES[activeEvt]}
                   </text>
@@ -1099,14 +1126,14 @@ export default function AssignPage() {
         </CardContent>
 
         {showOut && isReady && (
-          <CardFooter className="flex flex-col h-[215px] bg-[#07111E] border-t border-[#0A1929] p-0">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-[#0A1929]">
-              <span className="text-[9px] font-semibold text-[#1E3A5F] font-mono">OUTPUT TEKS</span>
-              <Button onClick={copyOut} variant={copied ? "default" : "outline"}>{copied ? "✓ DISALIN" : "SALIN"}</Button>
+          <CardFooter className="flex flex-col h-[215px] border-t border-sidebar-border p-0 bg-card">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-sidebar-border">
+              <span className="text-[9px] font-semibold text-muted-foreground font-mono">OUTPUT TEKS</span>
+              <Button onClick={copyOut} variant={copied ? "default" : "outline"} size="sm">{copied ? "✓ DISALIN" : "SALIN"}</Button>
             </div>
-            <pre className="flex-1 overflow-y-auto p-4 text-[11px] text-[#334155] leading-8 font-mono whitespace-pre-wrap m-0">
-              {genOutput()}
-            </pre>
+            <div className="flex-1 overflow-y-auto p-4">
+              <pre className="text-[11px] text-muted-foreground leading-7 font-mono whitespace-pre-wrap m-0">{genOutput()}</pre>
+            </div>
           </CardFooter>
         )}
       </Card>

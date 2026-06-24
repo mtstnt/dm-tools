@@ -232,6 +232,24 @@ export default function AssignPage() {
     { assignments: {}, sr: { tcIn: null, tcOut: null, fd: null } },
   ]);
 
+  /* Theme tokens (use global CSS variables from globals.css) */
+  const THEME = {
+    bg: "var(--color-background)",
+    fg: "var(--color-foreground)",
+    headerBg: "var(--color-sidebar)",
+    headerBorder: "1px solid var(--color-sidebar-border)",
+    panelBg: "var(--color-sidebar)",
+    panelBorder: "1px solid var(--color-sidebar-border)",
+    cardBg: "var(--color-card)",
+    popoverBg: "var(--color-popover)",
+    inputBg: "var(--color-input)",
+    inputBorder: "1px solid var(--color-border)",
+    primary: "var(--color-primary)",
+    primaryFg: "var(--color-primary-foreground)",
+    muted: "var(--color-muted)",
+    mutedFg: "var(--color-muted-foreground)",
+  };
+
   /* ── Derived ── */
   const eventMembers = useCallback(
     (ei: number): Member[] => {
@@ -293,7 +311,7 @@ export default function AssignPage() {
   );
 
   const colorOf = useCallback(
-    (name: string): string => members.find((m) => m.name === name)?.color ?? "#334155",
+    (name: string): string => members.find((m) => m.name === name)?.color ?? "var(--color-muted-foreground)",
     [members]
   );
 
@@ -485,16 +503,16 @@ export default function AssignPage() {
       return (
         <g key={key}>
           <rect x={g.x} y={g.y} width={g.w} height={g.h} rx="6"
-            fill="#06122A" stroke="#1E40AF" strokeWidth="2.5" />
+            fill="var(--color-card)" stroke="var(--color-primary)" strokeWidth="2.5" />
           <rect x={g.x + 2} y={g.y + 2} width={g.w - 4} height={g.h - 4} rx="5"
-            fill="none" stroke="#1E3A8A" strokeWidth="0.5" />
+            fill="none" stroke="var(--color-sidebar-border)" strokeWidth="0.5" />
           <text x={g.cx} y={g.cy - 4} textAnchor="middle"
-            fill="#93C5FD" fontSize="13" fontWeight="800" letterSpacing="5"
+            fill="var(--color-sidebar-primary)" fontSize="13" fontWeight="800" letterSpacing="5"
             style={{ fontFamily: "Syne,sans-serif" }}>
             MAIN STAGE
           </text>
           <text x={g.cx} y={g.cy + 12} textAnchor="middle"
-            fill="#1E3A8A" fontSize="8" letterSpacing="2"
+            fill="var(--color-sidebar-primary)" fontSize="8" letterSpacing="2"
             style={{ fontFamily: "DM Mono,monospace" }}>
             ↑ SEMUA ARAH KE SINI
           </text>
@@ -507,12 +525,12 @@ export default function AssignPage() {
     const isSelConn  = selected && assignees.includes(selected.name);
     const hasAny     = assignees.length > 0;
     const priColor   = hasAny ? colorOf(assignees[0]) : null;
-    const stroke     = isSelConn ? "#FCD34D" : priColor || (isHov ? "#475569" : "#0F2A4A");
+    const stroke     = isSelConn ? "var(--assign-warn)" : priColor || (isHov ? "var(--color-muted-foreground)" : "var(--color-sidebar-border)");
     const fill       = priColor
       ? priColor + "22"
       : isHov && mode === "manual" && selected && !getMemberRole(selected.name, activeEvt)
-      ? "#FFFFFF09"
-      : "#030C1CAA";
+      ? "rgba(255,255,255,0.06)"
+      : "var(--assign-dim)";
     const sw    = isHov || isSelConn ? 2.5 : 1.5;
     const arRot = ARROW_ROT[key] ?? 0;
 
@@ -545,7 +563,7 @@ export default function AssignPage() {
           <polygon
             points="0,-12 9,-4 5,-4 5,10 -5,10 -5,-4 -9,-4"
             fill="none"
-            stroke={hasAny ? priColor + "AA" : "#EF444477"}
+            stroke={hasAny ? priColor + "AA" : "var(--assign-fail)"}
             strokeWidth="1.8"
             strokeLinejoin="round"
           />
@@ -553,7 +571,7 @@ export default function AssignPage() {
 
         {/* Block key label */}
         <text x={g.cx} y={g.cy + 5} textAnchor="middle"
-          fill={priColor || (isHov ? "#64748B" : "#1E3A5F")}
+          fill={priColor || (isHov ? "var(--color-muted-foreground)" : "var(--color-sidebar-foreground)")}
           fontSize="13" fontWeight="700"
           style={{ fontFamily: "DM Mono,monospace", userSelect: "none" }}>
           {key}
@@ -561,7 +579,7 @@ export default function AssignPage() {
 
         {/* Weight badge */}
         <text x={g.cx} y={g.cy + 18} textAnchor="middle"
-          fill="#0F2A4A" fontSize="8"
+          fill="var(--color-sidebar-border)" fontSize="8"
           style={{ fontFamily: "DM Mono,monospace", userSelect: "none" }}>
           {WEIGHTS[activeEvt][key]}
         </text>
@@ -590,7 +608,7 @@ export default function AssignPage() {
         {/* Multi-assignee count */}
         {assignees.length > 1 && (
           <text x={g.cx} y={g.cy + 46} textAnchor="middle"
-            fill="#1E3A5F" fontSize="8"
+            fill="var(--color-sidebar-foreground)" fontSize="8"
             style={{ fontFamily: "DM Mono,monospace", userSelect: "none" }}>
             {assignees.length} org
           </text>
@@ -602,8 +620,8 @@ export default function AssignPage() {
             const cnt = assignees.length;
             const ok  = cnt >= 2;
             const one = cnt === 1;
-            const bC  = ok ? "#10B981" : one ? "#F59E0B" : "#EF4444";
-            const bBg = ok ? "#05291999" : one ? "#1c140099" : "#1a050599";
+            const bC  = ok ? "var(--assign-success)" : one ? "var(--assign-warn)" : "var(--assign-fail)";
+            const bBg = ok ? "rgba(16,185,129,0.15)" : one ? "rgba(245,158,11,0.12)" : "rgba(239,68,68,0.12)";
             return (
               <g>
                 <rect x={bx - 27} y={by - 9} width="29" height="15" rx="4"
@@ -639,18 +657,18 @@ export default function AssignPage() {
       <g>
         <rect x={tx + 2} y={ty + 2} width={w} height={h} rx="6" fill="black" opacity="0.4" />
         <rect x={tx} y={ty} width={w} height={h} rx="6"
-          fill="#060F1E" fillOpacity="0.97"
-          stroke={assignees.length > 0 ? colorOf(assignees[0]) + "55" : "#0F2A4A"}
+          fill="var(--color-popover)" fillOpacity="0.97"
+          stroke={assignees.length > 0 ? colorOf(assignees[0]) + "55" : "var(--color-sidebar-border)"}
           strokeWidth="1.5" />
         <text x={tx + w / 2} y={ty + 16} textAnchor="middle"
-          fill="#1E3A8A" fontSize="9" style={{ fontFamily: "DM Mono,monospace" }}>
+          fill="var(--color-sidebar-primary)" fontSize="9" style={{ fontFamily: "DM Mono,monospace" }}>
           {hovered} · w:{WEIGHTS[activeEvt][hovered]}
         </text>
         <line x1={tx + 10} y1={ty + 22} x2={tx + w - 10} y2={ty + 22}
-          stroke="#0F2A4A" strokeWidth="0.5" />
+          stroke="var(--color-sidebar-border)" strokeWidth="0.5" />
         {assignees.length === 0 ? (
           <text x={tx + w / 2} y={ty + 38} textAnchor="middle"
-            fill="#1E3A5F" fontSize="10" style={{ fontFamily: "DM Mono,monospace" }}>
+            fill="var(--color-sidebar-foreground)" fontSize="10" style={{ fontFamily: "DM Mono,monospace" }}>
             kosong
           </text>
         ) : (
@@ -669,7 +687,7 @@ export default function AssignPage() {
           (() => {
             const cnt = assignees.length;
             const ok  = cnt >= 2;
-            const col = ok ? "#10B981" : cnt === 1 ? "#F59E0B" : "#EF4444";
+            const col = ok ? "var(--assign-success)" : cnt === 1 ? "var(--assign-warn)" : "var(--assign-fail)";
             const msg = ok
               ? `✓ ${cnt}/2 min terpenuhi`
               : cnt === 1
@@ -699,52 +717,52 @@ export default function AssignPage() {
   const SR_SHORT = ["TC In + AC S1", "TC Out + AC S2", "FD"];
 
   return (
-    <div
+    <div className="assign-page"
       style={{
         height: "100%",
-        background: "#050B18",
-        color: "#CBD5E1",
-        fontFamily: "'Syne','Inter',sans-serif",
+        background: "var(--color-background)",
+        color: "var(--color-foreground)",
+        fontFamily: "var(--font-sans)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+        .assign-page { --assign-success: #10B981; --assign-warn: #F59E0B; --assign-fail: #EF4444; --assign-dim: var(--color-card); }
         ::-webkit-scrollbar{width:4px;}
         ::-webkit-scrollbar-track{background:transparent;}
-        ::-webkit-scrollbar-thumb{background:#0F2A4A;border-radius:2px;}
-        input::placeholder,textarea::placeholder{color:#1E3A5F;}
-        button:hover{filter:brightness(1.15);}
+        ::-webkit-scrollbar-thumb{background:var(--color-sidebar-border);border-radius:2px;}
+        input::placeholder,textarea::placeholder{color:var(--color-muted-foreground);}
+        button:hover{filter:brightness(1.05);}
       `}</style>
 
       {/* ════════════ HEADER ════════════ */}
       <header
         style={{
-          background: "#07111E", borderBottom: "1px solid #0A1D35",
+          background: "var(--color-sidebar)", borderBottom: "1px solid var(--color-sidebar-border)",
           padding: "8px 16px", display: "flex", alignItems: "center",
           gap: "10px", flexShrink: 0, minHeight: "50px", flexWrap: "wrap",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontSize: "18px" }}>⛪</span>
-          <span style={{ fontSize: "14px", fontWeight: 800, color: "#E2E8F0", letterSpacing: "1.5px", fontFamily: "Syne,sans-serif" }}>
+          <span style={{ fontSize: "14px", fontWeight: 800, color: "var(--color-foreground)", letterSpacing: "1.5px", fontFamily: "Syne,sans-serif" }}>
             SERVICE ASSIGNMENT
           </span>
         </div>
 
         {/* Event tabs */}
         {isReady && (
-          <div style={{ display: "flex", gap: "3px", background: "#0A1929", borderRadius: "8px", padding: "3px", border: "1px solid #0A1D35" }}>
+            <div style={{ display: "flex", gap: "3px", background: "var(--color-input)", borderRadius: "8px", padding: "3px", border: "1px solid var(--color-sidebar-border)" }}>
             {EVT_NAMES.map((name, i) => (
               <button key={i}
                 onClick={() => { setActiveEvt(i); setSelected(null); setError(""); }}
                 style={{
                   padding: "4px 16px", borderRadius: "5px", border: "none", cursor: "pointer",
                   fontSize: "11px", fontWeight: 700, letterSpacing: "1px", transition: "all 0.2s",
-                  background: activeEvt === i ? "#1D4ED8" : "transparent",
-                  color: activeEvt === i ? "white" : "#334155",
+                  background: activeEvt === i ? "var(--color-primary)" : "transparent",
+                  color: activeEvt === i ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
                   fontFamily: "Syne,sans-serif",
                 }}>
                 {name.toUpperCase()}
@@ -756,11 +774,11 @@ export default function AssignPage() {
         {/* A-block min-2 status chips */}
         {isReady && (
           <div style={{ display: "flex", gap: "4px", alignItems: "center", flexWrap: "wrap" }}>
-            {aStatus.map(({ bl, cnt }) => {
+              {aStatus.map(({ bl, cnt }) => {
               const ok  = cnt >= 2;
               const one = cnt === 1;
-              const bC  = ok ? "#10B981" : one ? "#F59E0B" : "#EF4444";
-              const bBg = ok ? "#05291966" : one ? "#1c140066" : "#1a050566";
+              const bC  = ok ? "var(--assign-success)" : one ? "var(--assign-warn)" : "var(--assign-fail)";
+              const bBg = ok ? "rgba(16,185,129,0.12)" : one ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.10)";
               return (
                 <div key={bl} style={{ display: "flex", alignItems: "center", gap: "3px", padding: "2px 7px", borderRadius: "5px", background: bBg, border: `1px solid ${bC}44` }}>
                   <span style={{ fontSize: "8px", color: bC, fontWeight: 700, fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>{bl}</span>
@@ -776,7 +794,7 @@ export default function AssignPage() {
         {isReady && (
           <>
             {/* Mode toggle */}
-            <div style={{ display: "flex", gap: "3px", background: "#0A1929", borderRadius: "7px", padding: "3px", border: "1px solid #0A1D35" }}>
+            <div style={{ display: "flex", gap: "3px", background: "var(--color-input)", borderRadius: "7px", padding: "3px", border: "1px solid var(--color-sidebar-border)" }}>
               {(["view", "manual"] as const).map((m) => {
                 const lbl = m === "view" ? "👁 VIEW" : "✏️ MANUAL";
                 return (
@@ -786,8 +804,8 @@ export default function AssignPage() {
                       padding: "4px 10px", borderRadius: "5px", border: "none", cursor: "pointer",
                       fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px",
                       transition: "all 0.2s", fontFamily: "DM Mono,monospace",
-                      background: mode === m ? (m === "manual" ? "#B45309" : "#1E3A5F") : "transparent",
-                      color: mode === m ? "white" : "#334155",
+                      background: mode === m ? (m === "manual" ? "var(--assign-warn)" : "var(--color-sidebar-primary)") : "transparent",
+                      color: mode === m ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
                     }}>
                     {lbl}
                   </button>
@@ -796,17 +814,17 @@ export default function AssignPage() {
             </div>
 
             <button onClick={runAuto}
-              style={{ padding: "6px 14px", background: "#1D4ED8", border: "none", borderRadius: "7px", color: "white", fontSize: "11px", fontWeight: 700, cursor: "pointer", letterSpacing: "1px", fontFamily: "Syne,sans-serif" }}>
+              style={{ padding: "6px 14px", background: "var(--color-primary)", border: "none", borderRadius: "7px", color: "var(--color-primary-foreground)", fontSize: "11px", fontWeight: 700, cursor: "pointer", letterSpacing: "1px", fontFamily: "var(--font-display), var(--font-sans)" }}>
               ⚡ AUTO ASSIGN
             </button>
 
             <button onClick={() => setShowOut((p) => !p)}
               style={{
                 padding: "6px 12px",
-                background: showOut ? "#064E3B" : "#0A1929",
-                border: "1px solid " + (showOut ? "#10B981" : "#0A1D35"),
+                background: showOut ? "var(--color-card)" : "var(--color-input)",
+                border: showOut ? "1px solid var(--assign-success)" : "1px solid var(--color-sidebar-border)",
                 borderRadius: "7px",
-                color: showOut ? "#10B981" : "#334155",
+                color: showOut ? "var(--assign-success)" : "var(--color-muted-foreground)",
                 fontSize: "11px", fontWeight: 700, cursor: "pointer",
                 fontFamily: "DM Mono,monospace", letterSpacing: "0.5px",
               }}>
@@ -823,26 +841,26 @@ export default function AssignPage() {
         <aside
           style={{
             width: "265px", flexShrink: 0,
-            background: "#07111E", borderRight: "1px solid #0A1D35",
+            background: "var(--color-sidebar)", borderRight: "1px solid var(--color-sidebar-border)",
             display: "flex", flexDirection: "column", overflow: "hidden",
           }}
         >
           {/* Input area */}
           <div style={{ padding: "12px", borderBottom: "1px solid #0A1929" }}>
-            <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+              <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
               <input
                 value={singleName}
                 onChange={(e) => setSingleName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addSingle()}
                 placeholder="Nama... (T) atau (Y) opsional"
                 style={{
-                  flex: 1, background: "#0A1929", border: "1px solid #0F2A4A",
-                  borderRadius: "6px", padding: "7px 10px", color: "#E2E8F0",
-                  fontSize: "12px", outline: "none", fontFamily: "Syne,sans-serif",
+                  flex: 1, background: "var(--color-input)", border: "1px solid var(--color-border)",
+                  borderRadius: "6px", padding: "7px 10px", color: "var(--color-foreground)",
+                  fontSize: "12px", outline: "none", fontFamily: "var(--font-sans)",
                   transition: "border-color 0.2s",
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "#1D4ED8")}
-                onBlur={(e)  => (e.target.style.borderColor = "#0F2A4A")}
+                onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
+                onBlur={(e)  => (e.target.style.borderColor = "var(--color-border)")}
               />
               <button onClick={addSingle}
                 style={{ width: "34px", height: "34px", background: "#1D4ED8", border: "none", borderRadius: "6px", color: "white", fontSize: "18px", cursor: "pointer", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>
@@ -850,8 +868,8 @@ export default function AssignPage() {
               </button>
             </div>
 
-            <button onClick={() => setShowImport((p) => !p)}
-              style={{ background: "none", border: "none", color: "#1E3A5F", fontSize: "9px", cursor: "pointer", padding: "0", letterSpacing: "1px", fontFamily: "DM Mono,monospace" }}>
+              <button onClick={() => setShowImport((p) => !p)}
+              style={{ background: "none", border: "none", color: "var(--color-sidebar-foreground)", fontSize: "9px", cursor: "pointer", padding: "0", letterSpacing: "1px", fontFamily: "var(--font-mono)" }}>
               {showImport ? "▼" : "▶"} IMPORT DARI TEKS
             </button>
 
@@ -867,10 +885,10 @@ export default function AssignPage() {
                   onChange={(e) => setBulkText(e.target.value)}
                   placeholder={"• rafa\n• medelin (T)\n• chen (Y)\nsatu nama per baris"}
                   rows={5}
-                  style={{ width: "100%", background: "#0A1929", border: "1px solid #0F2A4A", borderRadius: "6px", padding: "8px", color: "#CBD5E1", fontSize: "11px", resize: "none", outline: "none", fontFamily: "DM Mono,monospace", lineHeight: 1.8 }}
+                  style={{ width: "100%", background: "var(--color-input)", border: "1px solid var(--color-border)", borderRadius: "6px", padding: "8px", color: "var(--color-foreground)", fontSize: "11px", resize: "none", outline: "none", fontFamily: "var(--font-mono)", lineHeight: 1.8 }}
                 />
                 <button onClick={parseBulk}
-                  style={{ width: "100%", marginTop: "4px", padding: "6px", background: "#0F2A4A", border: "1px solid #1E3A5F", borderRadius: "6px", color: "#64748B", fontSize: "10px", cursor: "pointer", fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>
+                  style={{ width: "100%", marginTop: "4px", padding: "6px", background: "var(--color-card)", border: "1px solid var(--color-sidebar-border)", borderRadius: "6px", color: "var(--color-muted-foreground)", fontSize: "10px", cursor: "pointer", fontFamily: "var(--font-mono)", letterSpacing: "1px" }}>
                   IMPORT ({bulkText.split("\n").filter((l) => l.trim()).length} NAMA)
                 </button>
               </div>
@@ -879,9 +897,9 @@ export default function AssignPage() {
 
           {/* Min-2 rule strip */}
           {isReady && (
-            <div style={{ padding: "5px 12px", borderBottom: "1px solid #0A1929", background: "#040D1A", display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "7.5px", color: "#0F2A4A", letterSpacing: "1px", fontFamily: "DM Mono,monospace" }}>MIN 2 ORG/BLOK A</span>
-              <span style={{ fontSize: "7.5px", fontWeight: 700, marginLeft: "auto", color: allAMet ? "#10B981" : "#F59E0B", fontFamily: "DM Mono,monospace", letterSpacing: "0.5px" }}>
+            <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--color-sidebar-border)", background: "var(--color-card)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "7.5px", color: "var(--color-muted-foreground)", letterSpacing: "1px", fontFamily: "var(--font-mono)" }}>MIN 2 ORG/BLOK A</span>
+              <span style={{ fontSize: "7.5px", fontWeight: 700, marginLeft: "auto", color: allAMet ? "var(--color-primary)" : "var(--color-destructive)", fontFamily: "var(--font-mono)", letterSpacing: "0.5px" }}>
                 {allAMet ? "✓ TERPENUHI" : `⚠ ${aStatus.filter((s) => s.cnt < 2).map((s) => s.bl).join(",")} KURANG`}
               </span>
             </div>
@@ -890,12 +908,12 @@ export default function AssignPage() {
           {/* Member list */}
           <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
             {members.length === 0 ? (
-              <div style={{ textAlign: "center", color: "#0F2A4A", padding: "30px 10px", fontSize: "10px", lineHeight: 2.5, fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>
+                <div style={{ textAlign: "center", color: "var(--color-muted-foreground)", padding: "30px 10px", fontSize: "10px", lineHeight: 2.5, fontFamily: "var(--font-mono)", letterSpacing: "1px" }}>
                 BELUM ADA ANGGOTA<br />Tambah di atas atau import
               </div>
             ) : (
               <>
-                <div style={{ fontSize: "8px", color: "#0F2A4A", marginBottom: "8px", padding: "0 4px", fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>
+                <div style={{ fontSize: "8px", color: "var(--color-muted-foreground)", marginBottom: "8px", padding: "0 4px", fontFamily: "var(--font-mono)", letterSpacing: "1px" }}>
                   {members.length} ANGGOTA · 2 TERATAS = KOORDINATOR ALL BLOCK
                 </div>
 
@@ -922,11 +940,11 @@ export default function AssignPage() {
                       onMouseLeave={() => setHoveredMbr(null)}
                       style={{
                         borderRadius: "8px", marginBottom: "3px",
-                        border: "1px solid " + (isSel ? "#1D4ED866" : isHov ? "#1E3A5F44" : "transparent"),
+                        border: "1px solid " + (isSel ? "var(--color-primary)" : isHov ? "var(--color-muted-foreground)" : "transparent"),
                         overflow: "hidden",
                         opacity: !isInEvt ? 0.28 : isSR ? 0.65 : 1,
                         transition: "all 0.15s",
-                        background: isSel ? "#0A1929" : isHov && isInEvt ? "#07111E" : "transparent",
+                        background: isSel ? "var(--color-card)" : isHov && isInEvt ? "var(--color-input)" : "transparent",
                       }}
                     >
                       {/* Main row */}
@@ -937,37 +955,37 @@ export default function AssignPage() {
                         <div style={{ width: "10px", height: "10px", borderRadius: "50%", flexShrink: 0, background: m.color, boxShadow: `0 0 7px ${m.color}77` }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#E2E8F0" }}>{m.name}</span>
+                            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-foreground)" }}>{m.name}</span>
                             {isABAny && <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: "#78350F44", color: "#FCD34D", fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>{abLabel}</span>}
-                            {isSR    && <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: "#0F2A4A", color: "#334155", fontFamily: "DM Mono,monospace" }}>SR</span>}
+                            {isSR    && <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: "var(--color-sidebar-border)", color: "var(--color-muted-foreground)", fontFamily: "DM Mono,monospace" }}>SR</span>}
                             {avail !== "both" && (
                               <span style={{ fontSize: "7px", padding: "1px 5px", borderRadius: "3px", background: avail === "teen" ? "#78350F55" : "#1E3A8A55", color: avail === "teen" ? "#FBBF24" : "#93C5FD", fontFamily: "DM Mono,monospace", letterSpacing: "1px", border: "1px solid " + (avail === "teen" ? "#FBBF2444" : "#93C5FD44") }}>
                                 {avail === "teen" ? "T" : "Y"}
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: "9px", marginTop: "1px", color: isSR ? "#1E3A5F" : role ? "#475569" : blocks.length ? m.color + "BB" : "#1E3A5F", fontFamily: "DM Mono,monospace", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                          <div style={{ fontSize: "9px", marginTop: "1px", color: isSR ? "var(--color-sidebar-foreground)" : role ? "var(--color-muted-foreground)" : blocks.length ? m.color + "BB" : "var(--color-sidebar-foreground)", fontFamily: "DM Mono,monospace", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                             {!isInEvt
                               ? <span style={{ color: "#1E3A5F", fontStyle: "italic" }}>tidak ikut {EVT_NAMES[activeEvt]}</span>
                               : role || (blocks.length ? `${blocks.join(" · ")} (${w.toFixed(2)})` : "–")}
                           </div>
                         </div>
-                        <span style={{ fontSize: "9px", color: "#1E3A5F", fontFamily: "DM Mono,monospace", flexShrink: 0 }}>#{i + 1}</span>
+                        <span style={{ fontSize: "9px", color: "var(--color-sidebar-foreground)", fontFamily: "DM Mono,monospace", flexShrink: 0 }}>#{i + 1}</span>
                       </div>
 
                       {/* Hover action bar */}
                       {isHov && (
-                        <div style={{ display: "flex", gap: "4px", padding: "5px 8px", borderTop: "1px solid #0F2A4A", background: "#040D1A" }}>
+                        <div style={{ display: "flex", gap: "4px", padding: "5px 8px", borderTop: "1px solid var(--color-sidebar-border)", background: "var(--color-popover)" }}>
                           <button onClick={(e) => { e.stopPropagation(); moveMember(m.id, -1); }}
-                            style={{ flex: 1, padding: "5px 4px", background: "#0A1929", border: "1px solid #0F2A4A", borderRadius: "5px", color: "#475569", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
+                            style={{ flex: 1, padding: "5px 4px", background: "var(--color-input)", border: "1px solid var(--color-sidebar-border)", borderRadius: "5px", color: "var(--color-muted-foreground)", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
                             <span style={{ fontSize: "12px" }}>↑</span><span style={{ fontSize: "8px", letterSpacing: "0.5px" }}>NAIK</span>
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); moveMember(m.id, 1); }}
-                            style={{ flex: 1, padding: "5px 4px", background: "#0A1929", border: "1px solid #0F2A4A", borderRadius: "5px", color: "#475569", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
+                            style={{ flex: 1, padding: "5px 4px", background: "var(--color-input)", border: "1px solid var(--color-sidebar-border)", borderRadius: "5px", color: "var(--color-muted-foreground)", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
                             <span style={{ fontSize: "12px" }}>↓</span><span style={{ fontSize: "8px", letterSpacing: "0.5px" }}>TURUN</span>
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); removeMember(m.id); }}
-                            style={{ flex: 1, padding: "5px 4px", background: "#1C0909", border: "1px solid #7F1D1D55", borderRadius: "5px", color: "#EF4444", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
+                            style={{ flex: 1, padding: "5px 4px", background: "var(--color-card)", border: "1px solid rgba(127,29,29,0.33)", borderRadius: "5px", color: "var(--assign-fail)", fontSize: "10px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
                             <span style={{ fontSize: "12px" }}>×</span><span style={{ fontSize: "8px", letterSpacing: "0.5px" }}>HAPUS</span>
                           </button>
                         </div>

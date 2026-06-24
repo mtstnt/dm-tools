@@ -8,6 +8,7 @@ export type Event = {
   location: string | null;
   seatCountUrl: string | null;
   editUrl: string | null;
+  locked: boolean;
 };
 
 export function parseEvents(html: string): Event[] {
@@ -54,6 +55,8 @@ export function parseEvents(html: string): Event[] {
         seatCountUrl?.match(/\/presence2\/(\d+)/)?.[1] ??
         null;
 
+      const locked = $card.find("i.fa-lock").length > 0;
+
       return {
         id,
         date,
@@ -62,6 +65,7 @@ export function parseEvents(html: string): Event[] {
         location,
         seatCountUrl,
         editUrl,
+        locked,
       };
     })
     .get();

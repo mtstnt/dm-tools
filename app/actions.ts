@@ -1,6 +1,7 @@
 "use server"
 
 import * as cheerio from "cheerio"
+import { parseEvents, type Event } from "@/lib/parsers/events"
 
 interface WebAuthResult {
   success: boolean
@@ -15,7 +16,8 @@ export async function webAuthLogin(
   const password = atob(passwordBase64)
   try {
     // Step 1: GET /login to retrieve CSRF token + session cookie
-    const getUrl = "https://sc.gms.church/login"
+    const baseUrl = process.env.SC_BASE_URL!
+    const getUrl = `${baseUrl}/login`
     const getHeaders = {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
@@ -69,14 +71,14 @@ export async function webAuthLogin(
     console.log("[webAuthLogin]   cookies for POST:", cookies)
 
     // Step 2: POST /login with redirect: "manual"
-    const postUrl = "https://sc.gms.church/login"
+    const postUrl = `${baseUrl}/login`
     const postHeaders = {
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: cookies,
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-      Origin: "https://sc.gms.church",
-      Referer: "https://sc.gms.church/login",
+      Origin: baseUrl,
+      Referer: `${baseUrl}/login`,
     }
     const postBody = new URLSearchParams({
       email,
@@ -138,4 +140,28 @@ export async function webAuthLogin(
       error: err instanceof Error ? err.message : "Login request failed",
     }
   }
+}
+
+export async function fetchEvents(cookie: string): Promise<Event[]> {
+  const baseUrl = process.env.SC_BASE_URL!
+  const headers = {
+    Cookie: cookie,
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+  }
+
+  const pages = [1, 2, 3]
+  const results = await Promise.all(
+    pages.map(async (page) => {
+      const url = `${baseUrl}/event?page=${page}`
+      const res = await fetch(url, { headers })
+      if (!res.ok) {
+        throw new Error(`Failed to fetch events page ${page}: ${res.status}`)
+      }
+      const html = await res.text()
+      return parseEvents(html)
+    })
+  )
+
+  return results.flat()
 }

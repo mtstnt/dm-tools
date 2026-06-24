@@ -1,4 +1,4 @@
-import { FileText, ArrowRight, History, UserCheck } from "lucide-react"
+import { CalendarDays, FileText, ArrowRight, History, UserCheck } from "lucide-react"
 import Link from "next/link"
 
 const tools = [
@@ -21,6 +21,13 @@ const tools = [
     description: "Open the assignment tool for service block allocation and counters.",
     href: "/tools/assign",
     icon: UserCheck,
+    available: true,
+  },
+  {
+    name: "Events (Experimental)",
+    description: "Access external event management from sc.gms.church with web authentication.",
+    href: "/tools/events",
+    icon: CalendarDays,
     available: true,
   },
 ]

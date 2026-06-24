@@ -91,7 +91,7 @@ export function WebAuthGuard({ children }: { children: React.ReactNode }) {
           <DialogHeader>
             <DialogTitle>Web Authentication</DialogTitle>
             <DialogDescription>
-              Sign in with your sc.gms.church credentials to access Events.
+              Sign in with your credentials to access Events.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">

@@ -14,12 +14,27 @@
 | Theming | next-themes (class strategy, light default) |
 | Package Manager | Bun |
 
+## Environment Variables
+
+| Variable | Scope | Description |
+|----------|-------|-------------|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Client | Firebase Web API key |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Client | Firebase Auth domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Client | Firebase project ID |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Client | Firebase storage bucket |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Client | Firebase messaging sender ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Client | Firebase app ID |
+| `SC_BASE_URL` | Server | Base URL for external events API (used by server actions) |
+| `NEXT_PUBLIC_SC_BASE_URL` | Client | Same value, used for link generation in event cards |
+
+Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is server-only (used in `app/actions.ts`). `NEXT_PUBLIC_SC_BASE_URL` is client-side (used in event card links).
+
 ## Directory Layout
 
 ```
 app/
   layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider
-  actions.ts          Server actions: setAuthCookie(), logout()
+  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents()
   auth/
     login/page.tsx    Login page (Firebase email/password)
     forget-password/  Password reset page (sendPasswordResetEmail)
@@ -28,6 +43,8 @@ app/
     page.tsx          Tools dashboard (card grid linking to features)
     reports/          Service report generator
     reports-history/  Browse saved Firestore reports
+    assign/           Service assignment tool (SVG-based block allocation)
+    events/           External events browser (web auth guard)
     test-firebase/    Firebase debug page
 components/
   ui/                 17 Shadcn components (badge, button, calendar, card, etc.)
@@ -37,9 +54,14 @@ components/
   theme-toggle.tsx    Light/dark toggle button
   account-info.tsx    User dropdown with Firebase auth state
   logout-button.tsx   Sidebar logout form action
+  web-auth-guard.tsx  Auth gate for external events API (localStorage-based session)
 lib/
   firebase.ts         Firebase client init (hardcoded config, "use client")
-  queries/reports.ts  Firestore fetch + sort for reports collection
+  queries/
+    reports.ts        Firestore fetch + sort for reports collection
+    events.ts         Re-exports fetchEvents + Event type from app/actions
+  parsers/
+    events.ts         Cheerio parser for external event HTML
   utils.ts            cn() — clsx + tailwind-merge
 hooks/
   use-mobile.ts       768px breakpoint hook
@@ -50,6 +72,9 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 
 ## Auth Flow
 
+Two separate auth systems:
+
+### Firebase Auth (main app)
 1. User visits `/` → redirected to `/tools` (via proxy.ts logic, but middleware.ts is missing)
 2. `/tools/*` routes check for `authenticated` cookie
 3. If no cookie → redirect to `/auth/login`
@@ -57,14 +82,24 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 5. `/auth/forget-password` page: Firebase `sendPasswordResetEmail` → shows success state
 6. Cookie: `authenticated=true`, httpOnly, 7-day expiry
 
+### Web Auth (events page only)
+1. `WebAuthGuard` checks localStorage for external API credentials
+2. If missing → modal dialog for email + password
+3. Server action: GET `/login` → CSRF token → POST `/login` → `sails.sid` cookie
+4. Credentials + cookie stored in localStorage
+
 ## Data Model
 
-Firestore collection `reports`:
+### Firestore `reports` collection
 - `title`, `type` (AOG_YOUTH, AOG_TEEN, EVENT), `date` (Indonesian format "DD Month YYYY")
 - `divisions` — map of ministry names to volunteer counts
 - `totalVolunteer`, `jemaat`, `tc`, `guest`, `pastorSpeaker`
 - `altarcallText`, `altarcallNumber`, `baptisan`, `whl`, `bersediaJoinCg`
 - `prayerStation`, `oneMinutePrayer`, `reportText`, `lastUpdated`
+
+### External events
+- Scraped via Cheerio from HTML `.card` elements
+- Fields: `id`, `date`, `time`, `eventName`, `location`, `seatCountUrl`, `editUrl`, `locked`
 
 ## Features
 

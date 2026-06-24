@@ -42,7 +42,7 @@ export default function EventsPage() {
                 Events
               </h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Manage events from sc.gms.church.{" "}
+                Manage events.{" "}
                 <span className="text-muted-foreground/60">
                   Experimental
                 </span>

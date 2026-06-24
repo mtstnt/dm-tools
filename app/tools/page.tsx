@@ -25,7 +25,7 @@ const tools = [
   },
   {
     name: "Events (Experimental)",
-    description: "Access external event management from sc.gms.church with web authentication.",
+    description: "Access external event management with web authentication.",
     href: "/tools/events",
     icon: CalendarDays,
     available: true,

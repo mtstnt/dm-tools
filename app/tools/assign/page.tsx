@@ -227,7 +227,7 @@ export default function AssignPage() {
   const [selected,   setSelected]   = useState<Member | null>(null);
   const [hovered,    setHovered]    = useState<string | null>(null);
   const [showOut,    setShowOut]    = useState(false);
-  const [copied,     setCopied]     = useState(false);
+  const [copied,     setCopied]     = useState<null | "ALL" | "TEEN" | "YOUTH">(null);
   const [error,      setError]      = useState("");
   const [showImport, setShowImport] = useState(false);
   const [hoveredMbr, setHoveredMbr] = useState<number | null>(null);
@@ -470,28 +470,33 @@ export default function AssignPage() {
   };
 
   /* ── Output ── */
-  const genOutput = (): string =>
-    events
-      .map((evt, ei) => {
-        const lines: string[] = [EVT_NAMES[ei], ""];
-        allBlockForEvent(ei).forEach((m) => lines.push(`• ${m.name} : ALL BLOCK`));
-        const { tcIn, tcOut, fd } = evt.sr;
-        if (tcIn)  lines.push(`• ${tcIn} : ${SR_ROLES[0]}`);
-        if (tcOut) lines.push(`• ${tcOut} : ${SR_ROLES[1]}`);
-        if (fd)    lines.push(`• ${fd} : ${SR_ROLES[2]}`);
-        getCounters(ei).forEach((c) => {
-          const bl = ORDERED.filter((b) => (evt.assignments[b] || []).includes(c.name));
-          lines.push(`• ${c.name} : ${bl.length ? bl.join(", ") : "(belum di-assign)"}`);
-        });
-        return lines.join("\n");
-      })
-      .join("\n\n");
+  const genOutput = (ei?: number): string => {
+    if (typeof ei === "number") {
+      const evt = events[ei];
+      const lines: string[] = [];
+      // Header immediately followed by content (no extra blank line)
+      lines.push(EVT_NAMES[ei]);
+      allBlockForEvent(ei).forEach((m) => lines.push(`• ${m.name} : ALL BLOCK`));
+      const { tcIn, tcOut, fd } = evt.sr;
+      if (tcIn)  lines.push(`• ${tcIn} : ${SR_ROLES[0]}`);
+      if (tcOut) lines.push(`• ${tcOut} : ${SR_ROLES[1]}`);
+      if (fd)    lines.push(`• ${fd} : ${SR_ROLES[2]}`);
+      getCounters(ei).forEach((c) => {
+        const bl = ORDERED.filter((b) => (evt.assignments[b] || []).includes(c.name));
+        lines.push(`• ${c.name} : ${bl.length ? bl.join(", ") : "(belum di-assign)"}`);
+      });
+      return lines.join("\n");
+    }
+    // Combined output: two sections separated by a single blank line
+    return [genOutput(0), genOutput(1)].join("\n\n");
+  };
 
-  const copyOut = async () => {
+  const copyOut = async (which: "ALL" | "TEEN" | "YOUTH") => {
     try {
-      await navigator.clipboard.writeText(genOutput());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const text = which === "ALL" ? genOutput() : genOutput(which === "TEEN" ? 0 : 1);
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
     } catch {}
   };
 
@@ -1129,7 +1134,11 @@ export default function AssignPage() {
           <CardFooter className="flex flex-col h-[215px] border-t border-sidebar-border p-0 bg-card">
             <div className="flex items-center justify-between px-4 py-2 border-b border-sidebar-border">
               <span className="text-[9px] font-semibold text-muted-foreground font-mono">OUTPUT TEKS</span>
-              <Button onClick={copyOut} variant={copied ? "default" : "outline"} size="sm">{copied ? "✓ DISALIN" : "SALIN"}</Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => copyOut("TEEN")} variant={copied === "TEEN" ? "default" : "outline"} size="sm">{copied === "TEEN" ? "✓ DISALIN" : "SALIN TEEN"}</Button>
+                <Button onClick={() => copyOut("YOUTH")} variant={copied === "YOUTH" ? "default" : "outline"} size="sm">{copied === "YOUTH" ? "✓ DISALIN" : "SALIN YOUTH"}</Button>
+                <Button onClick={() => copyOut("ALL")} variant={copied === "ALL" ? "default" : "outline"} size="sm">{copied === "ALL" ? "✓ DISALIN" : "SALIN SEMUA"}</Button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               <pre className="text-[11px] text-muted-foreground leading-7 font-mono whitespace-pre-wrap m-0">{genOutput()}</pre>

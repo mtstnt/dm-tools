@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { onAuthStateChanged, signOut, type User } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import { logout } from "@/app/actions"
 import { LogOut, User as UserIcon } from "lucide-react"
 import {
   DropdownMenu,
@@ -16,15 +16,32 @@ import {
 
 export function AccountInfo() {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u))
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u)
+      setLoading(false)
+    })
     return () => unsubscribe()
   }, [])
 
   async function handleLogout() {
     await signOut(auth)
-    await logout()
+    router.push("/auth/login")
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2.5 px-2 py-1.5">
+        <div className="flex flex-col gap-1 items-end">
+          <div className="h-3 w-16 rounded bg-muted animate-pulse" />
+          <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
+        </div>
+        <div className="size-8 rounded-full bg-muted animate-pulse shrink-0" />
+      </div>
+    )
   }
 
   if (!user) return null

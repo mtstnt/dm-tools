@@ -2,6 +2,10 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -720,7 +724,6 @@ export default function AssignPage() {
     <div className="assign-page"
       style={{
         height: "100%",
-        background: "var(--color-background)",
         color: "var(--color-foreground)",
         fontFamily: "var(--font-sans)",
         display: "flex",
@@ -737,160 +740,114 @@ export default function AssignPage() {
         button:hover{filter:brightness(1.05);}
       `}</style>
 
-      {/* ════════════ HEADER ════════════ */}
-      <header
-        style={{
-          background: "var(--color-sidebar)", borderBottom: "1px solid var(--color-sidebar-border)",
-          padding: "8px 16px", display: "flex", alignItems: "center",
-          gap: "10px", flexShrink: 0, minHeight: "50px", flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "18px" }}>⛪</span>
-          <span style={{ fontSize: "14px", fontWeight: 800, color: "var(--color-foreground)", letterSpacing: "1.5px", fontFamily: "Syne,sans-serif" }}>
+      {/* Compact page header to match site */}
+      <div className="flex flex-col gap-6 animate-stagger p-0">
+        <div>
+          <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]" style={{margin:0}}>
             SERVICE ASSIGNMENT
-          </span>
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground" style={{marginTop:6}}>
+            Atur penempatan volunteer dan peran khusus. Tambahkan anggota lalu klik "INITIALIZE EVENTS".
+          </p>
         </div>
 
-        {/* Event tabs */}
-        {isReady && (
-            <div style={{ display: "flex", gap: "3px", background: "var(--color-input)", borderRadius: "8px", padding: "3px", border: "1px solid var(--color-sidebar-border)" }}>
-            {EVT_NAMES.map((name, i) => (
-              <button key={i}
-                onClick={() => { setActiveEvt(i); setSelected(null); setError(""); }}
-                style={{
-                  padding: "4px 16px", borderRadius: "5px", border: "none", cursor: "pointer",
-                  fontSize: "11px", fontWeight: 700, letterSpacing: "1px", transition: "all 0.2s",
-                  background: activeEvt === i ? "var(--color-primary)" : "transparent",
-                  color: activeEvt === i ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
-                  fontFamily: "Syne,sans-serif",
-                }}>
-                {name.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        )}
+        <Card className="h-full">
 
-        {/* A-block min-2 status chips */}
-        {isReady && (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center", flexWrap: "wrap" }}>
-              {aStatus.map(({ bl, cnt }) => {
-              const ok  = cnt >= 2;
-              const one = cnt === 1;
-              const bC  = ok ? "var(--assign-success)" : one ? "var(--assign-warn)" : "var(--assign-fail)";
-              const bBg = ok ? "rgba(16,185,129,0.12)" : one ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.10)";
-              return (
-                <div key={bl} style={{ display: "flex", alignItems: "center", gap: "3px", padding: "2px 7px", borderRadius: "5px", background: bBg, border: `1px solid ${bC}44` }}>
-                  <span style={{ fontSize: "8px", color: bC, fontWeight: 700, fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>{bl}</span>
-                  <span style={{ fontSize: "8px", color: bC, fontFamily: "DM Mono,monospace" }}>{cnt}/2{ok ? " ✓" : one ? " ⚠" : " ✗"}</span>
+          {/* ════════════ HEADER ════════════ */}
+          <CardHeader className="px-4 py-3 bg-sidebar border-b border-sidebar-border">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">⛪</span>
+              <div>
+                <CardTitle className="font-display">SERVICE ASSIGNMENT</CardTitle>
+                <CardDescription className="text-sm text-muted-foreground">Atur penempatan volunteer dan peran khusus.</CardDescription>
+              </div>
+
+              {isReady && (
+                <div className="ml-4 flex items-center gap-2 bg-input rounded-md p-1 border border-sidebar-border">
+                  {EVT_NAMES.map((name, i) => (
+                    <Button key={i} variant={activeEvt === i ? "default" : "ghost"} size="sm" onClick={() => { setActiveEvt(i); setSelected(null); setError(""); }}>
+                      {name.toUpperCase()}
+                    </Button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              )}
 
-        <div style={{ flex: 1 }} />
-
-        {isReady && (
-          <>
-            {/* Mode toggle */}
-            <div style={{ display: "flex", gap: "3px", background: "var(--color-input)", borderRadius: "7px", padding: "3px", border: "1px solid var(--color-sidebar-border)" }}>
-              {(["view", "manual"] as const).map((m) => {
-                const lbl = m === "view" ? "👁 VIEW" : "✏️ MANUAL";
-                return (
-                  <button key={m}
-                    onClick={() => { setMode(m); setSelected(null); setError(""); }}
-                    style={{
-                      padding: "4px 10px", borderRadius: "5px", border: "none", cursor: "pointer",
-                      fontSize: "10px", fontWeight: 700, letterSpacing: "0.5px",
-                      transition: "all 0.2s", fontFamily: "DM Mono,monospace",
-                      background: mode === m ? (m === "manual" ? "var(--assign-warn)" : "var(--color-sidebar-primary)") : "transparent",
-                      color: mode === m ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
-                    }}>
-                    {lbl}
-                  </button>
-                );
-              })}
+              {isReady && (
+                <div className="ml-2 flex items-center gap-2 flex-wrap">
+                  {aStatus.map(({ bl, cnt }) => {
+                    const ok = cnt >= 2;
+                    const one = cnt === 1;
+                    const bC = ok ? "var(--assign-success)" : one ? "var(--assign-warn)" : "var(--assign-fail)";
+                    const bBg = ok ? "rgba(16,185,129,0.12)" : one ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.10)";
+                    return (
+                      <div key={bl} style={{ display: "flex", alignItems: "center", gap: "3px", padding: "2px 7px", borderRadius: "5px", background: bBg, border: `1px solid ${bC}44` }}>
+                        <span style={{ fontSize: "8px", color: bC, fontWeight: 700, fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>{bl}</span>
+                        <span style={{ fontSize: "8px", color: bC, fontFamily: "DM Mono,monospace" }}>{cnt}/2{ok ? " ✓" : one ? " ⚠" : " ✗"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <button onClick={runAuto}
-              style={{ padding: "6px 14px", background: "var(--color-primary)", border: "none", borderRadius: "7px", color: "var(--color-primary-foreground)", fontSize: "11px", fontWeight: 700, cursor: "pointer", letterSpacing: "1px", fontFamily: "var(--font-display), var(--font-sans)" }}>
-              ⚡ AUTO ASSIGN
-            </button>
+            {isReady && (
+              <CardAction>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 bg-input rounded-md p-1 border border-sidebar-border">
+                    {(["view", "manual"] as const).map((m) => {
+                      const lbl = m === "view" ? "👁 VIEW" : "✏️ MANUAL";
+                      return (
+                        <Button key={m} variant={mode === m ? "default" : "ghost"} size="sm" onClick={() => { setMode(m); setSelected(null); setError(""); }}>
+                          {lbl}
+                        </Button>
+                      );
+                    })}
+                  </div>
 
-            <button onClick={() => setShowOut((p) => !p)}
-              style={{
-                padding: "6px 12px",
-                background: showOut ? "var(--color-card)" : "var(--color-input)",
-                border: showOut ? "1px solid var(--assign-success)" : "1px solid var(--color-sidebar-border)",
-                borderRadius: "7px",
-                color: showOut ? "var(--assign-success)" : "var(--color-muted-foreground)",
-                fontSize: "11px", fontWeight: 700, cursor: "pointer",
-                fontFamily: "DM Mono,monospace", letterSpacing: "0.5px",
-              }}>
-              📋 OUTPUT
-            </button>
-          </>
-        )}
-      </header>
+                  <Button onClick={runAuto}>⚡ AUTO ASSIGN</Button>
+                  <Button variant="outline" onClick={() => setShowOut((p) => !p)}>{showOut ? "📋 OUTPUT" : "📋 OUTPUT"}</Button>
+                </div>
+              </CardAction>
+            )}
+          </CardHeader>
 
-      {/* ════════════ BODY ════════════ */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
+          {/* ════════════ BODY ════════════ */}
+          <CardContent className="p-0 flex-1">
+            <div className="flex flex-1 overflow-hidden min-h-0">
 
         {/* ════ SIDEBAR ════ */}
-        <aside
-          style={{
-            width: "265px", flexShrink: 0,
-            background: "var(--color-sidebar)", borderRight: "1px solid var(--color-sidebar-border)",
-            display: "flex", flexDirection: "column", overflow: "hidden",
-          }}
-        >
+        <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
           {/* Input area */}
-          <div style={{ padding: "12px", borderBottom: "1px solid #0A1929" }}>
-              <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
-              <input
+          <div className="px-3 pb-3 border-b border-[#0A1929]">
+            <div className="flex gap-2 mb-2">
+              <Input
                 value={singleName}
                 onChange={(e) => setSingleName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addSingle()}
                 placeholder="Nama... (T) atau (Y) opsional"
-                style={{
-                  flex: 1, background: "var(--color-input)", border: "1px solid var(--color-border)",
-                  borderRadius: "6px", padding: "7px 10px", color: "var(--color-foreground)",
-                  fontSize: "12px", outline: "none", fontFamily: "var(--font-sans)",
-                  transition: "border-color 0.2s",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
-                onBlur={(e)  => (e.target.style.borderColor = "var(--color-border)")}
               />
-              <button onClick={addSingle}
-                style={{ width: "34px", height: "34px", background: "#1D4ED8", border: "none", borderRadius: "6px", color: "white", fontSize: "18px", cursor: "pointer", fontWeight: 700, lineHeight: "1", flexShrink: 0 }}>
-                +
-              </button>
+              <Button size="icon" onClick={addSingle}>+</Button>
             </div>
 
-              <button onClick={() => setShowImport((p) => !p)}
-              style={{ background: "none", border: "none", color: "var(--color-sidebar-foreground)", fontSize: "9px", cursor: "pointer", padding: "0", letterSpacing: "1px", fontFamily: "var(--font-mono)" }}>
+            <button onClick={() => setShowImport((p) => !p)} className="text-[9px] text-sidebar-foreground font-mono p-0">
               {showImport ? "▼" : "▶"} IMPORT DARI TEKS
             </button>
 
             {showImport && (
-              <div style={{ marginTop: "8px" }}>
-                <div style={{ fontSize: "8px", color: "#1E3A5F", marginBottom: "5px", lineHeight: 1.6, fontFamily: "DM Mono,monospace" }}>
-                  Tambahkan <span style={{ color: "#FBBF24" }}>(T)</span> di akhir nama → hanya Teen.{" "}
-                  <span style={{ color: "#93C5FD" }}>(Y)</span> di akhir nama → hanya Youth.{" "}
-                  Tanpa tanda → bisa keduanya.
+              <div className="mt-2">
+                <div className="text-[8px] text-[#1E3A5F] mb-1.5 leading-6 font-mono">
+                  Tambahkan <span className="text-[#FBBF24]">(T)</span> di akhir nama → hanya Teen. <span className="text-[#93C5FD]">(Y)</span> di akhir nama → hanya Youth. Tanpa tanda → bisa keduanya.
                 </div>
-                <textarea
+                <Textarea
                   value={bulkText}
                   onChange={(e) => setBulkText(e.target.value)}
                   placeholder={"• rafa\n• medelin (T)\n• chen (Y)\nsatu nama per baris"}
                   rows={5}
-                  style={{ width: "100%", background: "var(--color-input)", border: "1px solid var(--color-border)", borderRadius: "6px", padding: "8px", color: "var(--color-foreground)", fontSize: "11px", resize: "none", outline: "none", fontFamily: "var(--font-mono)", lineHeight: 1.8 }}
+                  className="w-full"
                 />
-                <button onClick={parseBulk}
-                  style={{ width: "100%", marginTop: "4px", padding: "6px", background: "var(--color-card)", border: "1px solid var(--color-sidebar-border)", borderRadius: "6px", color: "var(--color-muted-foreground)", fontSize: "10px", cursor: "pointer", fontFamily: "var(--font-mono)", letterSpacing: "1px" }}>
+                <Button variant="outline" className="w-full mt-2" onClick={parseBulk}>
                   IMPORT ({bulkText.split("\n").filter((l) => l.trim()).length} NAMA)
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -1093,107 +1050,67 @@ export default function AssignPage() {
             )}
 
             {!isReady ? (
-              <button onClick={initialize}
-                style={{ width: "100%", padding: "9px", background: "#1D4ED8", border: "none", borderRadius: "7px", color: "white", fontSize: "11px", fontWeight: 700, cursor: "pointer", letterSpacing: "1.5px", fontFamily: "Syne,sans-serif" }}>
-                🚀 INITIALIZE EVENTS
-              </button>
+              <Button onClick={initialize} className="w-full" size="lg">🚀 INITIALIZE EVENTS</Button>
             ) : (
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button onClick={initialize}
-                  style={{ flex: 1, padding: "7px 4px", background: "#0A1929", border: "1px solid #0F2A4A", borderRadius: "6px", color: "#334155", fontSize: "9px", cursor: "pointer", fontFamily: "DM Mono,monospace", letterSpacing: "0.5px" }}>
-                  🎲 RE-ROLL SR
-                </button>
-                <button onClick={clearAll}
-                  style={{ flex: 1, padding: "7px 4px", background: "#0A1929", border: "1px solid #0F2A4A", borderRadius: "6px", color: "#334155", fontSize: "9px", cursor: "pointer", fontFamily: "DM Mono,monospace", letterSpacing: "0.5px" }}>
-                  🗑 CLEAR
-                </button>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={initialize}>🎲 RE-ROLL SR</Button>
+                <Button variant="outline" className="flex-1" onClick={clearAll}>🗑 CLEAR</Button>
               </div>
             )}
           </div>
         </aside>
 
         {/* ════ MAIN AREA ════ */}
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+        <main className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {isReady && (
+            <div className="p-4 flex-1 overflow-auto">
+              <div className="bg-card rounded-md p-4 h-full">
+                <svg viewBox="0 0 830 500" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                  <ellipse cx="415" cy="54" rx="240" ry="70" fill="url(#stageGlow)" />
 
-          {/* SVG Map */}
-          <div style={{ flex: 1, overflow: "hidden", background: "#030810", position: "relative", minHeight: 0 }}>
-            {!isReady ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "14px" }}>
-                <div style={{ fontSize: "48px", opacity: 0.12 }}>🗺️</div>
-                <div style={{ fontSize: "10px", color: "#0F2A4A", fontFamily: "DM Mono,monospace", letterSpacing: "2px", textAlign: "center", lineHeight: 2.5 }}>
-                  TAMBAH ANGGOTA<br />KLIK &quot;INITIALIZE EVENTS&quot;
-                </div>
+                  {/* Connecting lines from A blocks → main stage */}
+                  {A_BL.map((key) => {
+                    const g         = GEOM[key];
+                    const assignees = getAssignees(key, activeEvt);
+                    const col       = assignees.length > 0 ? colorOf(assignees[0]) + "33" : "#0B1E35";
+                    return (
+                      <line key={key}
+                        x1={g.cx} y1={g.cy - 28} x2="415" y2="96"
+                        stroke={col} strokeWidth="1" strokeDasharray="6,5" opacity="0.7" />
+                    );
+                  })}
+
+                  {/* All blocks */}
+                  {Object.keys(GEOM).map((key) => renderBlock(key))}
+
+                  {/* Tooltip layer (on top) */}
+                  {renderTooltip()}
+
+                  <text x="824" y="486" textAnchor="end" fill="#0B1E35" fontSize="8"
+                    style={{ fontFamily: "DM Mono,monospace" }}>
+                    bobot blok: {EVT_NAMES[activeEvt]}
+                  </text>
+                </svg>
               </div>
-            ) : (
-              <svg
-                viewBox="0 0 830 490"
-                style={{ width: "100%", height: "100%", display: "block" }}
-                preserveAspectRatio="xMidYMid meet"
-              >
-                <defs>
-                  <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
-                    <circle cx="13" cy="13" r="0.65" fill="#0B1E35" opacity="0.9" />
-                  </pattern>
-                  <radialGradient id="stageGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#1D4ED8" stopOpacity="0.08" />
-                    <stop offset="100%" stopColor="#1D4ED8" stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-
-                <rect width="830" height="490" fill="url(#dots)" />
-                <ellipse cx="415" cy="54" rx="240" ry="70" fill="url(#stageGlow)" />
-
-                {/* Connecting lines from A blocks → main stage */}
-                {A_BL.map((key) => {
-                  const g         = GEOM[key];
-                  const assignees = getAssignees(key, activeEvt);
-                  const col       = assignees.length > 0 ? colorOf(assignees[0]) + "33" : "#0B1E35";
-                  return (
-                    <line key={key}
-                      x1={g.cx} y1={g.cy - 28} x2="415" y2="96"
-                      stroke={col} strokeWidth="1" strokeDasharray="6,5" opacity="0.7" />
-                  );
-                })}
-
-                {/* All blocks */}
-                {Object.keys(GEOM).map((key) => renderBlock(key))}
-
-                {/* Tooltip layer (on top) */}
-                {renderTooltip()}
-
-                <text x="824" y="486" textAnchor="end" fill="#0B1E35" fontSize="8"
-                  style={{ fontFamily: "DM Mono,monospace" }}>
-                  bobot blok: {EVT_NAMES[activeEvt]}
-                </text>
-              </svg>
-            )}
-          </div>
-
-          {/* Output panel */}
-          {showOut && isReady && (
-            <div style={{ height: "215px", background: "#07111E", borderTop: "1px solid #0A1929", display: "flex", flexDirection: "column" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", borderBottom: "1px solid #0A1929" }}>
-                <span style={{ fontSize: "9px", fontWeight: 600, color: "#1E3A5F", fontFamily: "DM Mono,monospace", letterSpacing: "1.5px" }}>OUTPUT TEKS</span>
-                <button onClick={copyOut}
-                  style={{
-                    padding: "4px 12px",
-                    background: copied ? "#064E3B" : "#0A1929",
-                    border: "1px solid " + (copied ? "#10B981" : "#0F2A4A"),
-                    borderRadius: "5px",
-                    color: copied ? "#10B981" : "#334155",
-                    fontSize: "9px", cursor: "pointer", fontWeight: 700,
-                    fontFamily: "DM Mono,monospace", letterSpacing: "1px", transition: "all 0.2s",
-                  }}>
-                  {copied ? "✓ DISALIN" : "SALIN"}
-                </button>
-              </div>
-              <pre style={{ flex: 1, overflowY: "auto", padding: "12px 16px", fontSize: "11px", color: "#334155", lineHeight: 2, whiteSpace: "pre-wrap", margin: 0, fontFamily: "DM Mono,monospace" }}>
-                {genOutput()}
-              </pre>
             </div>
           )}
         </main>
-      </div>
+          </div>
+        </CardContent>
+
+        {showOut && isReady && (
+          <CardFooter className="flex flex-col h-[215px] bg-[#07111E] border-t border-[#0A1929] p-0">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[#0A1929]">
+              <span className="text-[9px] font-semibold text-[#1E3A5F] font-mono">OUTPUT TEKS</span>
+              <Button onClick={copyOut} variant={copied ? "default" : "outline"}>{copied ? "✓ DISALIN" : "SALIN"}</Button>
+            </div>
+            <pre className="flex-1 overflow-y-auto p-4 text-[11px] text-[#334155] leading-8 font-mono whitespace-pre-wrap m-0">
+              {genOutput()}
+            </pre>
+          </CardFooter>
+        )}
+      </Card>
     </div>
+  </div>
   );
 }

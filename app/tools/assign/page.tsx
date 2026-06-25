@@ -15,8 +15,13 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 interface Member {
   id: number;
   name: string;
+  nij?: number;
+  email?: string;
+  nickname?: string;
   color: string;
   availability: "both" | "teen" | "youth";
+  role?: "Member" | "SPV" | "PIC";
+  isAdmin?: boolean;
 }
 
 interface EventSR {

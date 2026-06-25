@@ -1,8 +1,16 @@
 // app/tools/assign/page.tsx
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { collection, setDoc, doc, deleteDoc } from "firebase/firestore";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import {
+  collection,
+  setDoc,
+  doc,
+  deleteDoc,
+  onSnapshot,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +32,7 @@ interface Member {
   availability: "both" | "teen" | "youth";
   role?: "Member" | "SPV" | "PIC";
   isAdmin?: boolean;
+  order?: number; // ← NEW: persisted to Firestore for stable ordering
 }
 
 interface EventSR {
@@ -244,23 +253,27 @@ export default function AssignPage() {
     { assignments: {}, sr: { tcIn: null, tcOut: null, fd: null } },
   ]);
 
-  /* Theme tokens (use global CSS variables from globals.css) */
-  const THEME = {
-    bg: "var(--color-background)",
-    fg: "var(--color-foreground)",
-    headerBg: "var(--color-sidebar)",
-    headerBorder: "1px solid var(--color-sidebar-border)",
-    panelBg: "var(--color-sidebar)",
-    panelBorder: "1px solid var(--color-sidebar-border)",
-    cardBg: "var(--color-card)",
-    popoverBg: "var(--color-popover)",
-    inputBg: "var(--color-input)",
-    inputBorder: "1px solid var(--color-border)",
-    primary: "var(--color-primary)",
-    primaryFg: "var(--color-primary-foreground)",
-    muted: "var(--color-muted)",
-    mutedFg: "var(--color-muted-foreground)",
-  };
+  /* ─────────────────────────────────────────────
+     FIRESTORE REAL-TIME SYNC
+     Loads the "members" collection once on mount
+     and keeps it in sync via onSnapshot.
+  ───────────────────────────────────────────── */
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "members"),
+      (snap) => {
+        const loaded = snap.docs
+          .map((d) => d.data() as Member)
+          // Sort by `order` field (falls back to `id` for legacy docs without it)
+          .sort((a, b) => (a.order ?? a.id) - (b.order ?? b.id));
+        setMembers(loaded);
+      },
+      (err) => {
+        console.error("Firestore onSnapshot error:", err);
+      }
+    );
+    return () => unsub();
+  }, []); // runs once on mount
 
   /* ── Derived ── */
   const eventMembers = useCallback(
@@ -338,59 +351,128 @@ export default function AssignPage() {
     };
   };
 
+  // ── parseBulk: writes directly to Firestore "members" collection ──
   const parseBulk = () => {
     const lines = bulkText
       .split("\n")
       .map((l) => l.replace(/^[\s*•\-\d.]+/, "").trim())
       .filter(Boolean);
     if (!lines.length) return;
+
+    const startOrder = members.length; // base index for new members
     const rows = lines.map((raw, i) => {
       const { name, availability } = parseMemberStr(raw);
-      return { id: Date.now() + i, name, color: COLORS[i % COLORS.length], availability };
+      return {
+        id:           Date.now() + i,
+        name,
+        color:        COLORS[(startOrder + i) % COLORS.length],
+        availability,
+        order:        startOrder + i, // persisted for stable ordering
+      };
     });
 
-    // write to firestore for each member (best-effort), then update local state
     const doWrite = async () => {
       try {
-        await Promise.all(rows.map((r) => setDoc(doc(db, "members", String(r.id)), { ...r })));
+        await Promise.all(
+          rows.map((r) => setDoc(doc(db, "members", String(r.id)), { ...r }))
+        );
       } catch (e) {
-        // ignore firestore write errors, we'll still set local state
+        console.error("Firestore bulk write error:", e);
       }
+      // Optimistic local update; onSnapshot will reconcile
       setMembers((prev) => [...prev, ...rows]);
       setBulkText(""); setIsReady(false); setShowImport(false); setError(""); setSelected(null);
     };
     void doWrite();
   };
 
+  // ── addSingle: writes directly to Firestore "members" collection ──
   const addSingle = () => {
     const raw = singleName.trim();
     if (!raw) return;
     const { name, availability } = parseMemberStr(raw);
-    const m = { id: Date.now(), name, color: COLORS[members.length % COLORS.length], availability };
+    const order = members.length;
+    const m: Member = {
+      id: Date.now(),
+      name,
+      color: COLORS[order % COLORS.length],
+      availability,
+      order, // persisted for stable ordering
+    };
     const doWrite = async () => {
-      try { await setDoc(doc(db, "members", String(m.id)), { ...m }); } catch (e) { }
+      try { await setDoc(doc(db, "members", String(m.id)), { ...m }); }
+      catch (e) { console.error("Firestore add error:", e); }
+      // Optimistic local update; onSnapshot will reconcile
       setMembers((prev) => [...prev, m]);
       setSingleName(""); setIsReady(false);
     };
     void doWrite();
   };
 
+  // ── removeMember: deletes from Firestore ──
   const removeMember = (id: number) => {
     const doRemove = async () => {
-      try { await deleteDoc(doc(db, "members", String(id))); } catch (e) { }
+      try { await deleteDoc(doc(db, "members", String(id))); }
+      catch (e) { console.error("Firestore delete error:", e); }
+      // Optimistic local update; onSnapshot will reconcile
       setMembers((prev) => prev.filter((m) => m.id !== id));
       setIsReady(false); setSelected(null); setError("");
     };
     void doRemove();
   };
 
+  // ── moveMember: swaps `order` fields atomically via writeBatch ──
   const moveMember = (id: number, dir: number) => {
+    const i = members.findIndex((m) => m.id === id);
+    const j = i + dir;
+    if (j < 0 || j >= members.length) return;
+
+    const mA = members[i];
+    const mB = members[j];
+
+    // Optimistic local update for instant UI response
     setMembers((prev) => {
-      const i = prev.findIndex((m) => m.id === id), j = i + dir;
-      if (j < 0 || j >= prev.length) return prev;
-      const a = [...prev]; [a[i], a[j]] = [a[j], a[i]]; return a;
+      const a = [...prev];
+      [a[i], a[j]] = [a[j], a[i]];
+      return a;
     });
     setIsReady(false);
+
+    // Atomic Firestore batch: swap order fields
+    void (async () => {
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "members", String(mA.id)), { order: j });
+        batch.update(doc(db, "members", String(mB.id)), { order: i });
+        await batch.commit();
+      } catch (e) {
+        console.error("Firestore move error:", e);
+      }
+    })();
+  };
+
+  // ── toggleAdmin: accessible to everyone, no role check ──
+  const toggleAdmin = (id: number) => {
+    const member = members.find((m) => m.id === id);
+    if (!member) return;
+    const newVal = !member.isAdmin;
+
+    // Optimistic local update
+    setMembers((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, isAdmin: newVal } : m))
+    );
+
+    void (async () => {
+      try {
+        await updateDoc(doc(db, "members", String(id)), { isAdmin: newVal });
+      } catch (e) {
+        console.error("Firestore toggleAdmin error:", e);
+        // Revert on failure
+        setMembers((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, isAdmin: !newVal } : m))
+        );
+      }
+    })();
   };
 
   /* ── Initialize ── */
@@ -496,7 +578,6 @@ export default function AssignPage() {
     if (typeof ei === "number") {
       const evt = events[ei];
       const lines: string[] = [];
-      // Header immediately followed by content (no extra blank line)
       lines.push(EVT_NAMES[ei]);
       allBlockForEvent(ei).forEach((m) => lines.push(`• ${m.name} : ALL BLOCK`));
       const { tcIn, tcOut, fd } = evt.sr;
@@ -509,7 +590,6 @@ export default function AssignPage() {
       });
       return lines.join("\n");
     }
-    // Combined output: two sections separated by a single blank line
     return [genOutput(0), genOutput(1)].join("\n\n");
   };
 
@@ -530,7 +610,6 @@ export default function AssignPage() {
     const g = GEOM[key];
     if (!g) return null;
 
-    /* ── Main Stage (non-clickable) ── */
     if (g.t === "r" && g.nc) {
       return (
         <g key={key}>
@@ -566,7 +645,6 @@ export default function AssignPage() {
     const sw    = isHov || isSelConn ? 2.5 : 1.5;
     const arRot = ARROW_ROT[key] ?? 0;
 
-    /* Badge corner positions — works for both rect and polygon */
     const bx = g.t === "r" ? g.x + g.w - 2 : Math.max(...g.pts.map(([x]) => x)) - 2;
     const by = g.t === "r" ? g.y + 4        : Math.min(...g.pts.map(([, y]) => y)) + 12;
 
@@ -590,7 +668,6 @@ export default function AssignPage() {
       >
         {Shape}
 
-        {/* Direction arrow (hollow) */}
         <g transform={`translate(${g.cx},${g.cy - 22}) rotate(${arRot})`}>
           <polygon
             points="0,-12 9,-4 5,-4 5,10 -5,10 -5,-4 -9,-4"
@@ -601,7 +678,6 @@ export default function AssignPage() {
           />
         </g>
 
-        {/* Block key label */}
         <text x={g.cx} y={g.cy + 5} textAnchor="middle"
           fill={priColor || (isHov ? "var(--color-muted-foreground)" : "var(--color-sidebar-foreground)")}
           fontSize="13" fontWeight="700"
@@ -609,14 +685,12 @@ export default function AssignPage() {
           {key}
         </text>
 
-        {/* Weight badge */}
         <text x={g.cx} y={g.cy + 18} textAnchor="middle"
           fill="var(--color-sidebar-border)" fontSize="8"
           style={{ fontFamily: "DM Mono,monospace", userSelect: "none" }}>
           {WEIGHTS[activeEvt][key]}
         </text>
 
-        {/* Assignee colored dots */}
         {assignees.length > 0 &&
           (() => {
             const n       = Math.min(assignees.length, 5);
@@ -637,7 +711,6 @@ export default function AssignPage() {
             ));
           })()}
 
-        {/* Multi-assignee count */}
         {assignees.length > 1 && (
           <text x={g.cx} y={g.cy + 46} textAnchor="middle"
             fill="var(--color-sidebar-foreground)" fontSize="8"
@@ -646,7 +719,6 @@ export default function AssignPage() {
           </text>
         )}
 
-        {/* Min-2 badge for A blocks */}
         {A_BL.includes(key) &&
           (() => {
             const cnt = assignees.length;
@@ -671,7 +743,6 @@ export default function AssignPage() {
     );
   };
 
-  /* ── Tooltip (rendered on top of all blocks) ── */
   const renderTooltip = () => {
     if (!hovered || hovered === "MAIN_STAGE") return null;
     const g         = GEOM[hovered];
@@ -698,7 +769,7 @@ export default function AssignPage() {
         </text>
         <line x1={tx + 10} y1={ty + 22} x2={tx + w - 10} y2={ty + 22}
           stroke="var(--color-sidebar-border)" strokeWidth="0.5" />
-            {assignees.length === 0 ? (
+        {assignees.length === 0 ? (
           <text x={tx + w / 2} y={ty + 38} textAnchor="middle"
             fill="var(--color-sidebar-foreground)" fontSize="10" style={{ fontFamily: "DM Mono,monospace" }}>
             kosong
@@ -765,8 +836,6 @@ export default function AssignPage() {
           --assign-warn: #F59E0B;
           --assign-fail: #EF4444;
           --assign-dim: var(--color-card);
-
-          /* availability & label tokens (local overrides) */
           --assign-availability-teen: #FBBF24;
           --assign-availability-youth: #93C5FD;
           --assign-availability-teen-bg: #78350F55;
@@ -775,12 +844,11 @@ export default function AssignPage() {
           --assign-availability-youth-border: #93C5FD44;
           --assign-ab-bg: #78350F44;
           --assign-ab-fg: #FCD34D;
-
-          /* separators / misc */
+          --assign-admin-bg: rgba(234,179,8,0.15);
+          --assign-admin-fg: #EAB308;
+          --assign-admin-border: rgba(234,179,8,0.3);
           --assign-sep: #0F2A4A;
           --assign-bobot-text: #0B1E35;
-
-          /* manual / error banners */
           --assign-manual-bg: #1A1200;
           --assign-manual-border: #78350F55;
           --assign-manual-text: #FDE68A;
@@ -789,7 +857,6 @@ export default function AssignPage() {
           --assign-error-border: #7F1D1D44;
           --assign-error-text: #FCA5A5;
         }
-
         ::-webkit-scrollbar{width:4px;}
         ::-webkit-scrollbar-track{background:transparent;}
         ::-webkit-scrollbar-thumb{background:var(--color-sidebar-border);border-radius:2px;}
@@ -797,7 +864,6 @@ export default function AssignPage() {
         button:hover{filter:brightness(1.05);}
       `}</style>
 
-      {/* Compact page header to match site */}
       <div className="flex flex-col gap-6 animate-stagger p-0">
         <div>
           <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]" style={{margin:0}}>
@@ -809,7 +875,6 @@ export default function AssignPage() {
         </div>
 
         <Card className="h-full">
-
           {/* ════════════ HEADER ════════════ */}
           <CardHeader className="px-4 py-3 bg-sidebar border-b border-sidebar-border">
             <div className="flex items-center gap-3">
@@ -822,7 +887,8 @@ export default function AssignPage() {
               {isReady && (
                 <div className="ml-4 flex items-center gap-2 bg-input rounded-md p-1 border border-sidebar-border">
                   {EVT_NAMES.map((name, i) => (
-                    <Button key={i} variant={activeEvt === i ? "default" : "ghost"} size="sm" onClick={() => { setActiveEvt(i); setSelected(null); setError(""); }}>
+                    <Button key={i} variant={activeEvt === i ? "default" : "ghost"} size="sm"
+                      onClick={() => { setActiveEvt(i); setSelected(null); setError(""); }}>
                       {name.toUpperCase()}
                     </Button>
                   ))}
@@ -837,9 +903,9 @@ export default function AssignPage() {
                     const bC = ok ? "var(--assign-success)" : one ? "var(--assign-warn)" : "var(--assign-fail)";
                     const bBg = ok ? "rgba(16,185,129,0.12)" : one ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.10)";
                     return (
-                      <div key={bl} style={{ display: "flex", alignItems: "center", gap: "3px", padding: "2px 7px", borderRadius: "5px", background: bBg, border: `1px solid ${bC}44` }}>
-                        <span style={{ fontSize: "8px", color: bC, fontWeight: 700, fontFamily: "DM Mono,monospace", letterSpacing: "1px" }}>{bl}</span>
-                        <span style={{ fontSize: "8px", color: bC, fontFamily: "DM Mono,monospace" }}>{cnt}/2{ok ? " ✓" : one ? " ⚠" : " ✗"}</span>
+                      <div key={bl} style={{ display:"flex", alignItems:"center", gap:"3px", padding:"2px 7px", borderRadius:"5px", background:bBg, border:`1px solid ${bC}44` }}>
+                        <span style={{ fontSize:"8px", color:bC, fontWeight:700, fontFamily:"DM Mono,monospace", letterSpacing:"1px" }}>{bl}</span>
+                        <span style={{ fontSize:"8px", color:bC, fontFamily:"DM Mono,monospace" }}>{cnt}/2{ok?" ✓":one?" ⚠":" ✗"}</span>
                       </div>
                     );
                   })}
@@ -851,18 +917,15 @@ export default function AssignPage() {
               <CardAction>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 bg-input rounded-md p-1 border border-sidebar-border">
-                    {(["view", "manual"] as const).map((m) => {
-                      const lbl = m === "view" ? "👁 VIEW" : "✏️ MANUAL";
-                      return (
-                        <Button key={m} variant={mode === m ? "default" : "ghost"} size="sm" onClick={() => { setMode(m); setSelected(null); setError(""); }}>
-                          {lbl}
-                        </Button>
-                      );
-                    })}
+                    {(["view", "manual"] as const).map((m) => (
+                      <Button key={m} variant={mode === m ? "default" : "ghost"} size="sm"
+                        onClick={() => { setMode(m); setSelected(null); setError(""); }}>
+                        {m === "view" ? "👁 VIEW" : "✏️ MANUAL"}
+                      </Button>
+                    ))}
                   </div>
-
                   <Button onClick={runAuto}>⚡ AUTO ASSIGN</Button>
-                  <Button variant="outline" onClick={() => setShowOut((p) => !p)}>{showOut ? "📋 OUTPUT" : "📋 OUTPUT"}</Button>
+                  <Button variant="outline" onClick={() => setShowOut((p) => !p)}>📋 OUTPUT</Button>
                 </div>
               </CardAction>
             )}
@@ -872,303 +935,352 @@ export default function AssignPage() {
           <CardContent className="p-0 flex-1">
             <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* ════ SIDEBAR ════ */}
-        <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
-          {/* Input area */}
-          <div className="px-3 pb-3 border-b border-sidebar-border">
-            <div className="flex gap-2 mb-2">
-              <Input
-                value={singleName}
-                onChange={(e) => setSingleName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addSingle()}
-                placeholder="Nama... (T) atau (Y) opsional"
-              />
-              <Button size="icon" onClick={addSingle}>+</Button>
-            </div>
+              {/* ════ SIDEBAR ════ */}
+              <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
 
-            <button onClick={() => setShowImport((p) => !p)} className="text-[9px] text-sidebar-foreground font-mono p-0">
-              {showImport ? "▼" : "▶"} IMPORT DARI TEKS
-            </button>
+                {/* Input area */}
+                <div className="px-3 pb-3 border-b border-sidebar-border">
+                  <div className="flex gap-2 mb-2">
+                    <Input
+                      value={singleName}
+                      onChange={(e) => setSingleName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addSingle()}
+                      placeholder="Nama... (T) atau (Y) opsional"
+                    />
+                    <Button size="icon" onClick={addSingle}>+</Button>
+                  </div>
 
-            {showImport && (
-              <div className="mt-2">
-                <div className="text-[8px] text-muted-foreground mb-1.5 leading-6 font-mono">
-                  Tambahkan <span className="text-[var(--assign-availability-teen)]">(T)</span> di akhir nama → hanya Teen. <span className="text-[var(--assign-availability-youth)]">(Y)</span> di akhir nama → hanya Youth. Tanpa tanda → bisa keduanya.
-                </div>
-                <Textarea
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                  placeholder={"• rafa\n• medelin (T)\n• chen (Y)\nsatu nama per baris"}
-                  rows={5}
-                  className="w-full"
-                />
-                <Button variant="outline" className="w-full mt-2" onClick={parseBulk}>
-                  IMPORT ({bulkText.split("\n").filter((l) => l.trim()).length} NAMA)
-                </Button>
-              </div>
-            )}
-          </div>
+                  <button onClick={() => setShowImport((p) => !p)}
+                    className="text-[9px] text-sidebar-foreground font-mono p-0">
+                    {showImport ? "▼" : "▶"} IMPORT DARI TEKS
+                  </button>
 
-          {/* Min-2 rule strip */}
-          {isReady && (
-            <div style={{ padding: "5px 12px", borderBottom: "1px solid var(--color-sidebar-border)", background: "var(--color-card)", display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "7.5px", color: "var(--color-muted-foreground)", letterSpacing: "1px", fontFamily: "var(--font-mono)" }}>MIN 2 ORG/BLOK A</span>
-              <span style={{ fontSize: "7.5px", fontWeight: 700, marginLeft: "auto", color: allAMet ? "var(--color-primary)" : "var(--color-destructive)", fontFamily: "var(--font-mono)", letterSpacing: "0.5px" }}>
-                {allAMet ? "✓ TERPENUHI" : `⚠ ${aStatus.filter((s) => s.cnt < 2).map((s) => s.bl).join(",")} KURANG`}
-              </span>
-            </div>
-          )}
-
-          {/* Member list */}
-          <div className="flex-1 overflow-y-auto p-2">
-            {members.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8 px-2 text-[10px] leading-7 font-mono tracking-wide">
-                BELUM ADA ANGGOTA<br />Tambah di atas atau import
-              </div>
-            ) : (
-              <>
-                <div className="text-[8px] text-muted-foreground mb-2 px-1 font-mono tracking-wide">
-                  {members.length} ANGGOTA · 2 TERATAS = KOORDINATOR ALL BLOCK
+                  {showImport && (
+                    <div className="mt-2">
+                      <div className="text-[8px] text-muted-foreground mb-1.5 leading-6 font-mono">
+                        Tambahkan <span style={{color:"var(--assign-availability-teen)"}}>(T)</span> di akhir nama → hanya Teen.{" "}
+                        <span style={{color:"var(--assign-availability-youth)"}}>(Y)</span> di akhir nama → hanya Youth.
+                      </div>
+                      <Textarea
+                        value={bulkText}
+                        onChange={(e) => setBulkText(e.target.value)}
+                        placeholder={"• rafa\n• medelin (T)\n• chen (Y)\nsatu nama per baris"}
+                        rows={5}
+                        className="w-full"
+                      />
+                      <Button variant="outline" className="w-full mt-2" onClick={parseBulk}>
+                        IMPORT ({bulkText.split("\n").filter((l) => l.trim()).length} NAMA)
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                {members.map((m, i) => {
-                  const avail     = m.availability || "both";
-                  const evtKey    = activeEvt === 0 ? "teen" : "youth";
-                  const isInEvt   = avail === "both" || avail === evtKey;
-                  const role      = isInEvt ? getMemberRole(m.name, activeEvt) : null;
-                  const blocks    = isInEvt ? getMemberBlocks(m.name, activeEvt) : [];
-                  const isSel     = selected?.id === m.id;
-                  const isSR      = role && role !== "ALL BLOCK";
-                  const isCounter = !role && isInEvt;
-                  const w         = blocks.reduce((s, b) => s + (WEIGHTS[activeEvt][b] || 0), 0);
-                  const isHov     = hoveredMbr === m.id;
-                  const isABTeen  = allBlockForEvent(0).some((mb) => mb.name === m.name);
-                  const isABYouth = allBlockForEvent(1).some((mb) => mb.name === m.name);
-                  const isABAny   = isABTeen || isABYouth;
-                  const abLabel   = isABTeen && isABYouth ? "ALL" : isABTeen ? "ALL-T" : "ALL-Y";
+                {/* Min-2 rule strip */}
+                {isReady && (
+                  <div style={{ padding:"5px 12px", borderBottom:"1px solid var(--color-sidebar-border)", background:"var(--color-card)", display:"flex", alignItems:"center", gap:"8px" }}>
+                    <span style={{ fontSize:"7.5px", color:"var(--color-muted-foreground)", letterSpacing:"1px", fontFamily:"var(--font-mono)" }}>MIN 2 ORG/BLOK A</span>
+                    <span style={{ fontSize:"7.5px", fontWeight:700, marginLeft:"auto", color: allAMet ? "var(--color-primary)" : "var(--color-destructive)", fontFamily:"var(--font-mono)", letterSpacing:"0.5px" }}>
+                      {allAMet ? "✓ TERPENUHI" : `⚠ ${aStatus.filter((s)=>s.cnt<2).map((s)=>s.bl).join(",")} KURANG`}
+                    </span>
+                  </div>
+                )}
 
-                  return (
-                    <div
-                      key={m.id}
-                      onMouseEnter={() => setHoveredMbr(m.id)}
-                      onMouseLeave={() => setHoveredMbr(null)}
-                      className={`rounded-lg mb-1 overflow-hidden transition-all ${!isInEvt ? 'opacity-30' : isSR ? 'opacity-65' : 'opacity-100'}`}
-                      style={{
-                        border: isSel ? "1px solid var(--color-primary)" : isHov ? "1px solid var(--color-muted-foreground)" : "1px solid transparent",
-                        background: isSel ? "var(--color-card)" : isHov && isInEvt ? "var(--color-input)" : "transparent",
-                      }}
-                    >
-                      {/* Main row */}
-                      <div
-                        onClick={() => { if (mode === "manual" && isCounter && isInEvt) { setSelected(isSel ? null : m); setError(""); } }}
-                        className={`flex items-center gap-2 p-2 ${mode === "manual" && isCounter ? 'cursor-pointer' : 'cursor-default'}`}
-                      >
-                        <div style={{ width: "10px", height: "10px", borderRadius: "50%", flexShrink: 0, background: m.color, boxShadow: `0 0 7px ${m.color}77` }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[12px] font-semibold text-foreground">{m.name}</span>
-                            {isABAny && <span className="text-[7px] px-1 rounded-sm font-mono" style={{ background: 'var(--assign-ab-bg)', color: 'var(--assign-ab-fg)', letterSpacing: '1px' }}>{abLabel}</span>}
-                            {isSR    && <span className="text-[7px] px-1 rounded-sm bg-sidebar-border text-muted-foreground font-mono">SR</span>}
-                            {avail !== "both" && (
-                              <span className="text-[7px] px-1 rounded-sm font-mono" style={{
-                                background: avail === "teen" ? 'var(--assign-availability-teen-bg)' : 'var(--assign-availability-youth-bg)',
-                                color: avail === "teen" ? 'var(--assign-availability-teen)' : 'var(--assign-availability-youth)',
-                                letterSpacing: '1px',
-                                border: avail === "teen" ? '1px solid var(--assign-availability-teen-border)' : '1px solid var(--assign-availability-youth-border)'
-                              }}>
-                                {avail === "teen" ? "T" : "Y"}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: "9px", marginTop: "1px", color: isSR ? "var(--color-sidebar-foreground)" : role ? "var(--color-muted-foreground)" : blocks.length ? m.color + "BB" : "var(--color-sidebar-foreground)", fontFamily: "DM Mono,monospace", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                            {!isInEvt
-                              ? <span className="text-muted-foreground italic">tidak ikut {EVT_NAMES[activeEvt]}</span>
-                              : role || (blocks.length ? `${blocks.join(" · ")} (${w.toFixed(2)})` : "–")}
-                          </div>
-                        </div>
-                        <span className="text-[9px] text-sidebar-foreground font-mono flex-shrink-0">#{i + 1}</span>
+                {/* Member list */}
+                <div className="flex-1 overflow-y-auto p-2">
+                  {members.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8 px-2 text-[10px] leading-7 font-mono tracking-wide">
+                      BELUM ADA ANGGOTA<br />Tambah di atas atau import
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-[8px] text-muted-foreground mb-2 px-1 font-mono tracking-wide">
+                        {members.length} ANGGOTA · 2 TERATAS = KOORDINATOR ALL BLOCK
                       </div>
 
-                      {/* Hover action bar */}
-                      {isHov && (
-                        <div className="flex gap-2 p-2 border-t border-sidebar-border bg-popover">
-                          <button onClick={(e) => { e.stopPropagation(); moveMember(m.id, -1); }}
-                            className="flex-1 px-2 py-1 bg-input border border-sidebar-border rounded-md text-muted-foreground text-[10px] cursor-pointer flex items-center justify-center gap-2">
-                            <span className="text-[12px]">↑</span><span className="text-[8px] tracking-wider">NAIK</span>
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); moveMember(m.id, 1); }}
-                            className="flex-1 px-2 py-1 bg-input border border-sidebar-border rounded-md text-muted-foreground text-[10px] cursor-pointer flex items-center justify-center gap-2">
-                            <span className="text-[12px]">↓</span><span className="text-[8px] tracking-wider">TURUN</span>
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); removeMember(m.id); }}
-                            className="flex-1 px-2 py-1 bg-card border border-[rgba(127,29,29,0.33)] rounded-md text-[10px] cursor-pointer flex items-center justify-center gap-2" style={{ color: 'var(--assign-fail)' }}>
-                            <span className="text-[12px]">×</span><span className="text-[8px] tracking-wider">HAPUS</span>
-                          </button>
-                        </div>
-                      )}
+                      {members.map((m, i) => {
+                        const avail     = m.availability || "both";
+                        const evtKey    = activeEvt === 0 ? "teen" : "youth";
+                        const isInEvt   = avail === "both" || avail === evtKey;
+                        const role      = isInEvt ? getMemberRole(m.name, activeEvt) : null;
+                        const blocks    = isInEvt ? getMemberBlocks(m.name, activeEvt) : [];
+                        const isSel     = selected?.id === m.id;
+                        const isSR      = role && role !== "ALL BLOCK";
+                        const isCounter = !role && isInEvt;
+                        const w         = blocks.reduce((s, b) => s + (WEIGHTS[activeEvt][b] || 0), 0);
+                        const isHov     = hoveredMbr === m.id;
+                        const isABTeen  = allBlockForEvent(0).some((mb) => mb.name === m.name);
+                        const isABYouth = allBlockForEvent(1).some((mb) => mb.name === m.name);
+                        const isABAny   = isABTeen || isABYouth;
+                        const abLabel   = isABTeen && isABYouth ? "ALL" : isABTeen ? "ALL-T" : "ALL-Y";
+
+                        return (
+                          <div
+                            key={m.id}
+                            onMouseEnter={() => setHoveredMbr(m.id)}
+                            onMouseLeave={() => setHoveredMbr(null)}
+                            className={`rounded-lg mb-1 overflow-hidden transition-all ${!isInEvt ? "opacity-30" : isSR ? "opacity-65" : "opacity-100"}`}
+                            style={{
+                              border: isSel ? "1px solid var(--color-primary)" : isHov ? "1px solid var(--color-muted-foreground)" : "1px solid transparent",
+                              background: isSel ? "var(--color-card)" : isHov && isInEvt ? "var(--color-input)" : "transparent",
+                            }}
+                          >
+                            {/* Main row */}
+                            <div
+                              onClick={() => { if (mode === "manual" && isCounter && isInEvt) { setSelected(isSel ? null : m); setError(""); } }}
+                              className={`flex items-center gap-2 p-2 ${mode === "manual" && isCounter ? "cursor-pointer" : "cursor-default"}`}
+                            >
+                              <div style={{ width:"10px", height:"10px", borderRadius:"50%", flexShrink:0, background:m.color, boxShadow:`0 0 7px ${m.color}77` }} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[12px] font-semibold text-foreground">{m.name}</span>
+
+                                  {/* isAdmin badge — visible to all */}
+                                  {m.isAdmin && (
+                                    <span className="text-[7px] px-1 rounded-sm font-mono" style={{
+                                      background: "var(--assign-admin-bg)",
+                                      color: "var(--assign-admin-fg)",
+                                      border: "1px solid var(--assign-admin-border)",
+                                      letterSpacing: "1px",
+                                    }}>
+                                      ADMIN
+                                    </span>
+                                  )}
+
+                                  {isABAny && (
+                                    <span className="text-[7px] px-1 rounded-sm font-mono" style={{ background:"var(--assign-ab-bg)", color:"var(--assign-ab-fg)", letterSpacing:"1px" }}>
+                                      {abLabel}
+                                    </span>
+                                  )}
+                                  {isSR && (
+                                    <span className="text-[7px] px-1 rounded-sm bg-sidebar-border text-muted-foreground font-mono">SR</span>
+                                  )}
+                                  {avail !== "both" && (
+                                    <span className="text-[7px] px-1 rounded-sm font-mono" style={{
+                                      background: avail === "teen" ? "var(--assign-availability-teen-bg)" : "var(--assign-availability-youth-bg)",
+                                      color: avail === "teen" ? "var(--assign-availability-teen)" : "var(--assign-availability-youth)",
+                                      letterSpacing: "1px",
+                                      border: avail === "teen" ? "1px solid var(--assign-availability-teen-border)" : "1px solid var(--assign-availability-youth-border)",
+                                    }}>
+                                      {avail === "teen" ? "T" : "Y"}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize:"9px", marginTop:"1px", color: isSR ? "var(--color-sidebar-foreground)" : role ? "var(--color-muted-foreground)" : blocks.length ? m.color + "BB" : "var(--color-sidebar-foreground)", fontFamily:"DM Mono,monospace", overflow:"hidden", whiteSpace:"nowrap", textOverflow:"ellipsis" }}>
+                                  {!isInEvt
+                                    ? <span className="text-muted-foreground italic">tidak ikut {EVT_NAMES[activeEvt]}</span>
+                                    : role || (blocks.length ? `${blocks.join(" · ")} (${w.toFixed(2)})` : "–")}
+                                </div>
+                              </div>
+                              <span className="text-[9px] text-sidebar-foreground font-mono flex-shrink-0">#{i + 1}</span>
+                            </div>
+
+                            {/* Hover action bar — accessible to everyone, no role check */}
+                            {isHov && (
+                              <div className="flex gap-1.5 p-2 border-t border-sidebar-border bg-popover flex-wrap">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); moveMember(m.id, -1); }}
+                                  className="flex-1 px-2 py-1 bg-input border border-sidebar-border rounded-md text-muted-foreground text-[10px] cursor-pointer flex items-center justify-center gap-1">
+                                  <span className="text-[12px]">↑</span>
+                                  <span className="text-[8px] tracking-wider">NAIK</span>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); moveMember(m.id, 1); }}
+                                  className="flex-1 px-2 py-1 bg-input border border-sidebar-border rounded-md text-muted-foreground text-[10px] cursor-pointer flex items-center justify-center gap-1">
+                                  <span className="text-[12px]">↓</span>
+                                  <span className="text-[8px] tracking-wider">TURUN</span>
+                                </button>
+
+                                {/* isAdmin toggle — accessible to everyone */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleAdmin(m.id); }}
+                                  className="flex-1 px-2 py-1 rounded-md text-[10px] cursor-pointer flex items-center justify-center gap-1"
+                                  style={{
+                                    background: m.isAdmin ? "rgba(234,179,8,0.1)" : "var(--color-input)",
+                                    border: m.isAdmin ? "1px solid rgba(234,179,8,0.35)" : "1px solid var(--color-sidebar-border)",
+                                    color: m.isAdmin ? "var(--assign-admin-fg)" : "var(--color-muted-foreground)",
+                                  }}>
+                                  <span className="text-[11px]">{m.isAdmin ? "👑" : "👤"}</span>
+                                  <span className="text-[8px] tracking-wider">{m.isAdmin ? "ADMIN" : "USER"}</span>
+                                </button>
+
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); removeMember(m.id); }}
+                                  className="flex-1 px-2 py-1 bg-card rounded-md text-[10px] cursor-pointer flex items-center justify-center gap-1"
+                                  style={{ color:"var(--assign-fail)", border:"1px solid rgba(127,29,29,0.33)" }}>
+                                  <span className="text-[12px]">×</span>
+                                  <span className="text-[8px] tracking-wider">HAPUS</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+
+                {/* ── PERAN KHUSUS (manual SR assignment) ── */}
+                {isReady && (() => {
+                  const sr = events[activeEvt].sr;
+                  const pickerOpen = srPicker && srPicker.ei === activeEvt;
+
+                  return (
+                    <div className="border-t border-sidebar-border flex-shrink-0">
+                      <div className="px-3 pt-2 pb-1 bg-sidebar">
+                        <span className="text-[7.5px] text-muted-foreground tracking-wider font-mono">
+                          PERAN KHUSUS — {EVT_NAMES[activeEvt].toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="p-2 bg-sidebar flex flex-col gap-2">
+                        {SR_KEYS.map((key, ki) => {
+                          const assigned = sr[key];
+                          const aColor = assigned ? colorOf(assigned) : null;
+                          const isOpen = !!(pickerOpen && srPicker.role === key);
+                          const eligible = getSREligible(activeEvt, key);
+
+                          return (
+                            <Popover key={key} open={isOpen}
+                              onOpenChange={(v) => setSRPicker(v ? { ei: activeEvt, role: key } : null)}>
+                              <PopoverTrigger>
+                                <div role="button"
+                                  className={`w-full flex items-center gap-3 p-2 rounded-md border ${isOpen ? "bg-input border-sidebar-border" : "bg-transparent border-transparent"}`}>
+                                  {aColor
+                                    ? <span className="w-2.5 h-2.5 rounded-full" style={{ background:aColor, boxShadow:`0 0 6px ${aColor}66` }} />
+                                    : <span className="w-2.5 h-2.5 rounded-full border border-dashed border-sidebar-border bg-transparent" />}
+                                  <div className="flex-1 min-w-0 text-left">
+                                    <div className="text-[7.5px] text-muted-foreground font-mono">{SR_SHORT[ki]}</div>
+                                    <div className={`text-sm font-semibold mt-0.5 ${aColor ? "" : "text-muted-foreground"}`}>
+                                      {assigned || <span className="text-[8px] text-muted-foreground italic">belum di-assign</span>}
+                                    </div>
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{isOpen ? "▲" : "▼"}</span>
+                                </div>
+                              </PopoverTrigger>
+
+                              <PopoverContent className="w-full p-0">
+                                <div className="bg-popover border border-sidebar-border rounded-b-md max-h-[140px] overflow-y-auto">
+                                  <div
+                                    onClick={() => setEventSR(activeEvt, key, null)}
+                                    className="px-3 py-2 text-sm text-muted-foreground hover:bg-input cursor-pointer border-b border-sidebar-border">
+                                    — Kosongkan slot ini
+                                  </div>
+                                  {eligible.length === 0 ? (
+                                    <div className="px-3 py-2 text-sm text-muted-foreground">Tidak ada anggota tersedia</div>
+                                  ) : (
+                                    eligible.map((mb) => (
+                                      <div
+                                        key={mb.id}
+                                        onClick={() => setEventSR(activeEvt, key, mb.name)}
+                                        className={`px-3 py-2 flex items-center gap-3 cursor-pointer hover:bg-input ${assigned === mb.name ? "bg-input" : ""}`}>
+                                        <span className="w-2.5 h-2.5 rounded-full" style={{ background:mb.color, boxShadow:`0 0 6px ${mb.color}66` }} />
+                                        <span className="text-sm font-semibold text-muted-foreground">{mb.name}</span>
+                                        {assigned === mb.name && <span className="ml-auto text-[8px] text-green-400">✓ terpilih</span>}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
-                })}
-              </>
-            )}
-          </div>
+                })()}
 
-          {/* ── PERAN KHUSUS (manual SR assignment) ── */}
-          {isReady && (() => {
-            const sr = events[activeEvt].sr;
-            const pickerOpen = srPicker && srPicker.ei === activeEvt;
+                {/* Bottom controls */}
+                <div style={{ padding:"10px", borderTop:"1px solid var(--color-sidebar-border)" }}>
+                  {error && (
+                    <div style={{ background:"var(--assign-error-bg)", border:"1px solid var(--assign-error-border)", borderRadius:"6px", padding:"8px", fontSize:"9px", color:"var(--assign-error-text)", marginBottom:"8px", lineHeight:1.6, fontFamily:"DM Mono,monospace" }}>
+                      ⚠ {error}
+                    </div>
+                  )}
 
-            return (
-              <div className="border-t border-sidebar-border flex-shrink-0">
-                <div className="px-3 pt-2 pb-1 bg-sidebar">
-                  <span className="text-[7.5px] text-muted-foreground tracking-wider font-mono">PERAN KHUSUS — {EVT_NAMES[activeEvt].toUpperCase()}</span>
+                  {mode === "manual" && isReady && (
+                    <div style={{ background:"var(--assign-manual-bg)", border:"1px solid var(--assign-manual-border)", borderRadius:"6px", padding:"8px", fontSize:"9px", color:"var(--assign-manual-text)", marginBottom:"8px", lineHeight:1.7, fontFamily:"DM Mono,monospace" }}>
+                      {selected ? (
+                        <>
+                          <span style={{ color:"var(--assign-manual-accent)" }}>MEMILIH: </span>
+                          <strong style={{ color:selected.color }}>{selected.name.toUpperCase()}</strong>
+                          <br />Klik blok di peta untuk assign/unassign
+                        </>
+                      ) : "Klik nama counter untuk mulai assign manual"}
+                    </div>
+                  )}
+
+                  {!isReady ? (
+                    <Button onClick={initialize} className="w-full" size="lg">🚀 INITIALIZE EVENTS</Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1" onClick={initialize}>🎲 RE-ROLL SR</Button>
+                      <Button variant="outline" className="flex-1" onClick={clearAll}>🗑 CLEAR</Button>
+                    </div>
+                  )}
                 </div>
+              </aside>
 
-                <div className="p-2 bg-sidebar flex flex-col gap-2">
-                  {SR_KEYS.map((key, ki) => {
-                    const assigned = sr[key];
-                    const aColor = assigned ? colorOf(assigned) : null;
-                    const isOpen = !!(pickerOpen && srPicker.role === key);
-                    const eligible = getSREligible(activeEvt, key);
+              {/* ════ MAIN AREA ════ */}
+              <main className="flex-1 flex flex-col overflow-hidden min-h-0">
+                {isReady && (
+                  <div className="p-4 flex-1 overflow-auto">
+                    <div className="bg-card rounded-md p-4 h-full">
+                      <svg viewBox="0 0 830 500" width="100%" height="100%"
+                        xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                        <ellipse cx="415" cy="54" rx="240" ry="70" fill="url(#stageGlow)" />
 
-                    return (
-                      <Popover key={key} open={isOpen} onOpenChange={(v) => setSRPicker(v ? { ei: activeEvt, role: key } : null)}>
-                        <PopoverTrigger>
-                          <div role="button" className={`w-full flex items-center gap-3 p-2 rounded-md border ${isOpen ? 'bg-input border-sidebar-border' : 'bg-transparent border-transparent'}`}>
-                            {aColor ? (
-                              <span className="w-2.5 h-2.5 rounded-full" style={{ background: aColor, boxShadow: `0 0 6px ${aColor}66` }} />
-                            ) : (
-                              <span className="w-2.5 h-2.5 rounded-full border border-dashed border-sidebar-border bg-transparent" />
-                            )}
-                            <div className="flex-1 min-w-0 text-left">
-                              <div className="text-[7.5px] text-muted-foreground font-mono">{SR_SHORT[ki]}</div>
-                              <div className={`text-sm font-semibold mt-0.5 ${aColor ? '' : 'text-muted-foreground'}`}>
-                                {assigned || <span className="text-[8px] text-muted-foreground italic">belum di-assign</span>}
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
-                          </div>
-                        </PopoverTrigger>
+                        {A_BL.map((key) => {
+                          const g         = GEOM[key];
+                          const assignees = getAssignees(key, activeEvt);
+                          const col       = assignees.length > 0 ? colorOf(assignees[0]) + "33" : "var(--color-sidebar-border)";
+                          return (
+                            <line key={key}
+                              x1={g.cx} y1={g.cy - 28} x2="415" y2="96"
+                              stroke={col} strokeWidth="1" strokeDasharray="6,5" opacity="0.7" />
+                          );
+                        })}
 
-                        <PopoverContent className="w-full p-0">
-                          <div className="bg-popover border border-sidebar-border rounded-b-md max-h-[140px] overflow-y-auto">
-                            <div
-                              onClick={() => setEventSR(activeEvt, key, null)}
-                              className="px-3 py-2 text-sm text-muted-foreground hover:bg-input cursor-pointer border-b border-sidebar-border"
-                            >
-                              — Kosongkan slot ini
-                            </div>
-                            {eligible.length === 0 ? (
-                              <div className="px-3 py-2 text-sm text-muted-foreground">Tidak ada anggota tersedia</div>
-                            ) : (
-                              eligible.map((mb) => (
-                                <div
-                                  key={mb.id}
-                                  onClick={() => setEventSR(activeEvt, key, mb.name)}
-                                  className={`px-3 py-2 flex items-center gap-3 cursor-pointer hover:bg-input ${assigned === mb.name ? 'bg-input' : ''}`}
-                                >
-                                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: mb.color, boxShadow: `0 0 6px ${mb.color}66` }} />
-                                  <span className="text-sm font-semibold text-muted-foreground">{mb.name}</span>
-                                  {assigned === mb.name && <span className="ml-auto text-[8px] text-green-400">✓ terpilih</span>}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
+                        {Object.keys(GEOM).map((key) => renderBlock(key))}
+                        {renderTooltip()}
 
-          {/* Bottom controls */}
-          <div style={{ padding: "10px", borderTop: "1px solid var(--color-sidebar-border)" }}>
-            {error && (
-              <div style={{ background: "var(--assign-error-bg)", border: "1px solid var(--assign-error-border)", borderRadius: "6px", padding: "8px", fontSize: "9px", color: "var(--assign-error-text)", marginBottom: "8px", lineHeight: 1.6, fontFamily: "DM Mono,monospace" }}>
-                ⚠ {error}
-              </div>
-            )}
-
-            {mode === "manual" && isReady && (
-              <div style={{ background: "var(--assign-manual-bg)", border: "1px solid var(--assign-manual-border)", borderRadius: "6px", padding: "8px", fontSize: "9px", color: "var(--assign-manual-text)", marginBottom: "8px", lineHeight: 1.7, fontFamily: "DM Mono,monospace" }}>
-                {selected ? (
-                  <>
-                    <span style={{ color: "var(--assign-manual-accent)" }}>MEMILIH: </span>
-                    <strong style={{ color: selected.color }}>{selected.name.toUpperCase()}</strong>
-                    <br />Klik blok di peta untuk assign/unassign
-                  </>
-                ) : "Klik nama counter untuk mulai assign manual"}
-              </div>
-            )}
-
-            {!isReady ? (
-              <Button onClick={initialize} className="w-full" size="lg">🚀 INITIALIZE EVENTS</Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={initialize}>🎲 RE-ROLL SR</Button>
-                <Button variant="outline" className="flex-1" onClick={clearAll}>🗑 CLEAR</Button>
-              </div>
-            )}
-          </div>
-        </aside>
-
-        {/* ════ MAIN AREA ════ */}
-        <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-          {isReady && (
-            <div className="p-4 flex-1 overflow-auto">
-              <div className="bg-card rounded-md p-4 h-full">
-                <svg viewBox="0 0 830 500" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-                  <ellipse cx="415" cy="54" rx="240" ry="70" fill="url(#stageGlow)" />
-
-                  {/* Connecting lines from A blocks → main stage */}
-                  {A_BL.map((key) => {
-                    const g         = GEOM[key];
-                    const assignees = getAssignees(key, activeEvt);
-                    const col       = assignees.length > 0 ? colorOf(assignees[0]) + "33" : "var(--color-sidebar-border)";
-                    return (
-                      <line key={key}
-                        x1={g.cx} y1={g.cy - 28} x2="415" y2="96"
-                        stroke={col} strokeWidth="1" strokeDasharray="6,5" opacity="0.7" />
-                    );
-                  })}
-
-                  {/* All blocks */}
-                  {Object.keys(GEOM).map((key) => renderBlock(key))}
-
-                  {/* Tooltip layer (on top) */}
-                  {renderTooltip()}
-
-                  <text x="824" y="486" textAnchor="end" fill="var(--color-sidebar-foreground)" fontSize="8"
-                    style={{ fontFamily: "DM Mono,monospace" }}>
-                    bobot blok: {EVT_NAMES[activeEvt]}
-                  </text>
-                </svg>
-              </div>
+                        <text x="824" y="486" textAnchor="end"
+                          fill="var(--color-sidebar-foreground)" fontSize="8"
+                          style={{ fontFamily:"DM Mono,monospace" }}>
+                          bobot blok: {EVT_NAMES[activeEvt]}
+                        </text>
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </main>
             </div>
+          </CardContent>
+
+          {showOut && isReady && (
+            <CardFooter className="flex flex-col h-[215px] border-t border-sidebar-border p-0 bg-card">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-sidebar-border">
+                <span className="text-[9px] font-semibold text-muted-foreground font-mono">OUTPUT TEKS</span>
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => copyOut("TEEN")} variant={copied === "TEEN" ? "default" : "outline"} size="sm">
+                    {copied === "TEEN" ? "✓ DISALIN" : "SALIN TEEN"}
+                  </Button>
+                  <Button onClick={() => copyOut("YOUTH")} variant={copied === "YOUTH" ? "default" : "outline"} size="sm">
+                    {copied === "YOUTH" ? "✓ DISALIN" : "SALIN YOUTH"}
+                  </Button>
+                  <Button onClick={() => copyOut("ALL")} variant={copied === "ALL" ? "default" : "outline"} size="sm">
+                    {copied === "ALL" ? "✓ DISALIN" : "SALIN SEMUA"}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <pre className="text-[11px] text-muted-foreground leading-7 font-mono whitespace-pre-wrap m-0">
+                  {genOutput()}
+                </pre>
+              </div>
+            </CardFooter>
           )}
-        </main>
-          </div>
-        </CardContent>
-
-        {showOut && isReady && (
-          <CardFooter className="flex flex-col h-[215px] border-t border-sidebar-border p-0 bg-card">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-sidebar-border">
-              <span className="text-[9px] font-semibold text-muted-foreground font-mono">OUTPUT TEKS</span>
-              <div className="flex items-center gap-2">
-                <Button onClick={() => copyOut("TEEN")} variant={copied === "TEEN" ? "default" : "outline"} size="sm">{copied === "TEEN" ? "✓ DISALIN" : "SALIN TEEN"}</Button>
-                <Button onClick={() => copyOut("YOUTH")} variant={copied === "YOUTH" ? "default" : "outline"} size="sm">{copied === "YOUTH" ? "✓ DISALIN" : "SALIN YOUTH"}</Button>
-                <Button onClick={() => copyOut("ALL")} variant={copied === "ALL" ? "default" : "outline"} size="sm">{copied === "ALL" ? "✓ DISALIN" : "SALIN SEMUA"}</Button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <pre className="text-[11px] text-muted-foreground leading-7 font-mono whitespace-pre-wrap m-0">{genOutput()}</pre>
-            </div>
-          </CardFooter>
-        )}
-      </Card>
+        </Card>
+      </div>
     </div>
-  </div>
   );
 }

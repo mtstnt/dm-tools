@@ -2,6 +2,8 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { collection, setDoc, doc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -342,29 +344,44 @@ export default function AssignPage() {
       .map((l) => l.replace(/^[\s*•\-\d.]+/, "").trim())
       .filter(Boolean);
     if (!lines.length) return;
-    setMembers(
-      lines.map((raw, i) => {
-        const { name, availability } = parseMemberStr(raw);
-        return { id: Date.now() + i, name, color: COLORS[i % COLORS.length], availability };
-      })
-    );
-    setBulkText(""); setIsReady(false); setShowImport(false); setError(""); setSelected(null);
+    const rows = lines.map((raw, i) => {
+      const { name, availability } = parseMemberStr(raw);
+      return { id: Date.now() + i, name, color: COLORS[i % COLORS.length], availability };
+    });
+
+    // write to firestore for each member (best-effort), then update local state
+    const doWrite = async () => {
+      try {
+        await Promise.all(rows.map((r) => setDoc(doc(db, "members", String(r.id)), { ...r })));
+      } catch (e) {
+        // ignore firestore write errors, we'll still set local state
+      }
+      setMembers((prev) => [...prev, ...rows]);
+      setBulkText(""); setIsReady(false); setShowImport(false); setError(""); setSelected(null);
+    };
+    void doWrite();
   };
 
   const addSingle = () => {
     const raw = singleName.trim();
     if (!raw) return;
     const { name, availability } = parseMemberStr(raw);
-    setMembers((prev) => [
-      ...prev,
-      { id: Date.now(), name, color: COLORS[prev.length % COLORS.length], availability },
-    ]);
-    setSingleName(""); setIsReady(false);
+    const m = { id: Date.now(), name, color: COLORS[members.length % COLORS.length], availability };
+    const doWrite = async () => {
+      try { await setDoc(doc(db, "members", String(m.id)), { ...m }); } catch (e) { }
+      setMembers((prev) => [...prev, m]);
+      setSingleName(""); setIsReady(false);
+    };
+    void doWrite();
   };
 
   const removeMember = (id: number) => {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-    setIsReady(false); setSelected(null); setError("");
+    const doRemove = async () => {
+      try { await deleteDoc(doc(db, "members", String(id))); } catch (e) { }
+      setMembers((prev) => prev.filter((m) => m.id !== id));
+      setIsReady(false); setSelected(null); setError("");
+    };
+    void doRemove();
   };
 
   const moveMember = (id: number, dir: number) => {

@@ -23,6 +23,7 @@ export default function MembersPage() {
   const [members, setMembers] = useState<MemberForm[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [form, setForm] = useState<MemberForm>({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", role: "Member", isAdmin: false });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -61,10 +62,16 @@ export default function MembersPage() {
   const resetForm = () => setForm({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", role: "Member", isAdmin: false });
 
   const save = () => {
-    if (!form.name.trim()) return;
+    setError(null);
+    if (!form.name.trim()) { setError("Nama wajib diisi"); return; }
+    // enforce unique email (if provided)
+    if (form.email && form.email.trim()) {
+      const same = members.find((m) => (m.email || "").toLowerCase() === (form.email || "").toLowerCase() && m.id !== form.id);
+      if (same) { setError("Email sudah dipakai oleh anggota lain"); return; }
+    }
+
     const doSave = async () => {
       try {
-        // use numeric id as doc id string to keep consistent
         const idStr = String(form.id);
         await setDoc(doc(db, "members", idStr), { ...form });
         if (editing) {
@@ -75,7 +82,6 @@ export default function MembersPage() {
         }
         resetForm();
       } catch (e) {
-        // if firestore fails, still update local state
         if (editing) {
           setMembers((prev) => prev.map((m) => (m.id === editing ? form : m)));
           setEditing(null);
@@ -95,7 +101,14 @@ export default function MembersPage() {
     setEditing(id);
   };
 
-  const remove = (id: number) => setMembers((prev) => prev.filter((m) => m.id !== id));
+  const remove = (id: number) => {
+    // remove from firestore and local state
+    const doRemove = async () => {
+      try { await deleteDoc(doc(db, "members", String(id))); } catch {}
+      setMembers((prev) => prev.filter((m) => m.id !== id));
+    };
+    void doRemove();
+  };
 
   return (
     <div className="p-4">
@@ -114,14 +127,14 @@ export default function MembersPage() {
 
           <div className="flex items-center gap-3 mb-4">
             <label className="text-sm">Role</label>
-            <select className="border rounded p-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any, isAdmin: e.target.value === "PIC" ? form.isAdmin : false })}>
+            <select className="border rounded p-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}>
               <option value="Member">Member</option>
               <option value="SPV">SPV</option>
               <option value="PIC">PIC</option>
             </select>
             <label className="ml-4 text-sm flex items-center gap-2">
-              <input type="checkbox" checked={!!form.isAdmin} onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} disabled={form.role !== "PIC"} />
-              <span>Admin (hanya untuk PIC)</span>
+              <input type="checkbox" checked={!!form.isAdmin} onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} />
+              <span>Admin (set siapa saja sebagai admin)</span>
             </label>
           </div>
 
@@ -131,6 +144,7 @@ export default function MembersPage() {
           </div>
 
           <div className="mt-6">
+            {error && <div className="mb-2 text-sm text-red-400">⚠ {error}</div>}
             <div className="text-sm text-muted-foreground mb-2">Daftar anggota ({members.length})</div>
             <div className="space-y-2">
               {members.map((m) => (

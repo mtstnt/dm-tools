@@ -71,7 +71,7 @@ export default function MembersPage() {
     const prepared = {
       ...form,
       email: normalizedEmail || undefined,
-      isAdmin: form.role === "PIC" ? !!form.isAdmin : false,
+      isAdmin: !!form.isAdmin,
     };
 
     const doSave = async () => {
@@ -125,14 +125,14 @@ export default function MembersPage() {
 
           <div className="flex items-center gap-3 mb-4">
             <label className="text-sm">Role</label>
-            <select className="border rounded p-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any, isAdmin: e.target.value === "PIC" ? form.isAdmin : false })}>
+            <select className="border rounded p-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}>
               <option value="Member">Member</option>
               <option value="SPV">SPV</option>
               <option value="PIC">PIC</option>
             </select>
             <label className="ml-4 text-sm flex items-center gap-2">
-              <input type="checkbox" checked={!!form.isAdmin} onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} disabled={form.role !== "PIC"} />
-              <span>{form.role === "PIC" ? "Admin (PIC only)" : "Admin hanya untuk PIC"}</span>
+              <input type="checkbox" checked={!!form.isAdmin} onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} />
+              <span>Admin</span>
             </label>
           </div>
 

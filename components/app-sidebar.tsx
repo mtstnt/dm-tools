@@ -25,9 +25,9 @@ export function AppSidebar() {
       if (!user || !user.email) { setIsAdmin(false); return; }
       try {
         const email = (user.email || "").toLowerCase();
-        const q = qf(collection(db, "members"), where("email", "==", email), where("isAdmin", "==", true));
+        const q = qf(collection(db, "members"), where("isAdmin", "==", true));
         const snap = await getDocs(q);
-        setIsAdmin(snap.docs.length > 0);
+        setIsAdmin(snap.docs.some((d) => ((d.data()?.email || "") as string).toLowerCase() === email));
       } catch (e) {
         setIsAdmin(false);
       }

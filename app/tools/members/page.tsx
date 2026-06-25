@@ -17,7 +17,6 @@ interface MemberForm {
   isAdmin?: boolean;
 }
 
-const STORAGE_KEY = "dm:members:v1";
 
 export default function MembersPage() {
   const [members, setMembers] = useState<MemberForm[]>([]);
@@ -32,63 +31,62 @@ export default function MembersPage() {
         const snap = await getDocs(collection(db, "members"));
         const rows: MemberForm[] = snap.docs.map((d) => {
           const data = d.data() as any;
+          const role = (data.role ?? "Member") as MemberForm["role"];
           return {
             id: data.id ?? Number(d.id) ?? Date.now(),
             name: data.name ?? "",
             nij: data.nij ?? undefined,
             email: data.email ?? "",
             nickname: data.nickname ?? "",
-            role: data.role ?? "Member",
-            isAdmin: data.isAdmin ?? false,
+            role,
+            isAdmin: role === "PIC" ? !!data.isAdmin : false,
           };
         });
         if (mounted) setMembers(rows);
       } catch (e) {
-        // fallback to localStorage
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw && mounted) setMembers(JSON.parse(raw));
-        } catch {}
+        if (mounted) setMembers([]);
       }
     };
-    load();
+    void load();
     return () => { mounted = false; };
   }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(members)); } catch {}
-  }, [members]);
 
   const resetForm = () => setForm({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", role: "Member", isAdmin: false });
 
   const save = () => {
     setError(null);
-    if (!form.name.trim()) { setError("Nama wajib diisi"); return; }
-    // enforce unique email (if provided)
-    if (form.email && form.email.trim()) {
-      const same = members.find((m) => (m.email || "").toLowerCase() === (form.email || "").toLowerCase() && m.id !== form.id);
-      if (same) { setError("Email sudah dipakai oleh anggota lain"); return; }
+    if (!form.name.trim()) {
+      setError("Nama wajib diisi");
+      return;
     }
+    const normalizedEmail = form.email?.trim().toLowerCase();
+    if (normalizedEmail) {
+      const same = members.find((m) => (m.email || "").toLowerCase() === normalizedEmail && m.id !== form.id);
+      if (same) {
+        setError("Email sudah dipakai oleh anggota lain");
+        return;
+      }
+    }
+
+    const prepared = {
+      ...form,
+      email: normalizedEmail || undefined,
+      isAdmin: form.role === "PIC" ? !!form.isAdmin : false,
+    };
 
     const doSave = async () => {
       try {
-        const idStr = String(form.id);
-        await setDoc(doc(db, "members", idStr), { ...form });
+        const idStr = String(prepared.id);
+        await setDoc(doc(db, "members", idStr), prepared);
         if (editing) {
-          setMembers((prev) => prev.map((m) => (m.id === editing ? form : m)));
+          setMembers((prev) => prev.map((m) => (m.id === editing ? prepared : m)));
           setEditing(null);
         } else {
-          setMembers((prev) => [...prev, form]);
+          setMembers((prev) => [...prev, prepared]);
         }
         resetForm();
-      } catch (e) {
-        if (editing) {
-          setMembers((prev) => prev.map((m) => (m.id === editing ? form : m)));
-          setEditing(null);
-        } else {
-          setMembers((prev) => [...prev, form]);
-        }
-        resetForm();
+      } catch (e: any) {
+        setError(`Gagal menyimpan ke Firestore: ${e?.message || "server error"}`);
       }
     };
     void doSave();
@@ -127,14 +125,14 @@ export default function MembersPage() {
 
           <div className="flex items-center gap-3 mb-4">
             <label className="text-sm">Role</label>
-            <select className="border rounded p-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}>
+            <select className="border rounded p-1" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any, isAdmin: e.target.value === "PIC" ? form.isAdmin : false })}>
               <option value="Member">Member</option>
               <option value="SPV">SPV</option>
               <option value="PIC">PIC</option>
             </select>
             <label className="ml-4 text-sm flex items-center gap-2">
-              <input type="checkbox" checked={!!form.isAdmin} onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} />
-              <span>Admin (set siapa saja sebagai admin)</span>
+              <input type="checkbox" checked={!!form.isAdmin} onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} disabled={form.role !== "PIC"} />
+              <span>{form.role === "PIC" ? "Admin (PIC only)" : "Admin hanya untuk PIC"}</span>
             </label>
           </div>
 

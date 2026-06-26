@@ -4,141 +4,138 @@ import * as cheerio from "cheerio"
 import { getEventDetail, requiresReauth, type EventDetail } from "@/lib/parsers/events"
 import { parseEventPage, type ParsedResult } from "@/lib/parsers/event-details"
 
-interface WebAuthResult {
-  success: boolean
-  cookie?: string
-  error?: string
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
+
+type WebAuthResult =
+  | { success: true; cookie: string }
+  | { success: false; error: string }
+
+function extractCookieHeader(setCookies: string[]): string {
+  return setCookies
+    .map((c) => c.split(";")[0])
+    .join("; ")
 }
 
 export async function webAuthLogin(
   email: string,
   passwordBase64: string
 ): Promise<WebAuthResult> {
-  const password = atob(passwordBase64)
   try {
-    // Step 1: GET /login to retrieve CSRF token + session cookie
+    const password = atob(passwordBase64)
     const baseUrl = process.env.SC_BASE_URL!
-    const getUrl = `${baseUrl}/login`
-    const getHeaders = {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    }
 
-    console.log("[webAuthLogin] → GET", getUrl)
-    console.log("[webAuthLogin]   headers:", getHeaders)
-
-    const getRes = await fetch(getUrl, { headers: getHeaders })
-
-    console.log("[webAuthLogin] ← GET", getRes.status, getRes.statusText)
-    console.log(
-      "[webAuthLogin]   set-cookie:",
-      getRes.headers.getSetCookie()
-    )
+    //
+    // STEP 1 — Load login page
+    //
+    const getRes = await fetch(`${baseUrl}/login`, {
+      headers: {
+        "User-Agent": USER_AGENT,
+      },
+    })
 
     if (!getRes.ok) {
-      console.log("[webAuthLogin] ✗ GET failed, status:", getRes.status)
-      return { success: false, error: "Failed to load login page" }
+      return {
+        success: false,
+        error: `Login page failed (${getRes.status})`,
+      }
     }
+
+    const initialCookies = getRes.headers.getSetCookie()
+
+    console.log("[GET] cookies:", initialCookies)
 
     const html = await getRes.text()
 
-    console.log("[webAuthLogin]   html length:", html.length)
-    console.log("[webAuthLogin]   html snippet:", html.slice(0, 300))
-
-    // Extract CSRF token using Cheerio
     const $ = cheerio.load(html)
-    let csrf = $('input[name="_csrf"]').attr("value")
 
-    if (!csrf) {
-      // Fallback: parse window._token from script tags
-      const scriptMatch = html.match(
+    const csrf =
+      $('input[name="_csrf"]').attr("value") ??
+      html.match(
         /window\._token\s*=\s*\{\s*csrf:\s*"([^"]+)"/
-      )
-      csrf = scriptMatch?.[1]
-    }
-
-    console.log("[webAuthLogin]   csrf token:", csrf ?? "(not found)")
+      )?.[1]
 
     if (!csrf) {
-      return { success: false, error: "Could not find CSRF token" }
-    }
-
-    // Extract cookies from GET response (need sails.sid)
-    const setCookieHeaders = getRes.headers.getSetCookie()
-    const cookies = setCookieHeaders
-      .map((header) => header.split(";")[0])
-      .join("; ")
-
-    console.log("[webAuthLogin]   cookies for POST:", cookies)
-
-    // Step 2: POST /login with redirect: "manual"
-    const postUrl = `${baseUrl}/login`
-    const postHeaders = {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: cookies,
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-      Origin: baseUrl,
-      Referer: `${baseUrl}/login`,
-    }
-    const postBody = new URLSearchParams({
-      email,
-      password,
-      _csrf: csrf,
-    })
-
-    console.log("[webAuthLogin] → POST", postUrl)
-    console.log("[webAuthLogin]   headers:", postHeaders)
-    console.log(
-      "[webAuthLogin]   body:",
-      postBody.toString().replace(/password=[^&]+/, "password=***")
-    )
-
-    const postRes = await fetch(postUrl, {
-      method: "POST",
-      redirect: "manual",
-      headers: postHeaders,
-      body: postBody,
-    })
-
-    const location = postRes.headers.get("location")
-    const setCookie = postRes.headers.get("set-cookie")
-
-    console.log("[webAuthLogin] ← POST", postRes.status, postRes.statusText)
-    console.log("[webAuthLogin]   location:", location)
-    console.log("[webAuthLogin]   set-cookie:", setCookie)
-
-    // Step 3: Check success
-    // Success: Location "/" and Set-Cookie with sails.sid
-    // Failure: Location "/login" (bad credentials)
-    if (location === "/" && setCookie) {
-      // Extract the sails.sid cookie value
-      const sailsSid = setCookieHeaders
-        .concat(setCookie ? [setCookie] : [])
-        .find((c) => c.startsWith("sails.sid="))
-
-      console.log("[webAuthLogin] ✓ Login successful, sails.sid:", sailsSid)
-
-      if (sailsSid) {
-        return { success: true, cookie: sailsSid.split(";")[0] }
+      return {
+        success: false,
+        error: "CSRF token not found",
       }
-
-      // Even if we can't isolate sails.sid, the login succeeded
-      return { success: true, cookie: setCookie.split(";")[0] }
     }
 
+    //
+    // STEP 2 — Login (FOLLOW redirects)
+    //
+    const loginCookies = extractCookieHeader(initialCookies)
+
+    const postRes = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": USER_AGENT,
+        Cookie: loginCookies,
+        Origin: baseUrl,
+        Referer: `${baseUrl}/login`,
+      },
+      body: new URLSearchParams({
+        email,
+        password,
+        _csrf: csrf,
+      }),
+    })
+
+    const finalUrl = postRes.url
+
+    console.log("[POST] final url:", finalUrl)
     console.log(
-      "[webAuthLogin] ✗ Login failed, location:",
-      location,
-      "set-cookie:",
-      setCookie
+      "[POST] final cookies:",
+      postRes.headers.getSetCookie()
     )
-    return { success: false, error: "Invalid email or password" }
+
+    //
+    // STEP 3 — Merge cookies
+    //
+    const responseCookies = postRes.headers.getSetCookie()
+
+    const finalCookie =
+      responseCookies.length > 0
+        ? extractCookieHeader(responseCookies)
+        : loginCookies
+
+    //
+    // STEP 4 — Validate success
+    //
+    if (
+      finalUrl.includes("/login") ||
+      postRes.status >= 400
+    ) {
+      const body = await postRes.text()
+
+      console.log(
+        "[POST] login failed body:",
+        body.substring(0, 300)
+      )
+
+      return {
+        success: false,
+        error: "Invalid email or password",
+      }
+    }
+
+    console.log("[SUCCESS] cookie:", finalCookie)
+
+    return {
+      success: true,
+      cookie: finalCookie,
+    }
   } catch (err) {
-    console.error("[webAuthLogin] ✗ Exception:", err)
+    console.error("[webAuthLogin]", err)
+
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Login request failed",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Login failed",
     }
   }
 }
@@ -147,8 +144,7 @@ export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
   const baseUrl = process.env.SC_BASE_URL!
   const headers = {
     Cookie: cookie,
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    "User-Agent": USER_AGENT,
   }
 
   const pages = [1, 2, 3]
@@ -172,29 +168,27 @@ export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
 
 export async function fetchEventEditPage(
   cookie: string,
-  eventId: string
-): Promise<ParsedResult> {
+  eventId: string,
+): Promise<any> {
   const baseUrl = process.env.SC_BASE_URL!
+  const url = `${baseUrl}/event/edit/${eventId}`
   const headers = {
     Cookie: cookie,
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-    "Cache-Control": "no-cache",
-    Dnt: "1",
-    Pragma: "no-cache"
+    Referer: `${baseUrl}/event`,
+    "User-Agent": USER_AGENT,
   }
-  const url = `${baseUrl}/event/edit/${eventId}`
-  console.log("[fetchEventEditPage] → GET", url, headers);
-  const res = await fetch(url, { headers })
+  console.log("[fetchEventEditPage] → GET", url)
+  console.log("sessionCookie", cookie);
+  const res = await fetch(url, { headers, credentials: "include" })
   if (!res.ok) {
     throw new Error(`Failed to fetch event edit page: ${res.status}`)
   }
   const html = await res.text()
-  if (requiresReauth(html)) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  return parseEventPage(html)
+  console.log(res.headers.get('location'));
+  console.log(html.substring(400, 500))
+  // if (requiresReauth(html)) {
+  //   throw new Error("SESSION_EXPIRED")
+  // }
+  // return parseEventPage(html)
+  return Promise.resolve(true);
 }

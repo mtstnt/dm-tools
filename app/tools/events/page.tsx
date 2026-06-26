@@ -305,7 +305,7 @@ function EventCard({ event }: { event: EventDetail }) {
       </CardContent>
       <CardFooter>
         <div className="flex gap-2 w-full">
-          {/*{event.showUrl && (
+          {event.showUrl && (
             <a
               href={`${process.env.NEXT_PUBLIC_SC_BASE_URL}${event.showUrl}`}
               target="_blank"
@@ -314,15 +314,15 @@ function EventCard({ event }: { event: EventDetail }) {
             >
               Seats
             </a>
-          )}*/}
-          {/*{event.editUrl && event.eventId && (
+          )}
+          {event.editUrl && event.eventId && (
             <Link
               href={`/tools/events/${event.eventId}/edit`}
               className="inline-flex h-7 flex-1 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
             >
               Edit
             </Link>
-          )}*/}
+          )}
         </div>
       </CardFooter>
     </Card>

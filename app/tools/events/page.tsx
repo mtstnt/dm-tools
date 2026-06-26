@@ -1,8 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { CalendarDays, Lock, Unlock, RefreshCw } from "lucide-react"
+import { CalendarDays, Lock, Unlock, RefreshCw, LogIn } from "lucide-react"
 import { WebAuthGuard, clearWebAuth, getWebAuthCookie } from "@/components/web-auth-guard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { fetchEvents, eventKeys, type Event } from "@/lib/queries/events"
+import { fetchEvents, eventKeys, type EventDetail } from "@/lib/queries/events"
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
@@ -94,7 +95,7 @@ function EventsGrid() {
   }, [sorted])
 
   const uniqueNames = useMemo(() => {
-    const set = new Set(sorted.map((e) => e.eventName).filter(Boolean) as string[])
+    const set = new Set(sorted.map((e) => e.name).filter(Boolean) as string[])
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [sorted])
 
@@ -114,7 +115,7 @@ function EventsGrid() {
   const filtered = useMemo(() => {
     return sorted.filter((e) => {
       if (locationFilter && e.location !== locationFilter) return false
-      if (nameFilter && e.eventName !== nameFilter) return false
+      if (nameFilter && e.name !== nameFilter) return false
       if (dateFilter && e.date !== dateFilter) return false
       return true
     })
@@ -145,20 +146,44 @@ function EventsGrid() {
   }
 
   if (isError) {
+    const isSessionExpired = error instanceof Error && error.message === "SESSION_EXPIRED"
+
     return (
       <Card className="max-w-md">
         <CardContent className="py-12 flex flex-col items-center gap-4 text-center">
-          <CalendarDays className="size-8 text-destructive" />
+          {isSessionExpired ? (
+            <LogIn className="size-8 text-muted-foreground" />
+          ) : (
+            <CalendarDays className="size-8 text-destructive" />
+          )}
           <div>
-            <p className="font-medium text-destructive">Failed to load events</p>
+            <p className={`font-medium ${isSessionExpired ? "" : "text-destructive"}`}>
+              {isSessionExpired ? "Session expired" : "Failed to load events"}
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {error instanceof Error ? error.message : "Unknown error"}
+              {isSessionExpired
+                ? "Your session has expired. Please sign in again."
+                : error instanceof Error ? error.message : "Unknown error"}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="size-3.5 mr-2" />
-            Retry
-          </Button>
+          {isSessionExpired ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                clearWebAuth()
+                window.location.reload()
+              }}
+            >
+              <LogIn className="size-3.5 mr-2" />
+              Sign in again
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="size-3.5 mr-2" />
+              Retry
+            </Button>
+          )}
         </CardContent>
       </Card>
     )
@@ -241,8 +266,8 @@ function EventsGrid() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {filtered.map((event: Event) => (
-            <EventCard key={event.id ?? `${event.date}-${event.eventName}`} event={event} />
+          {filtered.map((event: EventDetail) => (
+            <EventCard key={event.eventId ?? `${event.date}-${event.name}`} event={event} />
           ))}
         </div>
       )}
@@ -250,13 +275,13 @@ function EventsGrid() {
   )
 }
 
-function EventCard({ event }: { event: Event }) {
+function EventCard({ event }: { event: EventDetail }) {
   return (
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm leading-snug">
-            {event.eventName ?? "Untitled"}
+            {event.name ?? "Untitled"}
           </CardTitle>
           {event.locked ? (
             <Lock className="size-4 text-destructive shrink-0" />
@@ -280,26 +305,24 @@ function EventCard({ event }: { event: Event }) {
       </CardContent>
       <CardFooter>
         <div className="flex gap-2 w-full">
-          {event.seatCountUrl && (
+          {/*{event.showUrl && (
             <a
-              href={`${process.env.NEXT_PUBLIC_SC_BASE_URL}${event.seatCountUrl}`}
+              href={`${process.env.NEXT_PUBLIC_SC_BASE_URL}${event.showUrl}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-7 flex-1 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
             >
               Seats
             </a>
-          )}
-          {event.editUrl && (
-            <a
-              href={`${process.env.NEXT_PUBLIC_SC_BASE_URL}${event.editUrl}`}
-              target="_blank"
-              rel="noopener noreferrer"
+          )}*/}
+          {/*{event.editUrl && event.eventId && (
+            <Link
+              href={`/tools/events/${event.eventId}/edit`}
               className="inline-flex h-7 flex-1 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
             >
               Edit
-            </a>
-          )}
+            </Link>
+          )}*/}
         </div>
       </CardFooter>
     </Card>

@@ -1,7 +1,8 @@
 "use server"
 
 import * as cheerio from "cheerio"
-import { parseEvents, type Event } from "@/lib/parsers/events"
+import { getEventDetail, requiresReauth, type EventDetail } from "@/lib/parsers/events"
+import { parseEventPage, type ParsedResult } from "@/lib/parsers/event-details"
 
 interface WebAuthResult {
   success: boolean
@@ -142,7 +143,7 @@ export async function webAuthLogin(
   }
 }
 
-export async function fetchEvents(cookie: string): Promise<Event[]> {
+export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
   const baseUrl = process.env.SC_BASE_URL!
   const headers = {
     Cookie: cookie,
@@ -159,9 +160,41 @@ export async function fetchEvents(cookie: string): Promise<Event[]> {
         throw new Error(`Failed to fetch events page ${page}: ${res.status}`)
       }
       const html = await res.text()
-      return parseEvents(html)
+      if (requiresReauth(html)) {
+        throw new Error("SESSION_EXPIRED")
+      }
+      return getEventDetail(html)
     })
   )
 
   return results.flat()
+}
+
+export async function fetchEventEditPage(
+  cookie: string,
+  eventId: string
+): Promise<ParsedResult> {
+  const baseUrl = process.env.SC_BASE_URL!
+  const headers = {
+    Cookie: cookie,
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+    "Cache-Control": "no-cache",
+    Dnt: "1",
+    Pragma: "no-cache"
+  }
+  const url = `${baseUrl}/event/edit/${eventId}`
+  console.log("[fetchEventEditPage] → GET", url, headers);
+  const res = await fetch(url, { headers })
+  if (!res.ok) {
+    throw new Error(`Failed to fetch event edit page: ${res.status}`)
+  }
+  const html = await res.text()
+  if (requiresReauth(html)) {
+    throw new Error("SESSION_EXPIRED")
+  }
+  return parseEventPage(html)
 }

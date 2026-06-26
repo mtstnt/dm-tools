@@ -1,22 +1,6 @@
 import * as cheerio from "cheerio";
 import { normalizeBlocks } from "./user_block";
-
-export type Area = {
-  id: string | null;
-  name: string | null;
-  editUrl: string | null;
-};
-
-export type User = {
-  fullName: string;
-  email: string | null;
-};
-
-export type ParsedResult = {
-  areas: Area[];
-  users: User[];
-  userBlocks: any;
-};
+import { EventDetailsAllUser, EventDetailsArea, EventDetailsData, EventDetailsEvent } from "@/types/event";
 
 function decodeCfEmail(encoded: string): string {
   const key = parseInt(encoded.slice(0, 2), 16);
@@ -30,7 +14,7 @@ function decodeCfEmail(encoded: string): string {
   return result;
 }
 
-function extractUsers($: cheerio.CheerioAPI): User[] {
+function extractUsers($: cheerio.CheerioAPI): EventDetailsAllUser[] {
   return $("#users li")
     .toArray()
     .map((li) => {
@@ -46,7 +30,7 @@ function extractUsers($: cheerio.CheerioAPI): User[] {
     });
 }
 
-function extractAreas($: cheerio.CheerioAPI): Area[] {
+function extractAreas($: cheerio.CheerioAPI): EventDetailsArea[] {
   const areaGroup = $("#edit")
     .find(".form-group")
     .filter((_, el) => $(el).find("h2").first().text().includes("Area"))
@@ -56,18 +40,12 @@ function extractAreas($: cheerio.CheerioAPI): Area[] {
 
   return areaGroup
     .find("table tbody tr")
-    .map((_, row): Area => {
+    .map((_, row): EventDetailsArea => {
       const $row = $(row);
 
-      const name =
-        $row.find("td").eq(0).find("input").first().val()?.toString().trim() ??
-        null;
-
-      const editUrl =
-        $row.find("td").eq(1).find('a[href*="/area/edit/"]').attr("href") ??
-        null;
-
-      const id = editUrl?.match(/\/area\/edit\/(\d+)/)?.[1] ?? null;
+      const name = $row.find("td").eq(0).find("input").first().val()?.toString().trim() ?? "";
+      const editUrl = $row.find("td").eq(1).find('a[href*="/area/edit/"]').attr("href") ?? "";
+      const id = editUrl?.match(/\/area\/edit\/(\d+)/)?.[1] ?? "0";
 
       return {
         id,
@@ -78,35 +56,45 @@ function extractAreas($: cheerio.CheerioAPI): Area[] {
     .get();
 }
 
-function extractUserBlocks($: cheerio.CheerioAPI): any {
-  for (const script of $('script').toArray()) {
-    const content = $(script).html() ?? '';
+function extractUserBlocksAsRawJSONObject($: cheerio.CheerioAPI): any {
+  for (const script of $("script").toArray()) {
+    const content = $(script).html() ?? "";
 
-    const match = content.match(
-      /var\s+blocks\s*=\s*(\[[\s\S]*?\])\s*;/
-    );
+    const match = content.match(/var\s+blocks\s*=\s*(\[[\s\S]*?\])\s*;/);
 
     if (match) {
       return JSON.parse(match[1]);
     }
   }
 
-  throw new Error('blocks variable not found');
+  throw new Error("blocks variable not found");
 }
 
-export function parseEventPage(html: string): ParsedResult {
+export function extractEvent($: cheerio.CheerioAPI): EventDetailsEvent {
+  const form = $("#update_event");
+  const name = form.find('input[name="name"]').attr("value")?.trim() ?? "";
+  const date = form.find('input[name="event_date"]').attr("value")?.trim() ?? "";
+  return {
+    name,
+    date,
+  };
+}
+
+export function parseEventPage(html: string): EventDetailsData {
   const $ = cheerio.load(html);
 
   console.log("ParseEventPage:", html);
 
-  const blocksObject = extractUserBlocks($);
+  const blocksObject = extractUserBlocksAsRawJSONObject($);
   const userBlocks = normalizeBlocks(blocksObject);
 
   return {
+    allUsers: [],
+    // allUsers: extractUsers($), // TODO: For now not needed just yet.
+    event: extractEvent($),
+    users: userBlocks.users,
     areas: extractAreas($),
-    users: [],
-    // users: extractUsers($), // TODO: For now not needed just yet.
-    userBlocks: userBlocks,
+    blocks: userBlocks.blocks,
   };
 }
 

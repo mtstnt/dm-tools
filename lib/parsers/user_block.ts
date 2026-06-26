@@ -1,3 +1,5 @@
+import { EventDetailsBlock } from "@/types/event";
+
 type User = {
   id: number;
   name: string;
@@ -9,18 +11,18 @@ type User = {
 };
 
 type Block = {
-  id?: number;
+  id: number;
   name: string;
-  users?: User[];
+  users: User[];
 
-  area_id?: number;
-  event_id?: number;
-  row?: number;
-  column?: number;
-  chairs_data?: number[][];
-  real_data?: number[][];
-  createdAt?: string;
-  updatedAt?: string;
+  area_id: number;
+  event_id: number;
+  row: number;
+  column: number;
+  chairs_data: number[][];
+  real_data: number[][];
+  createdAt: string;
+  updatedAt: string;
 
   user?: string; // handles special rows like "All Block"
 };
@@ -29,11 +31,9 @@ type UserWithBlocks = User & {
   blocks: number[];
 };
 
-type BlockWithoutUsers = Omit<Block, "users">;
-
 type NormalizedData = {
   users: UserWithBlocks[];
-  blocks: BlockWithoutUsers[];
+  blocks: EventDetailsBlock[];
 };
 
 export function normalizeBlocks(data: Block[]): NormalizedData {

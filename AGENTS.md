@@ -41,7 +41,7 @@ Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4.
 ```
 app/
   layout.tsx          Root: fonts (Instrument Serif, DM Sans, IBM Plex Mono), ThemeProvider, QueryClient
-  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents()
+  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents(), fetchEventEditPage()
   auth/
     login/page.tsx    Firebase email/password login
     forget-password/  Firebase password reset email
@@ -49,7 +49,7 @@ app/
     reports/          Report text generator (client-only, no Firestore write)
     reports-history/  Firestore report browser
     assign/           Service assignment tool (SVG-based block allocation)
-    events/           External events browser (web auth guard)
+    events/           External events browser + event edit viewer (web auth guard)
     test-firebase/    Firebase debug page
 components/
   ui/                 17 Shadcn components (base-nova style)
@@ -59,9 +59,10 @@ lib/
   firebase.ts         Firebase client init — hardcoded config, "use client"
   queries/
     reports.ts        Firestore fetch for reports collection
-    events.ts         Re-exports fetchEvents + Event type from app/actions
+    events.ts         Re-exports fetchEvents, fetchEventEditPage + types from app/actions
   parsers/
     events.ts         Cheerio parser for external event HTML
+    event-details.ts  Cheerio parser for event edit page HTML → ParsedResult
 ```
 
 ## Key Facts
@@ -74,7 +75,7 @@ lib/
 - **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and `formatDateDisplay()` in reports page.
 - **Reports page**: Client-only form that generates text for clipboard. Does NOT save to Firestore.
 - **Reports history**: Reads from Firestore `reports` collection. Fields include `divisions` (map of ministry→count), `type` (AOG_YOUTH, AOG_TEEN, EVENT).
-- **Events page**: Experimental. Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars.
+- **Events page**: Experimental. Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. Event edit page displays parsed JSON from `fetchEventEditPage`.
 - **Assign page**: SVG-based service block allocation tool. Generates Teen/Youth assignments. Client-only, no persistence.
 - **Theme**: Light mode default, class-based dark mode via `next-themes`.
 - **Fonts**: CSS variables `--font-display` (Instrument Serif), `--font-sans` (DM Sans), `--font-mono` (IBM Plex Mono).

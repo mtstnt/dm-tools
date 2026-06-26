@@ -34,7 +34,7 @@ Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is server-only 
 ```
 app/
   layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider
-  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents()
+  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents(), fetchEventEditPage()
   auth/
     login/page.tsx    Login page (Firebase email/password)
     forget-password/  Password reset page (sendPasswordResetEmail)
@@ -59,9 +59,10 @@ lib/
   firebase.ts         Firebase client init (hardcoded config, "use client")
   queries/
     reports.ts        Firestore fetch + sort for reports collection
-    events.ts         Re-exports fetchEvents + Event type from app/actions
+    events.ts         Re-exports fetchEvents, fetchEventEditPage + types from app/actions
   parsers/
     events.ts         Cheerio parser for external event HTML
+    event-details.ts  Cheerio parser for event edit page HTML → ParsedResult
   utils.ts            cn() — clsx + tailwind-merge
 hooks/
   use-mobile.ts       768px breakpoint hook
@@ -109,6 +110,8 @@ Two separate auth systems:
 | Forget Password | `/auth/forget-password` | Working |
 | Reports Generator | `/tools/reports` | Working |
 | Reports History | `/tools/reports-history` | Working |
+| Events Browser | `/tools/events` | Working |
+| Event Edit | `/tools/events/[eventId]/edit` | Working |
 | Firebase Debug | `/tools/test-firebase` | Working |
 | Service Assignment | `docs/sample/` | Reference only (not integrated) |
 

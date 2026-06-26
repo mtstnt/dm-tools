@@ -6,7 +6,7 @@ import {
   requiresReauth,
   type EventDetail,
 } from "@/lib/parsers/events";
-import { parseEventPage, type ParsedResult } from "@/lib/parsers/event-details";
+import { parseEventPage } from "@/lib/parsers/event-details";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
@@ -32,6 +32,7 @@ export async function webAuthLogin(
     const loginPageUrl = `${loginUrl}?utc=p0700`;
 
     const getRes = await fetch(loginPageUrl, {
+      cache: "no-store",
       headers: { "User-Agent": USER_AGENT, Accept: ACCEPT_HTML },
     });
     if (!getRes.ok) {
@@ -73,6 +74,7 @@ export async function webAuthLogin(
     if (location) {
       const redirectUrl = new URL(location, baseUrl).toString();
       const redirectRes = await fetch(redirectUrl, {
+        cache: "no-store",
         headers: { Cookie: cookies, Referer: loginPageUrl, "User-Agent": USER_AGENT },
       });
       await redirectRes.text();
@@ -99,7 +101,7 @@ export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
   const results = await Promise.all(
     pages.map(async (page) => {
       const url = `${baseUrl}/event?page=${page}`;
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { cache: "no-store", headers });
       if (!res.ok) {
         throw new Error(`Failed to fetch events page ${page}: ${res.status}`);
       }
@@ -125,7 +127,7 @@ export async function fetchEventEditPage(
     Referer: `${baseUrl}/event`,
     "User-Agent": USER_AGENT,
   };
-  const res = await fetch(url, { headers, credentials: "include" });
+  const res = await fetch(url, { cache: "no-store", headers });
   if (!res.ok) {
     throw new Error(`Failed to fetch event edit page: ${res.status}`);
   }
@@ -135,4 +137,3 @@ export async function fetchEventEditPage(
   }
   return parseEventPage(html);
 }
-

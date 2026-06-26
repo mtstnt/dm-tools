@@ -9,9 +9,11 @@ Experimental page that scrapes event data from an external API using Cheerio. Us
 | File | Role |
 |------|------|
 | `app/tools/events/page.tsx` | Events grid with filters (client component) |
-| `app/actions.ts` | Server actions: `webAuthLogin()`, `fetchEvents()` |
+| `app/tools/events/[eventId]/edit/page.tsx` | Event edit page — fetches & displays parsed edit form JSON |
+| `app/actions.ts` | Server actions: `webAuthLogin()`, `fetchEvents()`, `fetchEventEditPage()` |
 | `components/web-auth-guard.tsx` | Auth gate dialog for external API credentials |
 | `lib/parsers/events.ts` | Cheerio HTML parser → `Event[]` |
+| `lib/parsers/event-details.ts` | Cheerio parser for event edit page HTML → `ParsedResult` |
 | `lib/queries/events.ts` | Re-exports + `eventKeys` query key factory |
 
 ## Auth Flow (Web Auth)
@@ -42,6 +44,14 @@ Click "Sign out" button → `clearWebAuth()` removes all three localStorage keys
 - `fetchEvents(cookie)` server action scrapes pages 1–3 from `SC_BASE_URL/event?page={n}`
 - Parses HTML with Cheerio, extracts `.card` elements
 - Query runs only when `WebAuthGuard` is authenticated
+
+## Event Edit Page
+
+- Route: `/tools/events/[eventId]/edit`
+- Calls `fetchEventEditPage(cookie, eventId)` which GETs `SC_BASE_URL/event/edit/{eventId}`
+- Parses the edit form HTML via `parseEventPage()` into a `ParsedResult`
+- Displays the parsed result as formatted JSON in a `<pre>` block
+- Auth-gated by `WebAuthGuard`
 
 ## Event Interface
 

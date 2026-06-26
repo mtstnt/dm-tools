@@ -30,23 +30,18 @@ export function getWebAuthCookie(): string | null {
 }
 
 export function WebAuthGuard({ children }: { children: React.ReactNode }) {
-  const [authenticated, setAuthenticated] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
-  const [pending, setPending] = useState(false)
-
-  useEffect(() => {
+  const [authenticated, setAuthenticated] = useState(() => {
     const storedEmail = localStorage.getItem(STORAGE_KEYS.email)
     const storedPassword = localStorage.getItem(STORAGE_KEYS.password)
     const storedCookie = localStorage.getItem(STORAGE_KEYS.cookie)
 
-    if (storedEmail && storedPassword && storedCookie) {
-      setAuthenticated(true)
-    }
-    setChecking(false)
-  }, [])
+    return !!(storedEmail && storedPassword && storedCookie);
+  })
+  const [checking, setChecking] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [pending, setPending] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -56,7 +51,7 @@ export function WebAuthGuard({ children }: { children: React.ReactNode }) {
     const encodedPassword = btoa(password)
     const result = await webAuthLogin(email, encodedPassword)
 
-    if (result.success && result.cookie) {
+    if (result.success) {
       localStorage.setItem(STORAGE_KEYS.email, email)
       localStorage.setItem(STORAGE_KEYS.password, encodedPassword)
       localStorage.setItem(STORAGE_KEYS.cookie, result.cookie)

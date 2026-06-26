@@ -20,9 +20,7 @@ export default function EventsPageDummy() {
       try {
         const cookie = getWebAuthCookie()
         if (!cookie) throw new Error("Not authenticated")
-        const email = localStorage.getItem("web-auth-email") ?? undefined
-        const password = localStorage.getItem("web-auth-password") ?? undefined
-        const details = await fetchEventEditPage(cookie, eventId, email, password)
+        const details = await fetchEventEditPage(cookie, eventId)
         console.log("Details", details);
         setStatus("success")
       } catch (err) {

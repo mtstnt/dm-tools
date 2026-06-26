@@ -13,6 +13,7 @@ interface MemberForm {
   nij?: number;
   email?: string;
   nickname?: string;
+  team?: string;
   role: "Member" | "SPV" | "PIC";
   isAdmin?: boolean;
 }
@@ -21,7 +22,7 @@ interface MemberForm {
 export default function MembersPage() {
   const [members, setMembers] = useState<MemberForm[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
-  const [form, setForm] = useState<MemberForm>({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", role: "Member", isAdmin: false });
+  const [form, setForm] = useState<MemberForm>({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", team: "", role: "Member", isAdmin: false });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function MembersPage() {
     return () => { mounted = false; };
   }, []);
 
-  const resetForm = () => setForm({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", role: "Member", isAdmin: false });
+  const resetForm = () => setForm({ id: Date.now(), name: "", nij: undefined, email: "", nickname: "", team: "", role: "Member", isAdmin: false });
 
   const save = () => {
     setError(null);
@@ -100,7 +101,6 @@ export default function MembersPage() {
   };
 
   const remove = (id: number) => {
-    // remove from firestore and local state
     const doRemove = async () => {
       try { await deleteDoc(doc(db, "members", String(id))); } catch {}
       setMembers((prev) => prev.filter((m) => m.id !== id));
@@ -113,12 +113,13 @@ export default function MembersPage() {
       <Card>
         <CardHeader>
           <CardTitle>Manage Members</CardTitle>
-          <CardDescription>Input data member — Nama Lengkap, NIJ, Email, Nickname, Role, Admin</CardDescription>
+          <CardDescription>Input data member — Nama Lengkap, NIJ, Email, Nickname, Team, Role, Admin</CardDescription>
         </CardHeader>
         <CardContent className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
             <Input placeholder="Nama Lengkap" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <Input placeholder="Nickname" value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} />
+            <Input placeholder="Team" value={form.team} onChange={(e) => setForm({ ...form, team: e.target.value })} />
             <Input placeholder="NIJ (angka)" value={form.nij ?? ""} onChange={(e) => setForm({ ...form, nij: e.target.value ? Number(e.target.value) : undefined })} />
             <Input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
@@ -148,7 +149,7 @@ export default function MembersPage() {
               {members.map((m) => (
                 <div key={m.id} className="p-2 border rounded flex items-center justify-between">
                   <div>
-                    <div className="font-medium">{m.name} {m.nickname ? `(${m.nickname})` : ""}</div>
+                    <div className="font-medium">{m.name} {m.team ? `(${m.team})` : ""}</div>
                     <div className="text-xs text-muted-foreground">NIJ: {m.nij ?? "-"} · {m.email || "-"} · {m.role} {m.isAdmin ? "· ADMIN" : ""}</div>
                   </div>
                   <div className="flex gap-2">

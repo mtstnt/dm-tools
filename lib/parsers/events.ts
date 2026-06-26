@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { parseEventTitle } from "@/lib/utils";
 
 export enum Role {
   SPV = "SPV",
@@ -27,19 +28,6 @@ export const requiresReauth = (html: string): boolean => {
   const $ = cheerio.load(html);
   const bodyText = normalize($("body").text());
   return bodyText.includes("Sign in");
-};
-
-const parseTitle = (text: string) => {
-  const parts = normalize(text)
-    .split("/")
-    .map((v) => v.trim());
-
-  return {
-    date: parts[0] ?? null,
-    name: parts[1] ?? null,
-    time:
-      parts.length >= 3 && /^\d{1,2}:\d{2}$/.test(parts[2]) ? parts[2] : null,
-  };
 };
 
 const getActionLinks = ($container: cheerio.Cheerio<any>) => {
@@ -128,7 +116,7 @@ export const getEventDetail = (html: string): EventDetail[] => {
         title = normalize(titleNode.text());
       }
 
-      const parsed = parseTitle(title);
+      const parsed = parseEventTitle(title);
 
       // 3. third child = location text
       const location = normalize(children.eq(2).text());

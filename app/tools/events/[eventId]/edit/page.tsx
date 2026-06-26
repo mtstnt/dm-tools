@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
@@ -23,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { cn } from "@/lib/utils"
+import { cn, parseEventTitle } from "@/lib/utils"
 import type {
   EventDetailsData,
   EventDetailsBlock,
@@ -38,7 +38,35 @@ function isEventDetailsBlock(
   return "area_id" in block
 }
 
+interface BlockContextValue {
+  selectedArea: string
+  setSelectedArea: (v: string) => void
+  selectedBlockId: string
+  setSelectedBlockId: (v: string) => void
+  grid: number[][]
+  setGrid: React.Dispatch<React.SetStateAction<number[][]>>
+}
 
+const BlockContext = createContext<BlockContextValue | null>(null)
+
+function useBlockContext() {
+  const ctx = useContext(BlockContext)
+  if (!ctx) throw new Error("useBlockContext must be used within BlockProvider")
+  return ctx
+}
+
+function BlockProvider({ children }: { children: React.ReactNode }) {
+  const [selectedArea, setSelectedArea] = useState<string>("")
+  const [selectedBlockId, setSelectedBlockId] = useState<string>("")
+  const [grid, setGrid] = useState<number[][]>([])
+
+  const value = useMemo(
+    () => ({ selectedArea, setSelectedArea, selectedBlockId, setSelectedBlockId, grid, setGrid }),
+    [selectedArea, selectedBlockId, grid],
+  )
+
+  return <BlockContext.Provider value={value}>{children}</BlockContext.Provider>
+}
 
 export default function EventEditPage() {
   const params = useParams()
@@ -102,6 +130,8 @@ function LoadingSkeleton() {
 function EventEditContent({ result }: { result: EventDetailsData }) {
   const { event, users, areas, blocks } = result
 
+  const parsedTitle = useMemo(() => parseEventTitle(event.name), [event.name])
+
   const assignmentRows = useMemo(() => {
     const realBlocks = blocks.filter(isEventDetailsBlock)
     return users.map((user) => {
@@ -123,33 +153,35 @@ function EventEditContent({ result }: { result: EventDetailsData }) {
           Events
         </Link>
         <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">
-          {event.name || "Untitled Event"}
+          {parsedTitle.name || "Untitled Event"}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {event.date || "No date"}
+          {parsedTitle.date || "No date"}
           {event.location ? ` · ${event.location}` : ""}
         </p>
       </div>
 
-      <Tabs defaultValue="assignment" className="w-full">
-        <TabsList className="w-full">
-          <TabsTrigger value="assignment">Assignment</TabsTrigger>
-          <TabsTrigger value="blocks">Blocks</TabsTrigger>
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-        </TabsList>
+      <BlockProvider>
+        <Tabs defaultValue="assignment" className="w-full">
+          <TabsList className="w-full">
+            <TabsTrigger value="assignment">Assignment</TabsTrigger>
+            <TabsTrigger value="blocks">Blocks</TabsTrigger>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="assignment">
-          <AssignmentTab rows={assignmentRows} />
-        </TabsContent>
+          <TabsContent value="assignment">
+            <AssignmentTab rows={assignmentRows} />
+          </TabsContent>
 
-        <TabsContent value="blocks">
-          <BlocksTab areas={areas} blocks={blocks} />
-        </TabsContent>
+          <TabsContent value="blocks">
+            <BlocksTab areas={areas} blocks={blocks} />
+          </TabsContent>
 
-        <TabsContent value="dashboard">
-          <p className="text-muted-foreground py-8">Dashboard — coming soon</p>
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="dashboard">
+            <p className="text-muted-foreground py-8">Dashboard — coming soon</p>
+          </TabsContent>
+        </Tabs>
+      </BlockProvider>
     </div>
   )
 }
@@ -199,9 +231,8 @@ function BlocksTab({
   areas: EventDetailsData["areas"]
   blocks: EventDetailsData["blocks"]
 }) {
-  const [selectedArea, setSelectedArea] = useState<string>("")
-  const [selectedBlockId, setSelectedBlockId] = useState<string>("")
-  const [grid, setGrid] = useState<number[][]>([])
+  const { selectedArea, setSelectedArea, selectedBlockId, setSelectedBlockId, grid, setGrid } =
+    useBlockContext()
 
   const realBlocks = useMemo(() => blocks.filter(isEventDetailsBlock), [blocks])
 
@@ -282,13 +313,13 @@ function BlocksTab({
       </div>
 
       {grid.length > 0 && grid[0] && (
-        <div className="overflow-x-auto">
-          <Table className="w-full max-w-4xl table-fixed">
+        <div className="overflow-x-auto min-w-full">
+          <Table className="min-w-max">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8 text-center text-xs" />
+                <TableHead className="text-center text-xs whitespace-nowrap px-1" />
                 {grid[0].map((_, ci) => (
-                  <TableHead key={ci} className="text-center text-xs font-medium">
+                  <TableHead key={ci} className="text-center text-xs font-medium whitespace-nowrap px-1">
                     {ci + 1}
                   </TableHead>
                 ))}
@@ -297,23 +328,20 @@ function BlocksTab({
             <TableBody>
               {grid.map((row, ri) => (
                 <TableRow key={ri}>
-                  <TableCell className="text-center text-xs font-medium text-muted-foreground p-1">
+                  <TableCell className="w-8 text-center text-xs font-medium text-muted-foreground whitespace-nowrap px-1">
                     {ri + 1}
                   </TableCell>
                   {row.map((val, ci) => (
-                    <TableCell key={ci} className="p-0.5">
-                      <button
-                        type="button"
-                        aria-label={`Cell ${ri + 1}-${ci + 1}`}
-                        className={cn(
-                          "w-full aspect-square rounded-sm border border-border/30 transition-colors cursor-pointer",
-                          val === 1
-                            ? "bg-emerald-500 hover:bg-emerald-400"
-                            : "bg-muted hover:bg-muted/70",
-                        )}
-                        onClick={() => toggleCell(ri, ci)}
-                      />
-                    </TableCell>
+                    <TableCell
+                      key={ci}
+                      className={cn(
+                        " w-8 aspect-square cursor-pointer transition-colors border border-border",
+                        val === 1
+                          ? "bg-emerald-500 hover:bg-emerald-400"
+                          : "bg-muted hover:bg-muted/70",
+                      )}
+                      onClick={() => toggleCell(ri, ci)}
+                    />
                   ))}
                 </TableRow>
               ))}

@@ -145,19 +145,13 @@ function extractUserBlocks($: cheerio.CheerioAPI): UserBlock[] {
 }
 
 export function parseEventPage(html: string): ParsedResult {
-  // const $ = cheerio.load(html);
+  const $ = cheerio.load(html);
 
-  // console.log("ParseEventPage:", html);
-
-  // return {
-  //   areas: extractAreas($),
-  //   users: extractUsers($),
-  //   userBlocks: extractUserBlocks($),
-  // };
+  console.log("ParseEventPage:", html);
 
   return {
-    areas: [],
-    users: [],
-    userBlocks: [],
-  }
+    areas: extractAreas($),
+    users: extractUsers($),
+    userBlocks: extractUserBlocks($),
+  };
 }

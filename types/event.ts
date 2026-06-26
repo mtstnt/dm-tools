@@ -43,6 +43,7 @@ export type EventDetailsBlockItem = EventDetailsBlock | AllBlock;
 export type EventDetailsEvent = {
   name: string;
   date: string;
+  location: string;
 }
 
 export interface EventDetailsData {

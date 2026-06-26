@@ -1,6 +1,11 @@
 import * as cheerio from "cheerio";
 import { normalizeBlocks } from "./user_block";
-import { EventDetailsAllUser, EventDetailsArea, EventDetailsData, EventDetailsEvent } from "@/types/event";
+import {
+  EventDetailsAllUser,
+  EventDetailsArea,
+  EventDetailsData,
+  EventDetailsEvent,
+} from "@/types/event";
 
 function decodeCfEmail(encoded: string): string {
   const key = parseInt(encoded.slice(0, 2), 16);
@@ -43,8 +48,11 @@ function extractAreas($: cheerio.CheerioAPI): EventDetailsArea[] {
     .map((_, row): EventDetailsArea => {
       const $row = $(row);
 
-      const name = $row.find("td").eq(0).find("input").first().val()?.toString().trim() ?? "";
-      const editUrl = $row.find("td").eq(1).find('a[href*="/area/edit/"]').attr("href") ?? "";
+      const name =
+        $row.find("td").eq(0).find("input").first().val()?.toString().trim() ??
+        "";
+      const editUrl =
+        $row.find("td").eq(1).find('a[href*="/area/edit/"]').attr("href") ?? "";
       const id = editUrl?.match(/\/area\/edit\/(\d+)/)?.[1] ?? "0";
 
       return {
@@ -70,20 +78,48 @@ function extractUserBlocksAsRawJSONObject($: cheerio.CheerioAPI): any {
   throw new Error("blocks variable not found");
 }
 
+function getSelectedText($: cheerio.CheerioAPI, selector: string): string {
+  const select = $(selector);
+
+  if (!select.length) {
+    return "";
+  }
+
+  const selected =
+    select.find("option[selected]").first() ||
+    select.find("option:selected").first();
+
+  if (selected.length) {
+    return selected.text().trim();
+  }
+
+  const value = select.val()?.toString();
+
+  if (!value) {
+    return "";
+  }
+
+  return select.find(`option[value="${value}"]`).first().text().trim() || "";
+}
+
 export function extractEvent($: cheerio.CheerioAPI): EventDetailsEvent {
   const form = $("#update_event");
-  const name = form.find('input[name="name"]').attr("value")?.trim() ?? "";
-  const date = form.find('input[name="event_date"]').attr("value")?.trim() ?? "";
+
   return {
-    name,
-    date,
+    name: form.find('input[name="name"]').attr("value")?.trim() ?? "",
+    date: form.find('input[name="event_date"]').attr("value")?.trim() ?? "",
+    location: getSelectedText(
+      $,
+      [
+        'select[name="churchcode"]',
+        'select#churchcode',
+      ].join(','),
+    ),
   };
 }
 
 export function parseEventPage(html: string): EventDetailsData {
   const $ = cheerio.load(html);
-
-  console.log("ParseEventPage:", html);
 
   const blocksObject = extractUserBlocksAsRawJSONObject($);
   const userBlocks = normalizeBlocks(blocksObject);

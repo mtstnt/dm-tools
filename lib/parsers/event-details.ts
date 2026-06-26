@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { normalizeBlocks } from "./user_block";
 
 export type Area = {
   id: string | null;
@@ -11,29 +12,13 @@ export type User = {
   email: string | null;
 };
 
-export type UserBlock = {
-  user: {
-    id: string;
-    name: string;
-  };
-  blocks: {
-    id: string;
-    name: string;
-  }[];
-};
-
 export type ParsedResult = {
   areas: Area[];
   users: User[];
-  userBlocks: UserBlock[];
+  userBlocks: any;
 };
 
-/**
- * Cloudflare email decoder
- */
 function decodeCfEmail(encoded: string): string {
-  if (!encoded) return "";
-
   const key = parseInt(encoded.slice(0, 2), 16);
 
   let result = "";
@@ -46,33 +31,19 @@ function decodeCfEmail(encoded: string): string {
 }
 
 function extractUsers($: cheerio.CheerioAPI): User[] {
-  const users: User[] = [];
+  return $("#users li")
+    .toArray()
+    .map((li) => {
+      const el = $(li);
 
-  // Cloudflare obfuscated
-  $("#event_users_tab tr").each((_, row) => {
-    const tds = $(row).find("td");
+      const encoded = el.find("a.__cf_email__").attr("data-cfemail");
 
-    const fullName = tds.eq(0).text().trim();
-
-    let email: string | null = null;
-
-    const cf = tds.eq(1).find("a.__cf_email__").attr("data-cfemail");
-
-    if (cf) {
-      email = decodeCfEmail(cf);
-    } else {
-      email = tds.eq(1).text().trim() || null;
-    }
-
-    if (fullName) {
-      users.push({
-        fullName,
-        email,
-      });
-    }
-  });
-
-  return users;
+      return {
+        id: Number(el.attr("data-id")),
+        fullName: el.find("span").first().text().trim(),
+        email: encoded ? decodeCfEmail(encoded) : null,
+      };
+    });
 }
 
 function extractAreas($: cheerio.CheerioAPI): Area[] {
@@ -107,41 +78,20 @@ function extractAreas($: cheerio.CheerioAPI): Area[] {
     .get();
 }
 
-function extractUserBlocks($: cheerio.CheerioAPI): UserBlock[] {
-  return $("#userBased tr")
-    .map((_, row): UserBlock | null => {
-      const $row = $(row);
+function extractUserBlocks($: cheerio.CheerioAPI): any {
+  for (const script of $('script').toArray()) {
+    const content = $(script).html() ?? '';
 
-      const userAnchor = $row.find("td").eq(0).find("a");
+    const match = content.match(
+      /var\s+blocks\s*=\s*(\[[\s\S]*?\])\s*;/
+    );
 
-      const userId = userAnchor.attr("data-user-id");
+    if (match) {
+      return JSON.parse(match[1]);
+    }
+  }
 
-      const userName = userAnchor.text().trim();
-
-      if (!userId || !userName) {
-        return null;
-      }
-
-      const blocks = $row
-        .find("td")
-        .eq(1)
-        .find(".btn-success")
-        .map((_, block) => ({
-          id: $(block).attr("data-block-id") ?? "",
-          name: $(block).text().trim(),
-        }))
-        .get();
-
-      return {
-        user: {
-          id: userId,
-          name: userName,
-        },
-        blocks,
-      };
-    })
-    .get()
-    .filter(Boolean) as UserBlock[];
+  throw new Error('blocks variable not found');
 }
 
 export function parseEventPage(html: string): ParsedResult {
@@ -149,9 +99,30 @@ export function parseEventPage(html: string): ParsedResult {
 
   console.log("ParseEventPage:", html);
 
+  const blocksObject = extractUserBlocks($);
+  const userBlocks = normalizeBlocks(blocksObject);
+
   return {
     areas: extractAreas($),
-    users: extractUsers($),
-    userBlocks: extractUserBlocks($),
+    users: [],
+    // users: extractUsers($), // TODO: For now not needed just yet.
+    userBlocks: userBlocks,
   };
+}
+
+// Extracts the block variable in thje script. Contains user block assignment.
+export function extractBlocks(html: string): unknown[] {
+  const $ = cheerio.load(html);
+
+  for (const script of $("script").toArray()) {
+    const content = $(script).html() ?? "";
+
+    const match = content.match(/var\s+blocks\s*=\s*(\[[\s\S]*?\])\s*;/);
+
+    if (match) {
+      return JSON.parse(match[1]);
+    }
+  }
+
+  throw new Error("blocks variable not found");
 }

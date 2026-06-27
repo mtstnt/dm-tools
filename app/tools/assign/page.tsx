@@ -1,20 +1,36 @@
 // app/tools/assign/page.tsx
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════
    TYPES
 ═══════════════════════════════════════════════════ */
 
+interface FirebaseMember {
+  id: string;
+  name: string;
+  nickname: string;
+  team: string;
+}
+
+interface ImportRow {
+  original:   string;
+  normalized: string;
+  match:      FirebaseMember | null;
+}
+
 interface Member {
   id: number;
   name: string;
+  nickname: string;
+  team: string;
   color: string;
   availability: "both" | "teen" | "youth";
 }
@@ -99,6 +115,70 @@ const GEOM: Record<string, Geom> = {
 /* ═══════════════════════════════════════════════════
    PURE HELPERS
 ═══════════════════════════════════════════════════ */
+
+/* ── Fuzzy search engine (ported from index.php) ── */
+const levenshtein = (a: string, b: string): number => {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  let curr = new Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      curr[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+};
+
+const fuzzySim = (a: string, b: string): number => {
+  if (!a || !b) return 0;
+  const max = Math.max(a.length, b.length);
+  return max ? 1 - levenshtein(a, b) / max : 1;
+};
+
+const fuzzyBestWord = (kw: string, text: string): number => {
+  let best = 0;
+  for (const w of text.split(/\s+/)) best = Math.max(best, fuzzySim(kw, w));
+  return best;
+};
+
+const PREFIXES = new Set([
+  'ko','ce','bro','sis','kak','om','tante','pak','bu','bang','abang','koko','cece','sis.',
+]);
+
+const normalizeName = (line: string): string => {
+  const words = line.toLowerCase().trim().split(/\s+/);
+  return words.filter(w => !PREFIXES.has(w)).join(' ').trim();
+};
+
+const scoreFbMember = (kw: string, member: FirebaseMember): number => {
+  const q    = kw.toLowerCase().trim();
+  const nick = member.nickname.toLowerCase();
+  const full = member.name.toLowerCase();
+
+  let exactNick = 0, nickHas = 0, fullHas = 0;
+  if (q === nick)            exactNick = 100;
+  else if (nick.includes(q)) nickHas   = 70;
+  if (full.includes(q))      fullHas   = 50;
+
+  const fuzzyNick = fuzzySim(q, nick) * 50;
+  const fuzzyFull = fuzzyBestWord(q, full) * 30;
+  return exactNick + nickHas + fullHas + fuzzyNick + fuzzyFull;
+};
+
+const rankFbMembers = (keyword: string, members: FirebaseMember[], limit = 8): FirebaseMember[] => {
+  if (!keyword.trim()) return [];
+  return members
+    .map(m => ({ m, score: scoreFbMember(keyword, m) }))
+    .filter(r => r.score > 4)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(r => r.m);
+};
 
 const shuffle = <T,>(arr: T[]): T[] => {
   const a = [...arr];
@@ -218,24 +298,30 @@ const autoAssignFn = (
 ═══════════════════════════════════════════════════ */
 
 export default function AssignPage() {
-  const [bulkText,   setBulkText]   = useState("");
-  const [singleName, setSingleName] = useState("");
-  const [members,    setMembers]    = useState<Member[]>([]);
-  const [isReady,    setIsReady]    = useState(false);
-  const [activeEvt,  setActiveEvt]  = useState(0);
-  const [mode,       setMode]       = useState<"view" | "manual">("view");
-  const [selected,   setSelected]   = useState<Member | null>(null);
-  const [hovered,    setHovered]    = useState<string | null>(null);
-  const [showOut,    setShowOut]    = useState(false);
-  const [copied,     setCopied]     = useState<null | "ALL" | "TEEN" | "YOUTH">(null);
-  const [error,      setError]      = useState("");
-  const [showImport, setShowImport] = useState(false);
-  const [hoveredMbr, setHoveredMbr] = useState<number | null>(null);
-  const [srPicker,   setSRPicker]   = useState<SRPickerState | null>(null);
-  const [events,     setEvents]     = useState<EventState[]>([
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const [searchOpen,   setSearchOpen]   = useState(false);
+  const [fbMembers,    setFbMembers]    = useState<FirebaseMember[]>([]);
+  const [fbLoading,    setFbLoading]    = useState(true);
+  const [showImport,   setShowImport]   = useState(false);
+  const [importText,   setImportText]   = useState("");
+  const [importRows,   setImportRows]   = useState<ImportRow[]>([]);
+  const [members,      setMembers]      = useState<Member[]>([]);
+  const [isReady,      setIsReady]      = useState(false);
+  const [activeEvt,    setActiveEvt]    = useState(0);
+  const [mode,         setMode]         = useState<"view" | "manual">("view");
+  const [selected,     setSelected]     = useState<Member | null>(null);
+  const [hovered,      setHovered]      = useState<string | null>(null);
+  const [showOut,      setShowOut]      = useState(false);
+  const [copied,       setCopied]       = useState(false);
+  const [error,        setError]        = useState("");
+  const [hoveredMbr,   setHoveredMbr]   = useState<number | null>(null);
+  const [srPicker,     setSRPicker]     = useState<SRPickerState | null>(null);
+  const [events,       setEvents]       = useState<EventState[]>([
     { assignments: {}, sr: { tcIn: null, tcOut: null, fd: null } },
     { assignments: {}, sr: { tcIn: null, tcOut: null, fd: null } },
   ]);
+
+  const searchRef = useRef<HTMLDivElement>(null);
 
   /* Theme tokens (use global CSS variables from globals.css) */
   const THEME = {
@@ -254,6 +340,48 @@ export default function AssignPage() {
     muted: "var(--color-muted)",
     mutedFg: "var(--color-muted-foreground)",
   };
+
+  /* ── Firebase: fetch members on mount ── */
+  useEffect(() => {
+    const fetchMembers = async () => {
+      setFbLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "members"));
+        const data: FirebaseMember[] = snap.docs.map(doc => ({
+          id:       doc.id,
+          name:     (doc.data().name     as string) ?? "",
+          nickname: (doc.data().nickname as string) ?? "",
+          team:     (doc.data().team     as string) ?? "",
+        }));
+        setFbMembers(data);
+      } catch (e) {
+        console.error("Firebase fetch error:", e);
+      } finally {
+        setFbLoading(false);
+      }
+    };
+    fetchMembers();
+  }, []);
+
+  /* ── Close dropdown on outside click ── */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  /* ── Search results (fuzzy scored) ── */
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const normalized = normalizeName(searchQuery);
+    if (!normalized) return [];
+    const alreadyAdded = new Set(members.map(m => m.name));
+    return rankFbMembers(normalized, fbMembers, 8).filter(r => !alreadyAdded.has(r.name));
+  }, [searchQuery, fbMembers, members]);
 
   /* ── Derived ── */
   const eventMembers = useCallback(
@@ -321,40 +449,60 @@ export default function AssignPage() {
   );
 
   /* ── Member Actions ── */
-  const parseMemberStr = (raw: string) => {
-    const tOnly = /\(T\)\s*$/i.test(raw);
-    const yOnly = /\(Y\)\s*$/i.test(raw);
-    const n0    = raw.replace(/\s*\([TY]\)\s*$/i, "").trim();
-    return {
-      name:         n0.charAt(0).toUpperCase() + n0.slice(1),
-      availability: (tOnly ? "teen" : yOnly ? "youth" : "both") as Member["availability"],
-    };
+  const addFromSearch = (fb: FirebaseMember, availability: Member["availability"]) => {
+    setMembers(prev => {
+      if (prev.some(m => m.name === fb.name)) return prev;
+      return [...prev, {
+        id:           Date.now(),
+        name:         fb.name,
+        nickname:     fb.nickname,
+        team:         fb.team,
+        color:        COLORS[prev.length % COLORS.length],
+        availability,
+      }];
+    });
+    setSearchQuery("");
+    setSearchOpen(false);
+    setIsReady(false);
   };
 
-  const parseBulk = () => {
-    const lines = bulkText
+  const processImport = () => {
+    const lines = importText
       .split("\n")
-      .map((l) => l.replace(/^[\s*•\-\d.]+/, "").trim())
+      .map(l => l.replace(/^[\s*•\-\d.]+/, "").trim())
       .filter(Boolean);
-    if (!lines.length) return;
-    setMembers(
-      lines.map((raw, i) => {
-        const { name, availability } = parseMemberStr(raw);
-        return { id: Date.now() + i, name, color: COLORS[i % COLORS.length], availability };
+    const rows: ImportRow[] = lines
+      .map(original => {
+        const normalized = normalizeName(original);
+        if (!normalized) return null;
+        const ranked = rankFbMembers(normalized, fbMembers, 1);
+        return { original, normalized, match: ranked[0] ?? null };
       })
-    );
-    setBulkText(""); setIsReady(false); setShowImport(false); setError(""); setSelected(null);
+      .filter(Boolean) as ImportRow[];
+    setImportRows(rows);
   };
 
-  const addSingle = () => {
-    const raw = singleName.trim();
-    if (!raw) return;
-    const { name, availability } = parseMemberStr(raw);
-    setMembers((prev) => [
+  const addAllFromImport = (availability: Member["availability"]) => {
+    const alreadyAdded = new Set(members.map(m => m.name));
+    const toAdd = importRows
+      .filter(r => r.match && !alreadyAdded.has(r.match.name))
+      .map(r => r.match!);
+    if (!toAdd.length) return;
+    setMembers(prev => [
       ...prev,
-      { id: Date.now(), name, color: COLORS[prev.length % COLORS.length], availability },
+      ...toAdd.map((fb, i) => ({
+        id:           Date.now() + i,
+        name:         fb.name,
+        nickname:     fb.nickname,
+        team:         fb.team,
+        color:        COLORS[(prev.length + i) % COLORS.length],
+        availability,
+      })),
     ]);
-    setSingleName(""); setIsReady(false);
+    setImportText("");
+    setImportRows([]);
+    setShowImport(false);
+    setIsReady(false);
   };
 
   const removeMember = (id: number) => {
@@ -470,33 +618,28 @@ export default function AssignPage() {
   };
 
   /* ── Output ── */
-  const genOutput = (ei?: number): string => {
-    if (typeof ei === "number") {
-      const evt = events[ei];
-      const lines: string[] = [];
-      // Header immediately followed by content (no extra blank line)
-      lines.push(EVT_NAMES[ei]);
-      allBlockForEvent(ei).forEach((m) => lines.push(`• ${m.name} : ALL BLOCK`));
-      const { tcIn, tcOut, fd } = evt.sr;
-      if (tcIn)  lines.push(`• ${tcIn} : ${SR_ROLES[0]}`);
-      if (tcOut) lines.push(`• ${tcOut} : ${SR_ROLES[1]}`);
-      if (fd)    lines.push(`• ${fd} : ${SR_ROLES[2]}`);
-      getCounters(ei).forEach((c) => {
-        const bl = ORDERED.filter((b) => (evt.assignments[b] || []).includes(c.name));
-        lines.push(`• ${c.name} : ${bl.length ? bl.join(", ") : "(belum di-assign)"}`);
-      });
-      return lines.join("\n");
-    }
-    // Combined output: two sections separated by a single blank line
-    return [genOutput(0), genOutput(1)].join("\n\n");
-  };
+  const genOutput = (): string =>
+    events
+      .map((evt, ei) => {
+        const lines: string[] = [EVT_NAMES[ei], ""];
+        allBlockForEvent(ei).forEach((m) => lines.push(`• ${m.name} : ALL BLOCK`));
+        const { tcIn, tcOut, fd } = evt.sr;
+        if (tcIn)  lines.push(`• ${tcIn} : ${SR_ROLES[0]}`);
+        if (tcOut) lines.push(`• ${tcOut} : ${SR_ROLES[1]}`);
+        if (fd)    lines.push(`• ${fd} : ${SR_ROLES[2]}`);
+        getCounters(ei).forEach((c) => {
+          const bl = ORDERED.filter((b) => (evt.assignments[b] || []).includes(c.name));
+          lines.push(`• ${c.name} : ${bl.length ? bl.join(", ") : "(belum di-assign)"}`);
+        });
+        return lines.join("\n");
+      })
+      .join("\n\n");
 
-  const copyOut = async (which: "ALL" | "TEEN" | "YOUTH") => {
+  const copyOut = async () => {
     try {
-      const text = which === "ALL" ? genOutput() : genOutput(which === "TEEN" ? 0 : 1);
-      await navigator.clipboard.writeText(text);
-      setCopied(which);
-      setTimeout(() => setCopied(null), 2000);
+      await navigator.clipboard.writeText(genOutput());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {}
   };
 
@@ -852,40 +995,167 @@ export default function AssignPage() {
 
         {/* ════ SIDEBAR ════ */}
         <aside className="w-64 flex-shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
-          {/* Input area */}
-          <div className="px-3 pb-3 border-b border-sidebar-border">
-            <div className="flex gap-2 mb-2">
+          {/* Search bar */}
+          <div className="px-3 pb-3 pt-3 border-b border-sidebar-border" ref={searchRef}>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none select-none">🔍</span>
               <Input
-                value={singleName}
-                onChange={(e) => setSingleName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addSingle()}
-                placeholder="Nama... (T) atau (Y) opsional"
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                placeholder={fbLoading ? "Memuat data member…" : "Cari nama atau nickname…"}
+                disabled={fbLoading}
+                className="pl-8 text-xs h-8"
               />
-              <Button size="icon" onClick={addSingle}>+</Button>
+
+              {/* Dropdown */}
+              {searchOpen && (searchResults.length > 0 || (searchQuery.trim() && !fbLoading)) && (
+                <div className="absolute top-full left-0 right-0 z-50 bg-popover border border-sidebar-border rounded-md shadow-lg overflow-hidden mt-1 max-h-60 overflow-y-auto">
+                  {searchResults.length === 0 ? (
+                    <div className="px-3 py-3 text-[10px] text-muted-foreground text-center font-mono">
+                      Tidak ditemukan
+                    </div>
+                  ) : (
+                    searchResults.map((r) => (
+                      <div key={r.id} className="border-b border-sidebar-border last:border-0">
+                        {/* Member info */}
+                        <div className="px-3 py-2">
+                          <div className="text-[12px] font-semibold text-foreground leading-tight">{r.name}</div>
+                          <div className="text-[9px] text-muted-foreground font-mono tracking-wide mt-0.5">{r.team}</div>
+                        </div>
+                        {/* Availability buttons */}
+                        <div className="flex border-t border-sidebar-border/40">
+                          {([
+                            ["teen",  "T",   "var(--assign-availability-teen)"],
+                            ["both",  "T+Y", "var(--color-primary)"],
+                            ["youth", "Y",   "var(--assign-availability-youth)"],
+                          ] as const).map(([av, lbl, clr]) => (
+                            <button
+                              key={av}
+                              onClick={() => addFromSearch(r, av)}
+                              className="flex-1 py-1.5 text-[8px] font-mono font-bold hover:bg-input transition-colors cursor-pointer"
+                              style={{ color: clr }}
+                            >
+                              {lbl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
-            <button onClick={() => setShowImport((p) => !p)} className="text-[9px] text-sidebar-foreground font-mono p-0">
-              {showImport ? "▼" : "▶"} IMPORT DARI TEKS
-            </button>
+            {/* Hint */}
+            <div className="mt-1.5 text-[8px] text-muted-foreground font-mono leading-5">
+              Pilih <span style={{ color: "var(--assign-availability-teen)" }}>T</span> · <span style={{ color: "var(--color-primary)" }}>T+Y</span> · <span style={{ color: "var(--assign-availability-youth)" }}>Y</span> untuk menentukan ketersediaan
+            </div>
 
-            {showImport && (
-              <div className="mt-2">
-                <div className="text-[8px] text-muted-foreground mb-1.5 leading-6 font-mono">
-                  Tambahkan <span className="text-[var(--assign-availability-teen)]">(T)</span> di akhir nama → hanya Teen. <span className="text-[var(--assign-availability-youth)]">(Y)</span> di akhir nama → hanya Youth. Tanpa tanda → bisa keduanya.
-                </div>
-                <Textarea
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                  placeholder={"• rafa\n• medelin (T)\n• chen (Y)\nsatu nama per baris"}
-                  rows={5}
-                  className="w-full"
+            {/* Import toggle */}
+            <button
+              onClick={() => { setShowImport(p => !p); setImportRows([]); setImportText(""); }}
+              className="mt-2 text-[9px] text-muted-foreground font-mono hover:text-foreground transition-colors flex items-center gap-1"
+            >
+              <span>{showImport ? "▼" : "▶"}</span> IMPORT DARI TEKS
+            </button>
+          </div>
+
+          {/* ── Import panel ── */}
+          {showImport && (
+            <div className="border-b border-sidebar-border bg-card flex-shrink-0">
+              <div className="px-3 py-2">
+                <textarea
+                  value={importText}
+                  onChange={e => { setImportText(e.target.value); setImportRows([]); }}
+                  placeholder={"• rafa\n• ko matthew\n• ce grace\nsatu nama per baris"}
+                  rows={4}
+                  className="w-full text-[11px] bg-input border border-sidebar-border rounded-md p-2 font-mono resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+                  style={{ lineHeight: 1.7 }}
                 />
-                <Button variant="outline" className="w-full mt-2" onClick={parseBulk}>
-                  IMPORT ({bulkText.split("\n").filter((l) => l.trim()).length} NAMA)
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-1.5 text-[10px] h-7"
+                  onClick={processImport}
+                  disabled={!importText.trim() || fbLoading}
+                >
+                  ⚡ PROSES ({importText.split("\n").filter(l => l.trim()).length} BARIS)
                 </Button>
               </div>
-            )}
-          </div>
+
+              {/* Import results */}
+              {importRows.length > 0 && (
+                <div className="border-t border-sidebar-border">
+                  {/* Bulk-add bar */}
+                  <div className="px-3 py-2 flex items-center gap-2 bg-sidebar">
+                    <span className="text-[8px] text-muted-foreground font-mono flex-1">
+                      {importRows.filter(r => r.match).length}/{importRows.length} COCOK
+                    </span>
+                    <span className="text-[8px] text-muted-foreground font-mono">TAMBAH SEMUA:</span>
+                    {([
+                      ["teen",  "T",   "var(--assign-availability-teen)"],
+                      ["both",  "T+Y", "var(--color-primary)"],
+                      ["youth", "Y",   "var(--assign-availability-youth)"],
+                    ] as const).map(([av, lbl, clr]) => (
+                      <button
+                        key={av}
+                        onClick={() => addAllFromImport(av)}
+                        className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border border-sidebar-border hover:bg-input transition-colors cursor-pointer"
+                        style={{ color: clr }}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Row list */}
+                  <div className="max-h-52 overflow-y-auto divide-y divide-sidebar-border">
+                    {importRows.map((row, idx) => {
+                      const alreadyIn = row.match ? members.some(m => m.name === row.match!.name) : false;
+                      return (
+                        <div key={idx} className="px-3 py-2">
+                          {/* Original → match */}
+                          <div className="flex items-start gap-2 mb-1.5">
+                            <span className="text-[9px] font-mono text-muted-foreground bg-input px-1 py-0.5 rounded shrink-0 mt-0.5">{row.original}</span>
+                            <span className="text-[9px] text-muted-foreground mt-0.5">→</span>
+                            {row.match ? (
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-foreground leading-tight">{row.match.name}</div>
+                                <div className="text-[8px] text-muted-foreground font-mono">{row.match.team}</div>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] text-muted-foreground italic mt-0.5">tidak ditemukan</span>
+                            )}
+                          </div>
+                          {/* Per-row availability buttons */}
+                          {row.match && (
+                            <div className="flex gap-1">
+                              {([
+                                ["teen",  "T",   "var(--assign-availability-teen)"],
+                                ["both",  "T+Y", "var(--color-primary)"],
+                                ["youth", "Y",   "var(--assign-availability-youth)"],
+                              ] as const).map(([av, lbl, clr]) => (
+                                <button
+                                  key={av}
+                                  onClick={() => addFromSearch(row.match!, av)}
+                                  disabled={alreadyIn}
+                                  className="flex-1 py-1 text-[8px] font-mono font-bold rounded border border-sidebar-border hover:bg-input transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                                  style={{ color: clr }}
+                                >
+                                  {alreadyIn ? "✓" : lbl}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Min-2 rule strip */}
           {isReady && (
@@ -901,7 +1171,7 @@ export default function AssignPage() {
           <div className="flex-1 overflow-y-auto p-2">
             {members.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8 px-2 text-[10px] leading-7 font-mono tracking-wide">
-                BELUM ADA ANGGOTA<br />Tambah di atas atau import
+                BELUM ADA ANGGOTA<br />Cari nama di atas untuk menambah
               </div>
             ) : (
               <>
@@ -958,10 +1228,14 @@ export default function AssignPage() {
                               </span>
                             )}
                           </div>
+                          {/* Team name */}
+                          {m.team && (
+                            <div className="text-[8px] text-muted-foreground font-mono tracking-wide mt-0.5 truncate">{m.team}</div>
+                          )}
                           <div style={{ fontSize: "9px", marginTop: "1px", color: isSR ? "var(--color-sidebar-foreground)" : role ? "var(--color-muted-foreground)" : blocks.length ? m.color + "BB" : "var(--color-sidebar-foreground)", fontFamily: "DM Mono,monospace", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                             {!isInEvt
                               ? <span className="text-muted-foreground italic">tidak ikut {EVT_NAMES[activeEvt]}</span>
-                              : role || (blocks.length ? `${blocks.join(" · ")} (${w.toFixed(2)})` : "–")}
+                              : role || (blocks.length ? blocks.join(" · ") : "–")}
                           </div>
                         </div>
                         <span className="text-[9px] text-sidebar-foreground font-mono flex-shrink-0">#{i + 1}</span>
@@ -1134,11 +1408,7 @@ export default function AssignPage() {
           <CardFooter className="flex flex-col h-[215px] border-t border-sidebar-border p-0 bg-card">
             <div className="flex items-center justify-between px-4 py-2 border-b border-sidebar-border">
               <span className="text-[9px] font-semibold text-muted-foreground font-mono">OUTPUT TEKS</span>
-              <div className="flex items-center gap-2">
-                <Button onClick={() => copyOut("TEEN")} variant={copied === "TEEN" ? "default" : "outline"} size="sm">{copied === "TEEN" ? "✓ DISALIN" : "SALIN TEEN"}</Button>
-                <Button onClick={() => copyOut("YOUTH")} variant={copied === "YOUTH" ? "default" : "outline"} size="sm">{copied === "YOUTH" ? "✓ DISALIN" : "SALIN YOUTH"}</Button>
-                <Button onClick={() => copyOut("ALL")} variant={copied === "ALL" ? "default" : "outline"} size="sm">{copied === "ALL" ? "✓ DISALIN" : "SALIN SEMUA"}</Button>
-              </div>
+              <Button onClick={copyOut} variant={copied ? "default" : "outline"} size="sm">{copied ? "✓ DISALIN" : "SALIN"}</Button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               <pre className="text-[11px] text-muted-foreground leading-7 font-mono whitespace-pre-wrap m-0">{genOutput()}</pre>

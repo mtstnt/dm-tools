@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -11,8 +14,28 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { CalendarDays, FileText, History, Home, LayoutGrid, UserCheck } from "lucide-react"
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { collection, query as qf, where, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export function AppSidebar() {
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user || !user.email) { setIsAdmin(false); return; }
+      try {
+        const email = (user.email || "").toLowerCase();
+        const q = qf(collection(db, "members"), where("isAdmin", "==", true));
+        const snap = await getDocs(q);
+        setIsAdmin(snap.docs.some((d) => ((d.data()?.email || "") as string).toLowerCase() === email));
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    });
+    return () => unsub();
+  }, []);
   return (
     <Sidebar className="border-r-0">
       <SidebarHeader className="pb-2">
@@ -85,6 +108,17 @@ export function AppSidebar() {
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={<a href="/tools/members" />}
+                    className="gap-3 rounded-md transition-colors hover:bg-accent/60"
+                  >
+                    <UserCheck className="size-4 text-muted-foreground" />
+                    <span className="text-sm">Members</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

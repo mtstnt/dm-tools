@@ -20,6 +20,12 @@ interface FirebaseMember {
   team: string;
 }
 
+interface ImportRow {
+  original:   string;
+  normalized: string;
+  match:      FirebaseMember | null;
+}
+
 interface Member {
   id: number;
   name: string;
@@ -296,6 +302,9 @@ export default function AssignPage() {
   const [searchOpen,   setSearchOpen]   = useState(false);
   const [fbMembers,    setFbMembers]    = useState<FirebaseMember[]>([]);
   const [fbLoading,    setFbLoading]    = useState(true);
+  const [showImport,   setShowImport]   = useState(false);
+  const [importText,   setImportText]   = useState("");
+  const [importRows,   setImportRows]   = useState<ImportRow[]>([]);
   const [members,      setMembers]      = useState<Member[]>([]);
   const [isReady,      setIsReady]      = useState(false);
   const [activeEvt,    setActiveEvt]    = useState(0);
@@ -454,6 +463,45 @@ export default function AssignPage() {
     });
     setSearchQuery("");
     setSearchOpen(false);
+    setIsReady(false);
+  };
+
+  const processImport = () => {
+    const lines = importText
+      .split("\n")
+      .map(l => l.replace(/^[\s*•\-\d.]+/, "").trim())
+      .filter(Boolean);
+    const rows: ImportRow[] = lines
+      .map(original => {
+        const normalized = normalizeName(original);
+        if (!normalized) return null;
+        const ranked = rankFbMembers(normalized, fbMembers, 1);
+        return { original, normalized, match: ranked[0] ?? null };
+      })
+      .filter(Boolean) as ImportRow[];
+    setImportRows(rows);
+  };
+
+  const addAllFromImport = (availability: Member["availability"]) => {
+    const alreadyAdded = new Set(members.map(m => m.name));
+    const toAdd = importRows
+      .filter(r => r.match && !alreadyAdded.has(r.match.name))
+      .map(r => r.match!);
+    if (!toAdd.length) return;
+    setMembers(prev => [
+      ...prev,
+      ...toAdd.map((fb, i) => ({
+        id:           Date.now() + i,
+        name:         fb.name,
+        nickname:     fb.nickname,
+        team:         fb.team,
+        color:        COLORS[(prev.length + i) % COLORS.length],
+        availability,
+      })),
+    ]);
+    setImportText("");
+    setImportRows([]);
+    setShowImport(false);
     setIsReady(false);
   };
 
@@ -1003,7 +1051,111 @@ export default function AssignPage() {
             <div className="mt-1.5 text-[8px] text-muted-foreground font-mono leading-5">
               Pilih <span style={{ color: "var(--assign-availability-teen)" }}>T</span> · <span style={{ color: "var(--color-primary)" }}>T+Y</span> · <span style={{ color: "var(--assign-availability-youth)" }}>Y</span> untuk menentukan ketersediaan
             </div>
+
+            {/* Import toggle */}
+            <button
+              onClick={() => { setShowImport(p => !p); setImportRows([]); setImportText(""); }}
+              className="mt-2 text-[9px] text-muted-foreground font-mono hover:text-foreground transition-colors flex items-center gap-1"
+            >
+              <span>{showImport ? "▼" : "▶"}</span> IMPORT DARI TEKS
+            </button>
           </div>
+
+          {/* ── Import panel ── */}
+          {showImport && (
+            <div className="border-b border-sidebar-border bg-card flex-shrink-0">
+              <div className="px-3 py-2">
+                <textarea
+                  value={importText}
+                  onChange={e => { setImportText(e.target.value); setImportRows([]); }}
+                  placeholder={"• rafa\n• ko matthew\n• ce grace\nsatu nama per baris"}
+                  rows={4}
+                  className="w-full text-[11px] bg-input border border-sidebar-border rounded-md p-2 font-mono resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+                  style={{ lineHeight: 1.7 }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-1.5 text-[10px] h-7"
+                  onClick={processImport}
+                  disabled={!importText.trim() || fbLoading}
+                >
+                  ⚡ PROSES ({importText.split("\n").filter(l => l.trim()).length} BARIS)
+                </Button>
+              </div>
+
+              {/* Import results */}
+              {importRows.length > 0 && (
+                <div className="border-t border-sidebar-border">
+                  {/* Bulk-add bar */}
+                  <div className="px-3 py-2 flex items-center gap-2 bg-sidebar">
+                    <span className="text-[8px] text-muted-foreground font-mono flex-1">
+                      {importRows.filter(r => r.match).length}/{importRows.length} COCOK
+                    </span>
+                    <span className="text-[8px] text-muted-foreground font-mono">TAMBAH SEMUA:</span>
+                    {([
+                      ["teen",  "T",   "var(--assign-availability-teen)"],
+                      ["both",  "T+Y", "var(--color-primary)"],
+                      ["youth", "Y",   "var(--assign-availability-youth)"],
+                    ] as const).map(([av, lbl, clr]) => (
+                      <button
+                        key={av}
+                        onClick={() => addAllFromImport(av)}
+                        className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border border-sidebar-border hover:bg-input transition-colors cursor-pointer"
+                        style={{ color: clr }}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Row list */}
+                  <div className="max-h-52 overflow-y-auto divide-y divide-sidebar-border">
+                    {importRows.map((row, idx) => {
+                      const alreadyIn = row.match ? members.some(m => m.name === row.match!.name) : false;
+                      return (
+                        <div key={idx} className="px-3 py-2">
+                          {/* Original → match */}
+                          <div className="flex items-start gap-2 mb-1.5">
+                            <span className="text-[9px] font-mono text-muted-foreground bg-input px-1 py-0.5 rounded shrink-0 mt-0.5">{row.original}</span>
+                            <span className="text-[9px] text-muted-foreground mt-0.5">→</span>
+                            {row.match ? (
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-semibold text-foreground leading-tight">{row.match.name}</div>
+                                <div className="text-[8px] text-muted-foreground font-mono">{row.match.team}</div>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] text-muted-foreground italic mt-0.5">tidak ditemukan</span>
+                            )}
+                          </div>
+                          {/* Per-row availability buttons */}
+                          {row.match && (
+                            <div className="flex gap-1">
+                              {([
+                                ["teen",  "T",   "var(--assign-availability-teen)"],
+                                ["both",  "T+Y", "var(--color-primary)"],
+                                ["youth", "Y",   "var(--assign-availability-youth)"],
+                              ] as const).map(([av, lbl, clr]) => (
+                                <button
+                                  key={av}
+                                  onClick={() => addFromSearch(row.match!, av)}
+                                  disabled={alreadyIn}
+                                  className="flex-1 py-1 text-[8px] font-mono font-bold rounded border border-sidebar-border hover:bg-input transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                                  style={{ color: clr }}
+                                >
+                                  {alreadyIn ? "✓" : lbl}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Min-2 rule strip */}
           {isReady && (

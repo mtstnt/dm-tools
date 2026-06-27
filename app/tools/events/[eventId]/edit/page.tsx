@@ -258,13 +258,13 @@ function BlocksTab({
     }
   }
 
-  const toggleCell = (row: number, col: number) => {
-    setGrid((prev) => {
-      const next = prev.map((r) => [...r])
-      next[row][col] = next[row][col] === 1 ? 0 : 1
-      return next
-    })
-  }
+  // const toggleCell = (row: number, col: number) => {
+  //   setGrid((prev) => {
+  //     const next = prev.map((r) => [...r])
+  //     next[row][col] = next[row][col] === 1 ? 0 : 1
+  //     return next
+  //   })
+  // }
 
   return (
     <div className="space-y-4 py-2">
@@ -335,12 +335,12 @@ function BlocksTab({
                     <TableCell
                       key={ci}
                       className={cn(
-                        " w-8 aspect-square cursor-pointer transition-colors border border-border",
+                        " w-8 aspect-square transition-colors border border-border",
                         val === 1
-                          ? "bg-emerald-500 hover:bg-emerald-400"
-                          : "bg-muted hover:bg-muted/70",
+                          ? "bg-emerald-500"
+                          : "bg-muted",
                       )}
-                      onClick={() => toggleCell(ri, ci)}
+                      // onClick={() => toggleCell(ri, ci)}
                     />
                   ))}
                 </TableRow>

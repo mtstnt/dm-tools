@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { FileText, History, Home, LayoutGrid, UserCheck } from "lucide-react"
+import { CalendarDays, FileText, History, Home, LayoutGrid, UserCheck } from "lucide-react"
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { collection, query as qf, where, getDocs } from "firebase/firestore";
@@ -94,6 +94,18 @@ export function AppSidebar() {
                 >
                   <UserCheck className="size-4 text-muted-foreground" />
                   <span className="text-sm">Assign</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<a href="/tools/events" />}
+                  className="gap-3 rounded-md transition-colors hover:bg-accent/60"
+                >
+                  <CalendarDays className="size-4 text-muted-foreground" />
+                  <span className="text-sm">Events</span>
+                  <span className="ml-auto text-[10px] font-medium tracking-wide text-muted-foreground/50 bg-muted/50 px-1.5 py-0.5 rounded">
+                    Exp
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {isAdmin && (

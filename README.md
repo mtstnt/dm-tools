@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DM Tools
+
+Ministry management toolkit — service reports, volunteer assignment, and event browsing.
+
+## Stack
+
+Next.js 16 App Router · React 19 · TypeScript · Tailwind v4 · Shadcn UI · Firebase (Auth + Firestore) · TanStack React Query
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
+bun install
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.template .env
+```
+
+Fill in the values in `.env`:
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API key |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID |
+| `SC_BASE_URL` | Server-only. Base URL for external events API |
+| `NEXT_PUBLIC_SC_BASE_URL` | Client-exposed. Same value, used for event card links |
+
+### 3. Run dev server
+
+```bash
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+bun dev          # Dev server (localhost:3000)
+bun run build    # Production build
+bun run lint     # ESLint
+npx tsc --noEmit # Type check (no script configured)
+```
 
-## Learn More
+## Features
 
-To learn more about Next.js, take a look at the following resources:
+| Feature | Route | Description |
+|---------|-------|-------------|
+| Login | `/auth/login` | Firebase email/password auth |
+| Forget Password | `/auth/forget-password` | Firebase password reset |
+| Service Reports | `/tools/reports` | Generate formatted report text (clipboard) |
+| Reports History | `/tools/reports-history` | Browse Firestore-saved reports |
+| Assign | `/tools/assign` | SVG-based volunteer block allocation |
+| Events | `/tools/events` | Browse external events (experimental) |
+| Firebase Debug | `/tools/test-firebase` | Firebase connectivity test |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Docs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Feature specs in `docs/specs/`.
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deploy to Vercel or any platform supporting Next.js 16. Ensure all env vars are set in the hosting environment.

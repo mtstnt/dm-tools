@@ -1,4 +1,4 @@
-import { fetchEvents, fetchEventEditPage } from "@/app/actions"
+import { fetchEvents, fetchEventEditPage, updateUserBlocks } from "@/app/actions"
 import { type EventDetail } from "@/lib/parsers/events"
 
 export const eventKeys = {
@@ -6,4 +6,4 @@ export const eventKeys = {
   detail: (eventId: string) => ["events", eventId] as const,
 }
 
-export { fetchEvents, fetchEventEditPage, type EventDetail }
+export { fetchEvents, fetchEventEditPage, updateUserBlocks, type EventDetail }

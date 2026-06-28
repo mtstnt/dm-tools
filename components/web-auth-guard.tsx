@@ -29,6 +29,11 @@ export function getWebAuthCookie(): string | null {
   return localStorage.getItem(STORAGE_KEYS.cookie)
 }
 
+export function getWebAuthEmail(): string | null {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem(STORAGE_KEYS.email)
+}
+
 export function WebAuthGuard({ children }: { children: React.ReactNode }) {
   const [authenticated, setAuthenticated] = useState(() => {
     const storedEmail = localStorage.getItem(STORAGE_KEYS.email)

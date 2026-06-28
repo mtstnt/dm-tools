@@ -244,6 +244,18 @@ export async function updateUserBlocks(
   console.log("[updateUserBlocks] res headers:", logHeaders(res.headers));
   console.log("[updateUserBlocks] res body:", resBody.slice(0, 500));
 
+  const location = res.headers.get("location");
+  if (location) {
+    console.log("[updateUserBlocks] redirect detected:", location);
+    return { success: true };
+  }
+
+  if (res.headers.get("content-type")?.includes("text/html")) {
+    if (resBody.includes("Forbidden") && resBody.includes("don't have permission")) {
+      return { success: false, error: "Forbidden: You don't have permission to perform this action." };
+    }
+  }
+
   if (!res.ok) {
     return { success: false, error: `Request failed (${res.status})` };
   }

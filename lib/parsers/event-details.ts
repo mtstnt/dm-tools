@@ -130,8 +130,7 @@ export function parseEventPage(html: string): EventDetailsData {
     null;
 
   return {
-    allUsers: [],
-    // allUsers: extractUsers($), // TODO: For now not needed just yet.
+    allUsers: extractUsers($), // TODO: For now not needed just yet.
     event: extractEvent($),
     users: userBlocks.users,
     areas: extractAreas($),

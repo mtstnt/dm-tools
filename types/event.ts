@@ -34,6 +34,7 @@ export interface AllBlock {
 }
 
 export type EventDetailsAllUser = {
+  id: number;
   fullName: string;
   email: string | null;
 };

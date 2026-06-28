@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, CheckCircle } from "lucide-react"
 import { getWebAuthCookie, getWebAuthEmail, WebAuthGuard } from "@/components/web-auth-guard"
 import { fetchEventEditPage, updateUserBlocks } from "@/lib/queries/events"
@@ -131,7 +131,7 @@ function LoadingSkeleton() {
 }
 
 function EventEditContent({ result, eventId }: { result: EventDetailsData; eventId: string }) {
-  const { event, users, areas, blocks, csrf } = result
+  const { event, users, allUsers, areas, blocks, csrf } = result
 
   const parsedTitle = useMemo(() => parseEventTitle(event.name), [event.name])
 
@@ -176,6 +176,7 @@ function EventEditContent({ result, eventId }: { result: EventDetailsData; event
             <AssignmentTab
               rows={assignmentRows}
               users={users}
+              allUsers={allUsers}
               blocks={blocks}
               csrf={csrf}
               eventId={eventId}
@@ -198,16 +199,19 @@ function EventEditContent({ result, eventId }: { result: EventDetailsData; event
 function AssignmentTab({
   rows,
   users,
+  allUsers,
   blocks,
   csrf,
   eventId,
 }: {
   rows: { id: number; name: string; email: string | null; blocks: string[] }[]
   users: EventDetailsData["users"]
+  allUsers: EventDetailsData["allUsers"]
   blocks: EventDetailsData["blocks"]
   csrf: string | null
   eventId: string
 }) {
+  const router = useRouter()
   const [selectedUsers, setSelectedUsers] = useState<MultiSelectOption[]>([])
   const [selectedBlocks, setSelectedBlocks] = useState<MultiSelectOption[]>([])
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle")
@@ -215,13 +219,22 @@ function AssignmentTab({
 
   const realBlocks = useMemo(() => blocks.filter(isEventDetailsBlock), [blocks])
 
+  const ALLOWED_USER_IDS = new Set([
+    3086, 4554, 5457, 5456, 5918, 1644, 6456, 4553, 6203, 5907,
+    1399, 6844, 5444, 4636, 5882, 5443, 6870, 6860, 5464, 5458,
+    3735, 6874, 5436, 5912, 6199, 5439, 5875, 1631, 5437, 1682,
+    4709, 6871, 6445, 4678, 1685, 6846,
+  ])
+
   const userOptions = useMemo<MultiSelectOption[]>(
     () =>
-      users.map((user) => ({
-        label: user.name,
-        value: String(user.id),
-      })),
-    [users],
+      allUsers
+        .filter((user) => ALLOWED_USER_IDS.has(user.id))
+        .map((user) => ({
+          label: user.fullName,
+          value: String(user.id),
+        })),
+    [allUsers],
   )
 
   const blockOptions = useMemo<MultiSelectOption[]>(
@@ -266,6 +279,7 @@ function AssignmentTab({
           setSubmitStatus("idle")
           setSelectedUsers([])
           setSelectedBlocks([])
+          router.refresh()
         }, 2000)
       } else {
         setSubmitStatus("error")

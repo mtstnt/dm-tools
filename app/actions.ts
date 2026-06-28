@@ -172,7 +172,7 @@ export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
     }),
   );
   const allResults = results.flat();
-  return allResults.filter(r => ["AOG TEEN", "AOG YOUTH"].includes(r?.name ?? ""));
+  return allResults.filter(r => ["AOG TEEN", "AOG YOUTH"].includes(r?.name ?? "") && r.location == "GMS Surabaya Selatan");
 }
 
 export async function fetchEventEditPage(

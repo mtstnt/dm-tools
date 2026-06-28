@@ -288,9 +288,6 @@ function AssignmentTab({
       value: String(user.id),
     }));
 
-  console.log("before filtered", allUsers);
-  console.log("filtered users", filteredUsers);
-
   return (
     <div className="space-y-4 py-2">
       <div className="flex flex-col sm:flex-row gap-3">

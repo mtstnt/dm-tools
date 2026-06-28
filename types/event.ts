@@ -52,4 +52,5 @@ export interface EventDetailsData {
   users: EventDetailsUser[];
   areas: EventDetailsArea[];
   blocks: EventDetailsBlockItem[];
+  csrf: string | null;
 }

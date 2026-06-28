@@ -124,6 +124,11 @@ export function parseEventPage(html: string): EventDetailsData {
   const blocksObject = extractUserBlocksAsRawJSONObject($);
   const userBlocks = normalizeBlocks(blocksObject);
 
+  const csrf =
+    $('input[name="_csrf"]').attr("value") ??
+    html.match(/window\._token\s*=\s*\{\s*csrf:\s*"([^"]+)"/)?.[1] ??
+    null;
+
   return {
     allUsers: [],
     // allUsers: extractUsers($), // TODO: For now not needed just yet.
@@ -131,6 +136,7 @@ export function parseEventPage(html: string): EventDetailsData {
     users: userBlocks.users,
     areas: extractAreas($),
     blocks: userBlocks.blocks,
+    csrf,
   };
 }
 

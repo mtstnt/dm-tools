@@ -3,9 +3,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
-import { getWebAuthCookie, WebAuthGuard } from "@/components/web-auth-guard"
-import { fetchEventEditPage } from "@/lib/queries/events"
+import { ArrowLeft, Loader2, CheckCircle } from "lucide-react"
+import { getWebAuthCookie, getWebAuthEmail, WebAuthGuard } from "@/components/web-auth-guard"
+import { fetchEventEditPage, updateUserBlocks } from "@/lib/queries/events"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -23,6 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select"
 import { cn, parseEventTitle } from "@/lib/utils"
 import type {
   EventDetailsData,
@@ -31,6 +33,7 @@ import type {
 } from "@/types/event"
 
 type FetchStatus = "idle" | "loading" | "success" | "error"
+type SubmitStatus = "idle" | "submitting" | "success" | "error"
 
 function isEventDetailsBlock(
   block: EventDetailsBlockItem,
@@ -104,7 +107,7 @@ export default function EventEditPage() {
         {status === "error" && (
           <p className="text-sm text-destructive">Failed to load: {error}</p>
         )}
-        {status === "success" && result && <EventEditContent result={result} />}
+        {status === "success" && result && <EventEditContent result={result} eventId={eventId} />}
       </div>
     </WebAuthGuard>
   )
@@ -127,8 +130,8 @@ function LoadingSkeleton() {
   )
 }
 
-function EventEditContent({ result }: { result: EventDetailsData }) {
-  const { event, users, areas, blocks } = result
+function EventEditContent({ result, eventId }: { result: EventDetailsData; eventId: string }) {
+  const { event, users, areas, blocks, csrf } = result
 
   const parsedTitle = useMemo(() => parseEventTitle(event.name), [event.name])
 
@@ -170,7 +173,13 @@ function EventEditContent({ result }: { result: EventDetailsData }) {
           </TabsList>
 
           <TabsContent value="assignment">
-            <AssignmentTab rows={assignmentRows} />
+            <AssignmentTab
+              rows={assignmentRows}
+              users={users}
+              blocks={blocks}
+              csrf={csrf}
+              eventId={eventId}
+            />
           </TabsContent>
 
           <TabsContent value="blocks">
@@ -188,39 +197,164 @@ function EventEditContent({ result }: { result: EventDetailsData }) {
 
 function AssignmentTab({
   rows,
+  users,
+  blocks,
+  csrf,
+  eventId,
 }: {
   rows: { id: number; name: string; email: string | null; blocks: string[] }[]
+  users: EventDetailsData["users"]
+  blocks: EventDetailsData["blocks"]
+  csrf: string | null
+  eventId: string
 }) {
-  if (rows.length === 0) {
-    return (
-      <p className="text-muted-foreground py-8">No users assigned yet.</p>
-    )
+  const [selectedUsers, setSelectedUsers] = useState<MultiSelectOption[]>([])
+  const [selectedBlocks, setSelectedBlocks] = useState<MultiSelectOption[]>([])
+  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle")
+  const [submitError, setSubmitError] = useState("")
+
+  const realBlocks = useMemo(() => blocks.filter(isEventDetailsBlock), [blocks])
+
+  const userOptions = useMemo<MultiSelectOption[]>(
+    () =>
+      users.map((user) => ({
+        label: user.name,
+        value: String(user.id),
+      })),
+    [users],
+  )
+
+  const blockOptions = useMemo<MultiSelectOption[]>(
+    () =>
+      realBlocks.map((block) => ({
+        label: block.name,
+        value: String(block.id),
+      })),
+    [realBlocks],
+  )
+
+  const handleSubmit = async () => {
+    if (selectedUsers.length === 0 || selectedBlocks.length === 0) return
+
+    const cookie = getWebAuthCookie()
+    if (!cookie) {
+      setSubmitStatus("error")
+      setSubmitError("Not authenticated")
+      return
+    }
+
+    const userEmail = getWebAuthEmail()
+    if (!userEmail) {
+      setSubmitStatus("error")
+      setSubmitError("User email not found. Please log in again.")
+      return
+    }
+
+    setSubmitStatus("submitting")
+    setSubmitError("")
+
+    try {
+      const userIds = selectedUsers.map((u) => Number(u.value))
+      const blockIds = selectedBlocks.map((b) => Number(b.value))
+      const csrfToken = csrf ?? ""
+
+      const result = await updateUserBlocks(cookie, eventId, csrfToken, userIds, blockIds, userEmail)
+
+      if (result.success) {
+        setSubmitStatus("success")
+        setTimeout(() => {
+          setSubmitStatus("idle")
+          setSelectedUsers([])
+          setSelectedBlocks([])
+        }, 2000)
+      } else {
+        setSubmitStatus("error")
+        setSubmitError(result.error ?? "Failed to update")
+      }
+    } catch (err) {
+      setSubmitStatus("error")
+      setSubmitError(err instanceof Error ? err.message : "Unknown error")
+    }
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>User</TableHead>
-          <TableHead>Blocks</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell>
-              <p className="font-medium">{row.name}</p>
-              {row.email && (
-                <p className="text-xs text-muted-foreground">{row.email}</p>
-              )}
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {row.blocks.length > 0 ? row.blocks.join(", ") : "—"}
-            </TableCell>
+    <div className="space-y-4 py-2">
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex-1 min-w-0">
+          <MultiSelect
+            options={userOptions}
+            value={selectedUsers}
+            onChange={setSelectedUsers}
+            placeholder="Select users..."
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <MultiSelect
+            options={blockOptions}
+            value={selectedBlocks}
+            onChange={setSelectedBlocks}
+            placeholder="Select blocks..."
+          />
+        </div>
+        <Button
+          onClick={handleSubmit}
+          disabled={
+            selectedUsers.length === 0 ||
+            selectedBlocks.length === 0 ||
+            submitStatus === "submitting"
+          }
+          className="shrink-0"
+        >
+          {submitStatus === "submitting" && (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          )}
+          {submitStatus === "success" && (
+            <CheckCircle className="mr-2 size-4" />
+          )}
+          {submitStatus === "submitting"
+            ? "Assigning..."
+            : submitStatus === "success"
+              ? "Assigned!"
+              : "Assign"}
+        </Button>
+      </div>
+
+      {submitStatus === "error" && (
+        <p className="text-sm text-destructive">{submitError}</p>
+      )}
+
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>User</TableHead>
+            <TableHead>Blocks</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
+                No users assigned yet.
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>
+                  <p className="font-medium">{row.name}</p>
+                  {row.email && (
+                    <p className="text-xs text-muted-foreground">{row.email}</p>
+                  )}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {row.blocks.length > 0 ? row.blocks.join(", ") : "—"}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 

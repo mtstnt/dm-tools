@@ -151,7 +151,7 @@ export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
     "User-Agent": USER_AGENT,
   };
 
-  const pages = [1, 2, 3];
+  const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const results = await Promise.all(
     pages.map(async (page) => {
       const url = `${baseUrl}/event?page=${page}`;
@@ -171,8 +171,8 @@ export async function fetchEvents(cookie: string): Promise<EventDetail[]> {
       return getEventDetail(html);
     }),
   );
-
-  return results.flat();
+  const allResults = results.flat();
+  return allResults.filter(r => ["AOG TEEN", "AOG YOUTH"].includes(r?.name ?? ""));
 }
 
 export async function fetchEventEditPage(

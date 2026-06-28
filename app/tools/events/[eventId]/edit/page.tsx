@@ -269,7 +269,8 @@ function AssignmentTab({
           setSubmitStatus("idle")
           setSelectedUsers([])
           setSelectedBlocks([])
-          router.refresh()
+          // TODO: Raw page refresh for now.
+          window.location.reload();
         }, 2000)
       } else {
         setSubmitStatus("error")

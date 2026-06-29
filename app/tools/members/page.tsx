@@ -33,15 +33,17 @@ export default function MembersPage() {
         const rows: MemberForm[] = snap.docs.map((d) => {
           const data = d.data() as any;
           const role = (data.role ?? "Member") as MemberForm["role"];
-          return {
-            id: data.id ?? Number(d.id) ?? Date.now(),
-            name: data.name ?? "",
-            nij: data.nij ?? undefined,
-            email: data.email ?? "",
-            nickname: data.nickname ?? "",
-            role,
-            isAdmin: role === "PIC" ? !!data.isAdmin : false,
-          };
+
+        return {
+          id: data.id ?? Number(d.id) ?? Date.now(),
+          name: data.name ?? "",
+          nij: data.nij ?? undefined,
+          email: data.email ?? "",
+          nickname: data.nickname ?? "",
+          team: data.team ?? "",
+          role,
+          isAdmin: !!data.isAdmin,
+        };``
         });
         if (mounted) setMembers(rows);
       } catch (e) {
@@ -149,7 +151,7 @@ export default function MembersPage() {
               {members.map((m) => (
                 <div key={m.id} className="p-2 border rounded flex items-center justify-between">
                   <div>
-                    <div className="font-medium">{m.name} {m.team ? `(${m.team})` : ""}</div>
+                    <div className="font-medium">{m.name} {m.team ? `(Team ${m.team})` : ""}</div>
                     <div className="text-xs text-muted-foreground">NIJ: {m.nij ?? "-"} · {m.email || "-"} · {m.role} {m.isAdmin ? "· ADMIN" : ""}</div>
                   </div>
                   <div className="flex gap-2">

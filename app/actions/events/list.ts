@@ -16,9 +16,7 @@ export async function getEvents(
   const results = await Promise.all(
     pages.map(async (page) => {
       const url = `${baseUrl}/event?page=${page}`;
-      const res = await webFetch("getEvents", url, {
-        headers: { Cookie: ctx.cookie },
-      });
+      const res = await webFetch("getEvents", url, ctx);
       if (res.code >= 400) {
         throw new Error(`Failed to fetch events page ${page}: ${res.code}`);
       }

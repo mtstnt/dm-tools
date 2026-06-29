@@ -15,11 +15,10 @@ export async function updateUserBlocks(
   blockIds.forEach((id) => params.append("blocks[]", String(id)));
   params.append("_csrf", ctx.csrf);
 
-  const res = await webFetch("updateUserBlocks", `${baseUrl}/event/update_users_blocks/${eventId}`, {
+  const res = await webFetch("updateUserBlocks", `${baseUrl}/event/update_users_blocks/${eventId}`, ctx, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: ctx.cookie,
       Referer: `${baseUrl}/event/edit/${eventId}`,
     },
     body: params.toString(),

@@ -1,5 +1,5 @@
 export type LegacyWebContext = {
-  cookie: string;
+  cookie: string | null;
   csrf: string;
 };
 
@@ -29,20 +29,25 @@ export type WebFetchOptions = {
 export async function webFetch(
   tag: string,
   url: string,
+  ctx: LegacyWebContext,
   opts: WebFetchOptions = {},
 ): Promise<WebFetchResult> {
   const { method = "GET", headers = {}, body, redirect, cache = "no-store" } = opts;
 
+  const mergedHeaders: Record<string, string> = {
+    "User-Agent": USER_AGENT,
+    Accept: ACCEPT_HTML,
+    ...(ctx.cookie && { Cookie: ctx.cookie }),
+    ...headers,
+  };
+
   console.log(`[${tag}] ${method}`, url);
-  console.log(`[${tag}] req headers:`, headers);
+  console.log(`[${tag}] req headers:`, mergedHeaders);
   if (body) console.log(`[${tag}] req body:`, body);
 
   const res = await fetch(url, {
     method,
-    headers: {
-      "User-Agent": USER_AGENT,
-      ...headers,
-    },
+    headers: mergedHeaders,
     ...(body && { body }),
     ...(redirect && { redirect }),
     cache,

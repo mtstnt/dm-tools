@@ -3,10 +3,11 @@
 import * as cheerio from "cheerio";
 import {
   type WebAuthResult,
-  ACCEPT_HTML,
   extractCookieHeader,
   webFetch,
 } from "@/app/actions/_shared";
+
+const NULL_CTX = { cookie: null, csrf: "" };
 
 export async function webLogin(
   email: string,
@@ -18,9 +19,7 @@ export async function webLogin(
     const loginUrl = `${baseUrl}/login`;
     const loginPageUrl = `${loginUrl}?utc=p0700`;
 
-    const getRes = await webFetch("webLogin", loginPageUrl, {
-      headers: { Accept: ACCEPT_HTML },
-    });
+    const getRes = await webFetch("webLogin", loginPageUrl, NULL_CTX);
     if (getRes.code >= 400) {
       return { success: false, error: `Login page failed (${getRes.code})` };
     }
@@ -36,7 +35,7 @@ export async function webLogin(
     }
 
     const postBody = new URLSearchParams({ email, password, _csrf: csrf });
-    const postRes = await webFetch("webLogin", loginUrl, {
+    const postRes = await webFetch("webLogin", loginUrl, NULL_CTX, {
       method: "POST",
       redirect: "manual",
       headers: {
@@ -45,7 +44,6 @@ export async function webLogin(
         Cookie: cookies,
         Origin: baseUrl,
         Referer: loginPageUrl,
-        Accept: ACCEPT_HTML,
       },
       body: postBody.toString(),
     });
@@ -59,8 +57,8 @@ export async function webLogin(
 
     if (location) {
       const redirectUrl = new URL(location, baseUrl).toString();
-      await webFetch("webLogin:redirect", redirectUrl, {
-        headers: { Cookie: cookies, Referer: loginPageUrl },
+      await webFetch("webLogin:redirect", redirectUrl, { cookie: cookies, csrf: "" }, {
+        headers: { Referer: loginPageUrl },
       });
     }
 

@@ -10,11 +10,8 @@ export async function getEventDetail(
 ): Promise<any> {
   const baseUrl = process.env.SC_BASE_URL!;
   const url = `${baseUrl}/event/edit/${id}`;
-  const res = await webFetch("getEventDetail", url, {
-    headers: {
-      Cookie: ctx.cookie,
-      Referer: `${baseUrl}/event`,
-    },
+  const res = await webFetch("getEventDetail", url, ctx, {
+    headers: { Referer: `${baseUrl}/event` },
   });
   if (res.code >= 400) {
     throw new Error(`Failed to fetch event edit page: ${res.code}`);

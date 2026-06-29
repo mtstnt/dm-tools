@@ -359,6 +359,9 @@ function AssignmentTab({
       isAssigned: assignedUserIdsSet.has(user.id),
     })), [allUsers, assignedUserIdsSet]);
 
+  // Filter that visible rows should only show users that is already assigned.
+  const visibleRows = useMemo(() => rows.filter((row) => assignedUserIdsSet.has(row.id)), [rows, assignedUserIdsSet]);
+
   return (
     <div className="space-y-4 py-2">
       <div className="flex flex-col sm:flex-row gap-3">
@@ -413,14 +416,14 @@ function AssignmentTab({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.length === 0 ? (
+          {visibleRows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
                 No users assigned yet.
               </TableCell>
             </TableRow>
           ) : (
-            rows.map((row) => (
+            visibleRows.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>
                   <p className="font-medium">{row.name}</p>

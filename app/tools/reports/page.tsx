@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MinistriesDialog } from "@/components/ministries-dialog";
+import { syncTallySessionMeta } from "@/lib/queries/tally-session";
 
 interface AltarCallEntry {
   text: string;

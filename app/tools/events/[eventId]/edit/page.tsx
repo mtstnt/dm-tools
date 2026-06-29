@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, CheckCircle, X } from "lucide-react"
 import { getWebAuthCookie, WebAuthGuard } from "@/components/web-auth-guard"
-import { getEventDetail, updateUserBlocks, removeUserBlock } from "@/lib/queries/events"
+import { getEventDetail, updateUserBlocks, removeUserBlock, updateEventUsers } from "@/lib/queries/events"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -39,12 +39,17 @@ import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-selec
 import { cn, parseEventTitle } from "@/lib/utils"
 import type {
   EventDetailsData,
-  EventDetailsBlock,
-  EventDetailsBlockItem,
 } from "@/types/event"
 
 type FetchStatus = "idle" | "loading" | "success" | "error"
 type SubmitStatus = "idle" | "submitting" | "success" | "error"
+
+const ALLOWED_USER_IDS = new Set([
+  3086, 4554, 5457, 5456, 5918, 1644, 6456, 4553, 6203, 5907,
+  1399, 6844, 5444, 4636, 5882, 5443, 6870, 6860, 5464, 5458,
+  3735, 6874, 5436, 5912, 6199, 5439, 5875, 1631, 5437, 1682,
+  4709, 6871, 6445, 4678, 1685, 6846,
+])
 
 function hashString(str: string): number {
   let hash = 0
@@ -79,12 +84,6 @@ const BLOCK_COLORS = [
 
 function getBlockColor(blockName: string) {
   return BLOCK_COLORS[hashString(blockName) % BLOCK_COLORS.length]
-}
-
-function isEventDetailsBlock(
-  block: EventDetailsBlockItem,
-): block is EventDetailsBlock {
-  return "area_id" in block
 }
 
 interface BlockContextValue {
@@ -125,7 +124,7 @@ export default function EventEditPage() {
   const [result, setResult] = useState<EventDetailsData | null>(null)
 
   useEffect(() => {
-    const f = async () => {
+    const fetchData = async () => {
       setStatus("loading")
       const cookie = getWebAuthCookie()
       if (!cookie) {
@@ -136,7 +135,6 @@ export default function EventEditPage() {
 
       try {
         const data = await getEventDetail({ cookie, csrf: "" }, eventId)
-        console.log('data', data);
         setResult(data as EventDetailsData)
         setStatus("success")
       } catch (err) {
@@ -144,7 +142,7 @@ export default function EventEditPage() {
         setError(err instanceof Error ? err.message : "Unknown error")
       }
     }
-    f()
+    fetchData()
   }, [eventId])
 
   return (
@@ -178,16 +176,15 @@ function LoadingSkeleton() {
 }
 
 function EventEditContent({ result, eventId }: { result: EventDetailsData; eventId: string }) {
-  const { event, users, allUsers, areas, blocks, csrf } = result
+  const { event, users, assignedUserIds, allUsers, areas, blocks, csrf } = result
 
   const parsedTitle = useMemo(() => parseEventTitle(event.name), [event.name])
 
   const assignmentRows = useMemo(() => {
-    const realBlocks = blocks.filter(isEventDetailsBlock)
     return users.map((user) => {
       const userBlocks = user.blocks
         .map((blockId) => {
-          const block = realBlocks.find((b) => b.id === blockId)
+          const block = blocks.find((b) => b.id === blockId)
           return block ? { id: block.id, name: block.name } : null
         })
         .filter(Boolean) as { id: number; name: string }[]
@@ -230,6 +227,7 @@ function EventEditContent({ result, eventId }: { result: EventDetailsData; event
               blocks={blocks}
               csrf={csrf}
               eventId={eventId}
+              assignedUserIds={assignedUserIds}
             />
           </TabsContent>
 
@@ -249,6 +247,7 @@ function EventEditContent({ result, eventId }: { result: EventDetailsData; event
 function AssignmentTab({
   rows,
   users,
+  assignedUserIds,
   allUsers,
   blocks,
   csrf,
@@ -259,9 +258,9 @@ function AssignmentTab({
   allUsers: EventDetailsData["allUsers"]
   blocks: EventDetailsData["blocks"]
   csrf: string | null
-  eventId: string
+  eventId: string,
+  assignedUserIds: number[]
 }) {
-  const router = useRouter()
   const [selectedUsers, setSelectedUsers] = useState<MultiSelectOption[]>([])
   const [selectedBlocks, setSelectedBlocks] = useState<MultiSelectOption[]>([])
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle")
@@ -269,22 +268,15 @@ function AssignmentTab({
   const [deletingBlockId, setDeletingBlockId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState("")
 
-  const realBlocks = useMemo(() => blocks.filter(isEventDetailsBlock), [blocks])
-
-  const ALLOWED_USER_IDS = new Set([
-    3086, 4554, 5457, 5456, 5918, 1644, 6456, 4553, 6203, 5907,
-    1399, 6844, 5444, 4636, 5882, 5443, 6870, 6860, 5464, 5458,
-    3735, 6874, 5436, 5912, 6199, 5439, 5875, 1631, 5437, 1682,
-    4709, 6871, 6445, 4678, 1685, 6846,
-  ])
+  const assignedUserIdsSet = useMemo(() => new Set(assignedUserIds), [assignedUserIds]);
 
   const blockOptions = useMemo<MultiSelectOption[]>(
     () =>
-      realBlocks.map((block) => ({
+      blocks.map((block) => ({
         label: block.name,
         value: String(block.id),
       })),
-    [realBlocks],
+    [blocks],
   )
 
   const handleSubmit = async () => {
@@ -304,6 +296,15 @@ function AssignmentTab({
       const userIds = selectedUsers.map((u) => Number(u.value))
       const blockIds = selectedBlocks.map((b) => Number(b.value))
       const csrfToken = csrf ?? ""
+
+      // Combine assigned + selected user IDs for the PUT call
+      const allUserIds = [...new Set([...assignedUserIds.map(String), ...userIds.map(String)])]
+      const updateResult = await updateEventUsers({ cookie, csrf: csrfToken }, eventId, allUserIds)
+      if (!updateResult.success) {
+        setSubmitStatus("error")
+        setSubmitError(updateResult.error ?? "Failed to update event users")
+        return
+      }
 
       const result = await updateUserBlocks({ cookie, csrf: csrfToken }, eventId, userIds, blockIds)
 
@@ -350,12 +351,13 @@ function AssignmentTab({
     }
   }
 
-  const filteredUsers = allUsers
+  const filteredUsers = useMemo(() => allUsers
     .filter((user) => ALLOWED_USER_IDS.has(Number(user.id)))
     .map((user) => ({
       label: user.fullName,
       value: String(user.id),
-    }));
+      isAssigned: assignedUserIdsSet.has(user.id),
+    })), [allUsers, assignedUserIdsSet]);
 
   return (
     <div className="space-y-4 py-2">
@@ -507,12 +509,10 @@ function BlocksTab({
   const { selectedArea, setSelectedArea, selectedBlockId, setSelectedBlockId, grid, setGrid } =
     useBlockContext()
 
-  const realBlocks = useMemo(() => blocks.filter(isEventDetailsBlock), [blocks])
-
   const areaBlocks = useMemo(() => {
     if (!selectedArea) return []
-    return realBlocks.filter((b) => String(b.area_id) === selectedArea)
-  }, [selectedArea, realBlocks])
+    return blocks.filter((b) => String(b.area_id) === selectedArea)
+  }, [selectedArea, blocks])
 
   const handleAreaChange = (value: string | null) => {
     setSelectedArea(value ?? "")
@@ -524,7 +524,7 @@ function BlocksTab({
     const id = value ?? ""
     setSelectedBlockId(id)
     if (id) {
-      const block = realBlocks.find((b) => String(b.id) === id)
+      const block = blocks.find((b) => String(b.id) === id)
       setGrid(block?.chairs_data.map((row) => [...row]) ?? [])
     } else {
       setGrid([])

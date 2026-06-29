@@ -1,14 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { webLogin } from "@/app/actions/auth/web-login"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
@@ -80,64 +73,53 @@ export function WebAuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-pulse text-muted-foreground">
-          Waiting for authentication...
+    <div className="max-w-sm mx-auto py-12">
+      <h2 className="font-display text-2xl tracking-tight mb-1">Web Authentication</h2>
+      <p className="text-sm text-muted-foreground mb-6">
+        Sign in with your credentials to access Events.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <label
+            htmlFor="web-auth-email"
+            className="text-sm font-medium text-foreground"
+          >
+            Email
+          </label>
+          <Input
+            id="web-auth-email"
+            type="email"
+            placeholder="name@church.org"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
-      </div>
-      <Dialog open onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Web Authentication</DialogTitle>
-            <DialogDescription>
-              Sign in with your credentials to access Events.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <label
-                htmlFor="web-auth-email"
-                className="text-sm font-medium text-foreground"
-              >
-                Email
-              </label>
-              <Input
-                id="web-auth-email"
-                type="email"
-                placeholder="name@church.org"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label
-                htmlFor="web-auth-password"
-                className="text-sm font-medium text-foreground"
-              >
-                Password
-              </label>
-              <Input
-                id="web-auth-password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-            )}
-            <Button type="submit" disabled={pending} className="w-full">
-              {pending ? "Signing in..." : "Sign in"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+        <div className="space-y-2">
+          <label
+            htmlFor="web-auth-password"
+            className="text-sm font-medium text-foreground"
+          >
+            Password
+          </label>
+          <Input
+            id="web-auth-password"
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+        <Button type="submit" disabled={pending} className="w-full">
+          {pending ? "Signing in..." : "Sign in"}
+        </Button>
+      </form>
+    </div>
   )
 }

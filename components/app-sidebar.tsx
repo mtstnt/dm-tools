@@ -19,7 +19,6 @@ import { auth } from "@/lib/firebase";
 import { collection, query as qf, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Calculator } from "lucide-react";
-import { Hash } from "lucide-react";
 
 export function AppSidebar() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -122,19 +121,6 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               )}
             </SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                render={<a href="/tools/tc-altarcall" />}
-                className="gap-3 rounded-md transition-colors hover:bg-accent/60"
-              >
-                {/* Ikon sudah diganti jadi Hash */}
-                <Calculator className="size-4 text-muted-foreground" /> 
-                <span className="text-sm">Counter</span>
-                <span className="ml-auto text-[10px] font-medium tracking-wide text-muted-foreground/50 bg-muted/50 px-1.5 py-0.5 rounded">
-                  Exp
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

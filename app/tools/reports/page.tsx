@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -43,29 +43,10 @@ interface ReportData {
 }
 
 const DEFAULT_MINISTRIES = [
-  "DM",
-  "Crowd",
-  "Usher",
-  "PAW",
-  "Prayer",
-  "MM",
-  "SM",
-  "MUA",
-  "First Aid",
-  "Photography",
-  "Lighting",
-  "Greeter",
-  "Sosmed",
-  "Baptisan",
-  "Companion",
-  "Stylist",
-  "Hospitality",
-  "GA",
-  "Drama",
-  "Konseptor",
-  "WHL",
-  "Sound",
-  "Choir",
+  "DM", "Crowd", "Usher", "PAW", "Prayer", "MM", "SM", "MUA", 
+  "First Aid", "Photography", "Lighting", "Greeter", "Sosmed", 
+  "Baptisan", "Companion", "Stylist", "Hospitality", "GA", 
+  "Drama", "Konseptor", "WHL", "Sound", "Choir",
 ];
 
 const defaultVolunteers: Record<string, string> = Object.fromEntries(
@@ -88,26 +69,13 @@ const serviceLabels: Record<string, string> = {
 
 function formatDateDisplay(date: Date) {
   const monthNames = [
-    "Januari",
-    "Februari",
-    "Maret",
-    "April",
-    "Mei",
-    "Juni",
-    "Juli",
-    "Agustus",
-    "September",
-    "Oktober",
-    "November",
-    "Desember",
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
   return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-function calculateVolunteerSum(
-  volunteers: Record<string, string>,
-  ministries: string[],
-): number {
+function calculateVolunteerSum(volunteers: Record<string, string>, ministries: string[]): number {
   return ministries.reduce((sum, ministry) => {
     const value = parseInt(volunteers[ministry] || "0", 10);
     return sum + (isNaN(value) ? 0 : value);
@@ -115,9 +83,7 @@ function calculateVolunteerSum(
 }
 
 function formatAltarCalls(altarCalls: AltarCallEntry[]): string {
-  const validEntries = altarCalls.filter(
-    (e) => e.text.trim() || e.count.trim(),
-  );
+  const validEntries = altarCalls.filter((e) => e.text.trim() || e.count.trim());
   if (validEntries.length === 0) return "";
   return validEntries.map((e) => `${e.text}: ${e.count}`).join("; ");
 }
@@ -138,51 +104,90 @@ export default function ReportsPage() {
 
   const currentData = dataMap[serviceType];
 
-  const handleChange = (
-    field: keyof Omit<ReportData, "volunteers" | "altar_calls">,
-    value: string,
-  ) => {
+  // Buat Unique Session Key (Contoh: teen_2026-04-07)
+  const getSessionKey = () => {
+    const formattedDate = reportDate.toISOString().split('T')[0];
+    return `${serviceType}_${formattedDate}`;
+  };
+
+  // LOGIKA 1: Ambil data dari Firebase saat halaman dibuka atau diganti metadatanya
+  useEffect(() => {
+    const fetchExistingTemporaryData = async () => {
+      try {
+        const response = await fetch(`/api/altar-calls?sessionKey=${getSessionKey()}`);
+        if (response.ok) {
+          const serverAltarCalls = await response.json();
+          // Jika di Firebase sudah ada records data altarcall, pakai data tersebut
+          if (Array.isArray(serverAltarCalls) && serverAltarCalls.length > 0) {
+            setDataMap((prev) => ({
+              ...prev,
+              [serviceType]: {
+                ...prev[serviceType],
+                altar_calls: serverAltarCalls,
+              },
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("Gagal memuat data dari Firebase:", error);
+      }
+    };
+
+    fetchExistingTemporaryData();
+  }, [serviceType, reportDate]);
+
+  // Fungsi pembantu push data perubahan ke Firebase
+  const syncToFirebase = (nextAltarCalls: AltarCallEntry[]) => {
+    fetch('/api/altar-calls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionKey: getSessionKey(),
+        altarCalls: nextAltarCalls
+      })
+    }).catch(err => console.error("Gagal sync ke Firebase:", err));
+  };
+
+  const handleChange = (field: keyof Omit<ReportData, "volunteers" | "altar_calls">, value: string) => {
     setDataMap((prev) => ({
       ...prev,
       [serviceType]: { ...prev[serviceType], [field]: value },
     }));
   };
 
-  const handleVolunteerChange = (
-    ministry: string,
-    value: string,
-  ) => {
+  const handleVolunteerChange = (ministry: string, value: string) => {
     setDataMap((prev) => ({
       ...prev,
       [serviceType]: {
         ...prev[serviceType],
-        volunteers: {
-          ...prev[serviceType].volunteers,
-          [ministry]: value,
-        },
+        volunteers: { ...prev[serviceType].volunteers, [ministry]: value },
       },
     }));
   };
 
+  // LOGIKA 2: Push ke Firebase saat tambah baris baru
   const addAltarCall = () => {
-    setDataMap((prev) => ({
-      ...prev,
-      [serviceType]: {
-        ...prev[serviceType],
-        altar_calls: [
-          ...prev[serviceType].altar_calls,
-          { text: "", count: "" },
-        ],
-      },
-    }));
+    setDataMap((prev) => {
+      const currentAltarCalls = prev[serviceType]?.altar_calls || [];
+      const nextAltarCalls = [...currentAltarCalls, { text: "", count: "" }];
+      
+      syncToFirebase(nextAltarCalls);
+
+      return {
+        ...prev,
+        [serviceType]: { ...prev[serviceType], altar_calls: nextAltarCalls },
+      };
+    });
   };
 
+  // LOGIKA 3: Push ke Firebase saat baris dihapus
   const removeAltarCall = (index: number) => {
     setDataMap((prev) => {
-      const newCalls = prev[serviceType].altar_calls.filter(
-        (_, i) => i !== index,
-      );
+      const newCalls = prev[serviceType].altar_calls.filter((_, i) => i !== index);
       if (newCalls.length === 0) newCalls.push({ text: "", count: "" });
+      
+      syncToFirebase(newCalls);
+
       return {
         ...prev,
         [serviceType]: { ...prev[serviceType], altar_calls: newCalls },
@@ -190,14 +195,14 @@ export default function ReportsPage() {
     });
   };
 
-  const updateAltarCall = (
-    index: number,
-    field: keyof AltarCallEntry,
-    value: string,
-  ) => {
+  // LOGIKA 4: Push ke Firebase saat mengetik teks/angka counter altarcall
+  const updateAltarCall = (index: number, field: keyof AltarCallEntry, value: string) => {
     setDataMap((prev) => {
       const newCalls = [...prev[serviceType].altar_calls];
       newCalls[index] = { ...newCalls[index], [field]: value };
+      
+      syncToFirebase(newCalls);
+
       return {
         ...prev,
         [serviceType]: { ...prev[serviceType], altar_calls: newCalls },
@@ -206,12 +211,8 @@ export default function ReportsPage() {
   };
 
   const volunteerSum = calculateVolunteerSum(currentData.volunteers, ministries);
-  const effectiveVolunteerCount = useVolunteerMinistries
-    ? String(volunteerSum)
-    : currentData.volunteer_count;
-
-  const title =
-    serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
+  const effectiveVolunteerCount = useVolunteerMinistries ? String(volunteerSum) : currentData.volunteer_count;
+  const title = serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
   const date = formatDateDisplay(reportDate);
   const altarCallText = formatAltarCalls(currentData.altar_calls);
 
@@ -280,17 +281,11 @@ export default function ReportsPage() {
                 Date
               </label>
               <Popover>
-                <PopoverTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                    >
-                      <CalendarIcon className="mr-2 size-4" />
-                      {formatDateDisplay(reportDate)}
-                    </Button>
-                  }
-                />
+                <PopoverTrigger className={buttonVariants({ variant: "outline", className: "w-full justify-start text-left font-normal cursor-pointer" })}>
+                  <CalendarIcon className="mr-2 size-4" />
+                  {formatDateDisplay(reportDate)}
+                </PopoverTrigger>
+                
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
@@ -330,12 +325,12 @@ export default function ReportsPage() {
                     />
                     {useVolunteerMinistries && (
                       <MinistriesDialog
-                        ministries={ministries}
+                         ministries={ministries}
                         onSave={setMinistries}
                         trigger={
                           <Button
                             variant="ghost"
-                            size="icon-sm"
+                            size="icon"
                             className="size-6 text-muted-foreground"
                           >
                             <Settings2 className="size-3.5" />
@@ -428,7 +423,7 @@ export default function ReportsPage() {
                         onChange={(e) =>
                           updateAltarCall(index, "text", e.target.value)
                         }
-                        placeholder="Text"
+                        placeholder="Nama Altar Call (cth: Pertobatan)"
                         className="flex-1 min-h-[2.5rem]"
                         rows={1}
                       />
@@ -454,10 +449,9 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
-      </div>
+        </div>
 
-      {/* Mobile spacer so TC/Altar Calls aren't hidden behind expanded preview */}
-      <div className="h-[20vh] lg:hidden" aria-hidden="true" />
+        <div className="h-[20vh] lg:hidden" aria-hidden="true" />
 
         <div className="hidden lg:flex flex-col gap-4 lg:col-span-2">
           <div className="sticky top-6 flex flex-col gap-4">
@@ -471,11 +465,7 @@ export default function ReportsPage() {
                 onClick={handleCopy}
                 className="gap-2 text-xs h-8"
               >
-                {copied ? (
-                  <Check className="size-3.5" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 {copied ? "Copied!" : "Copy"}
               </Button>
             </div>
@@ -505,9 +495,7 @@ export default function ReportsPage() {
         )}
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-            <ChevronUp
-              className={`size-4 transition-transform duration-300 ${mobilePreviewOpen ? "" : "rotate-180"}`}
-            />
+            <ChevronUp className={`size-4 transition-transform duration-300 ${mobilePreviewOpen ? "" : "rotate-180"}`} />
             <span>Preview</span>
           </div>
           <div className="flex-1 min-w-0">
@@ -519,16 +507,12 @@ export default function ReportsPage() {
             variant="default"
             size="sm"
             onClick={(e) => {
-              e.stopPropagation()
-              handleCopy()
+              e.stopPropagation();
+              handleCopy();
             }}
             className="gap-1.5 text-xs h-8 shrink-0"
           >
-            {copied ? (
-              <Check className="size-3.5" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Copied!" : "Copy"}
           </Button>
         </div>

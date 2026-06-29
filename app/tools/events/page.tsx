@@ -305,6 +305,16 @@ function EventCard({ event }: { event: EventDetail }) {
       </CardContent>
       <CardFooter>
         <div className="flex gap-2 w-full">
+          {event.eventId && (
+            <a
+              href={`${process.env.NEXT_PUBLIC_SC_BASE_URL}/presence2/${event.eventId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-7 flex-1 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+            >
+              Seats
+            </a>
+          )}
           {event.showUrl && (
             <a
               href={`${process.env.NEXT_PUBLIC_SC_BASE_URL}${event.showUrl}`}
@@ -312,7 +322,7 @@ function EventCard({ event }: { event: EventDetail }) {
               rel="noopener noreferrer"
               className="inline-flex h-7 flex-1 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
             >
-              Seats
+              Presence
             </a>
           )}
           {event.editUrl && event.eventId && (

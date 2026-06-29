@@ -79,7 +79,7 @@ export const getRole = (html: string): Role => {
 /**
  * Parse events list
  */
-export const getEventDetail = (html: string): EventDetail[] => {
+export const parseEventDetail = (html: string): EventDetail[] => {
   const $ = cheerio.load(html);
   const role = getRole(html);
 

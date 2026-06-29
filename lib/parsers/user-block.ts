@@ -4,10 +4,6 @@ type User = {
   id: number;
   name: string;
   email: string;
-  phone: string;
-  login_token: string | null;
-  createdAt: string;
-  updatedAt: string;
 };
 
 type Block = {
@@ -39,27 +35,26 @@ type NormalizedData = {
 export function normalizeBlocks(data: Block[]): NormalizedData {
   const usersMap = new Map<number, UserWithBlocks>();
 
-  const blocks = data.map(({ users, ...block }) => {
-    users?.forEach((user) => {
-      const existing = usersMap.get(user.id);
+  const blocks = data
+    .map(({ users, ...block }) => {
+      users?.forEach((user) => {
+        const existing = usersMap.get(user.id);
 
-      if (existing) {
-        if (
-          block.id !== undefined &&
-          !existing.blocks.includes(block.id)
-        ) {
-          existing.blocks.push(block.id);
+        if (existing) {
+          if (block.id !== undefined && !existing.blocks.includes(block.id)) {
+            existing.blocks.push(block.id);
+          }
+        } else {
+          usersMap.set(user.id, {
+            ...user,
+            blocks: block.id !== undefined ? [block.id] : [],
+          });
         }
-      } else {
-        usersMap.set(user.id, {
-          ...user,
-          blocks: block.id !== undefined ? [block.id] : [],
-        });
-      }
-    });
+      });
 
-    return block;
-  });
+      return block;
+    })
+    .filter((block) => block.name !== "All Block");
 
   return {
     users: [...usersMap.values()],

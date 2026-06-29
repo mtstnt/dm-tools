@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { normalizeBlocks } from "./user_block";
+import { normalizeBlocks } from "./user-block";
 import {
   EventDetailsAllUser,
   EventDetailsArea,
@@ -19,7 +19,12 @@ function decodeCfEmail(encoded: string): string {
   return result;
 }
 
-function extractUsers($: cheerio.CheerioAPI): EventDetailsAllUser[] {
+type EventUser = {
+  allUsers: EventDetailsAllUser[],
+  assignedUsers: EventDetailsAllUser[]
+};
+
+function extractUsers($: cheerio.CheerioAPI): EventUser {
   const fromUsers = $("#users li")
     .toArray()
     .map((li) => {
@@ -54,7 +59,10 @@ function extractUsers($: cheerio.CheerioAPI): EventDetailsAllUser[] {
     }
   }
 
-  return [...merged.values()];
+  return {
+    allUsers: [...merged.values()],
+    assignedUsers: fromEventUsers,
+  }
 }
 
 function extractAreas($: cheerio.CheerioAPI): EventDetailsArea[] {
@@ -151,8 +159,11 @@ export function parseEventPage(html: string): EventDetailsData {
     html.match(/window\._token\s*=\s*\{\s*csrf:\s*"([^"]+)"/)?.[1] ??
     null;
 
+  const eventUsers = extractUsers($);
+
   return {
-    allUsers: extractUsers($), // TODO: For now not needed just yet.
+    allUsers: eventUsers.allUsers,
+    assignedUserIds: eventUsers.assignedUsers.map(e => e.id),
     event: extractEvent($),
     users: userBlocks.users,
     areas: extractAreas($),

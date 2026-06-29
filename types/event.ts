@@ -8,10 +8,6 @@ export interface EventDetailsUser {
   id: number;
   name: string;
   email: string | null;
-  phone: string | null;
-  login_token: string | null;
-  createdAt: string; // ISO datetime
-  updatedAt: string; // ISO datetime
   blocks: number[];
 }
 
@@ -28,18 +24,11 @@ export interface EventDetailsBlock {
   updatedAt: string; // ISO datetime
 }
 
-export interface AllBlock {
-  name: "All Block";
-  user: string;
-}
-
 export type EventDetailsAllUser = {
   id: number;
   fullName: string;
   email: string | null;
 };
-
-export type EventDetailsBlockItem = EventDetailsBlock | AllBlock;
 
 export type EventDetailsEvent = {
   name: string;
@@ -49,9 +38,10 @@ export type EventDetailsEvent = {
 
 export interface EventDetailsData {
   allUsers: EventDetailsAllUser[];
+  assignedUserIds: number[];
   event: EventDetailsEvent;
   users: EventDetailsUser[];
   areas: EventDetailsArea[];
-  blocks: EventDetailsBlockItem[];
+  blocks: EventDetailsBlock[];
   csrf: string | null;
 }

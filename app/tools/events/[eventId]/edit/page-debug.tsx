@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { getWebAuthCookie } from "@/components/web-auth-guard"
-import { fetchEventEditPage } from "@/lib/queries/events"
+import { getEventDetail } from "@/lib/queries/events"
 import { WebAuthGuard } from "@/components/web-auth-guard"
 
 type FetchStatus = "idle" | "loading" | "success" | "error"
@@ -26,7 +26,7 @@ export default function EventsPageDummy() {
       }
 
       try {
-        const data = await fetchEventEditPage(cookie, eventId)
+        const data = await getEventDetail({ cookie, csrf: "" }, eventId)
         setResult(data)
         setStatus("success")
       } catch (err) {

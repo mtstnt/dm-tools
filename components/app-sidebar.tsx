@@ -18,6 +18,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { collection, query as qf, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Calculator } from "lucide-react";
 
 export function AppSidebar() {
   const [isAdmin, setIsAdmin] = useState(false);

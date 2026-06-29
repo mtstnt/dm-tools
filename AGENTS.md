@@ -41,7 +41,7 @@ Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4.
 ```
 app/
   layout.tsx          Root: fonts (Instrument Serif, DM Sans, IBM Plex Mono), ThemeProvider, QueryClient
-  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents(), fetchEventEditPage()
+  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents(), fetchEventEditPage(), updateUserBlocks()
   auth/
     login/page.tsx    Firebase email/password login
     forget-password/  Firebase password reset email
@@ -52,7 +52,7 @@ app/
     events/           External events browser + event edit viewer (web auth guard)
     test-firebase/    Firebase debug page
 components/
-  ui/                 17 Shadcn components (base-nova style)
+  ui/                 18 Shadcn components (base-nova style) + multi-select (react-select wrapper)
   providers.tsx       React Query (staleTime 5m, gcTime 30m, no refetch on focus)
   web-auth-guard.tsx  Auth gate for external events API (localStorage-based session)
 lib/
@@ -75,7 +75,7 @@ lib/
 - **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and `formatDateDisplay()` in reports page.
 - **Reports page**: Client-only form that generates text for clipboard. Does NOT save to Firestore.
 - **Reports history**: Reads from Firestore `reports` collection. Fields include `divisions` (map of ministry→count), `type` (AOG_YOUTH, AOG_TEEN, EVENT).
-- **Events page**: Experimental. Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. Event edit page displays parsed JSON from `fetchEventEditPage`.
+- **Events page**: Experimental. Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. Event edit page displays parsed JSON from `fetchEventEditPage`. Assignment tab allows SPV/PIC users to assign blocks to users via `updateUserBlocks` server action.
 - **Assign page**: SVG-based service block allocation tool. Generates Teen/Youth assignments. Client-only, no persistence.
 - **Theme**: Light mode default, class-based dark mode via `next-themes`.
 - **Fonts**: CSS variables `--font-display` (Instrument Serif), `--font-sans` (DM Sans), `--font-mono` (IBM Plex Mono).
@@ -89,7 +89,7 @@ Feature specs in `docs/specs/`:
 - `01-authentication.md` — Auth flow, cookie details, middleware gap
 - `02-reports.md` — Report generator form fields, output format
 - `03-reports-history.md` — Firestore query, table columns, detail sheet
-- `04-events.md` — External events browser, web auth guard, cheerio parsing
+- `04-events.md` — External events browser, web auth guard, cheerio parsing, assignment feature
 - `05-assign.md` — Service assignment tool, SVG blocks, member management
 
 Reference samples in `docs/sample/`:

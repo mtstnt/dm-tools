@@ -20,19 +20,41 @@ function decodeCfEmail(encoded: string): string {
 }
 
 function extractUsers($: cheerio.CheerioAPI): EventDetailsAllUser[] {
-  return $("#users li")
+  const fromUsers = $("#users li")
     .toArray()
     .map((li) => {
       const el = $(li);
-
       const encoded = el.find("a.__cf_email__").attr("data-cfemail");
-
       return {
         id: Number(el.attr("data-id")),
         fullName: el.find("span").first().text().trim(),
         email: encoded ? decodeCfEmail(encoded) : null,
       };
     });
+
+  const fromEventUsers = $("#event_users li")
+    .toArray()
+    .map((li) => {
+      const el = $(li);
+      const encoded = el.find("a.__cf_email__").attr("data-cfemail");
+      return {
+        id: Number(el.attr("data-id")),
+        fullName: el.find("span").first().text().trim(),
+        email: encoded ? decodeCfEmail(encoded) : null,
+      };
+    });
+
+  const merged = new Map<number, EventDetailsAllUser>();
+  for (const user of fromUsers) {
+    if (user.id) merged.set(user.id, user);
+  }
+  for (const user of fromEventUsers) {
+    if (user.id && !merged.has(user.id)) {
+      merged.set(user.id, user);
+    }
+  }
+
+  return [...merged.values()];
 }
 
 function extractAreas($: cheerio.CheerioAPI): EventDetailsArea[] {

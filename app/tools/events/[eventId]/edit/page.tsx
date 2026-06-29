@@ -90,6 +90,7 @@ export default function EventEditPage() {
 
       try {
         const data = await fetchEventEditPage(cookie, eventId)
+        console.log('data', data);
         setResult(data as EventDetailsData)
         setStatus("success")
       } catch (err) {
@@ -226,17 +227,6 @@ function AssignmentTab({
     4709, 6871, 6445, 4678, 1685, 6846,
   ])
 
-  const userOptions = useMemo<MultiSelectOption[]>(
-    () =>
-      allUsers
-        .filter((user) => ALLOWED_USER_IDS.has(user.id))
-        .map((user) => ({
-          label: user.fullName,
-          value: String(user.id),
-        })),
-    [allUsers],
-  )
-
   const blockOptions = useMemo<MultiSelectOption[]>(
     () =>
       realBlocks.map((block) => ({
@@ -279,7 +269,8 @@ function AssignmentTab({
           setSubmitStatus("idle")
           setSelectedUsers([])
           setSelectedBlocks([])
-          router.refresh()
+          // TODO: Raw page refresh for now.
+          window.location.reload();
         }, 2000)
       } else {
         setSubmitStatus("error")
@@ -291,12 +282,19 @@ function AssignmentTab({
     }
   }
 
+  const filteredUsers = allUsers
+    .filter((user) => ALLOWED_USER_IDS.has(Number(user.id)))
+    .map((user) => ({
+      label: user.fullName,
+      value: String(user.id),
+    }));
+
   return (
     <div className="space-y-4 py-2">
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 min-w-0">
           <MultiSelect
-            options={userOptions}
+            options={filteredUsers}
             value={selectedUsers}
             onChange={setSelectedUsers}
             placeholder="Select users..."

@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next"
 import { Instrument_Serif, DM_Sans, IBM_Plex_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Providers } from "@/components/providers"
-import { ServiceWorkerRegistration } from "@/components/sw-registration"
 import "./globals.css"
 
 const instrumentSerif = Instrument_Serif({
@@ -68,7 +67,6 @@ export default function RootLayout({
         <ThemeProvider>
           <Providers>{children}</Providers>
         </ThemeProvider>
-        <ServiceWorkerRegistration />
       </body>
     </html>
   )

@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { fetchEvents, eventKeys, type EventDetail } from "@/lib/queries/events"
+import { getEvents, eventKeys, type EventDetail } from "@/lib/queries/events"
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
@@ -80,7 +80,7 @@ function EventsGrid() {
     queryFn: () => {
       const cookie = getWebAuthCookie()
       if (!cookie) throw new Error("Not authenticated")
-      return fetchEvents(cookie)
+      return getEvents({ cookie, csrf: "" })
     },
   })
 

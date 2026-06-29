@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { webAuthLogin } from "@/app/actions"
+import { webLogin } from "@/app/actions/auth/web-login"
 import {
   Dialog,
   DialogContent,
@@ -54,7 +54,7 @@ export function WebAuthGuard({ children }: { children: React.ReactNode }) {
     setPending(true)
 
     const encodedPassword = btoa(password)
-    const result = await webAuthLogin(email, encodedPassword)
+    const result = await webLogin(email, encodedPassword)
 
     if (result.success) {
       localStorage.setItem(STORAGE_KEYS.email, email)

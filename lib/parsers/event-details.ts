@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { normalizeBlocks } from "./user_block";
+import { normalizeBlocks } from "./user-block";
 import {
   EventDetailsAllUser,
   EventDetailsArea,

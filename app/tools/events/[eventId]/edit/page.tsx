@@ -4,8 +4,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, CheckCircle } from "lucide-react"
-import { getWebAuthCookie, getWebAuthEmail, WebAuthGuard } from "@/components/web-auth-guard"
-import { fetchEventEditPage, updateUserBlocks } from "@/lib/queries/events"
+import { getWebAuthCookie, WebAuthGuard } from "@/components/web-auth-guard"
+import { getEventDetail, updateUserBlocks } from "@/lib/queries/events"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -89,7 +89,7 @@ export default function EventEditPage() {
       }
 
       try {
-        const data = await fetchEventEditPage(cookie, eventId)
+        const data = await getEventDetail({ cookie, csrf: "" }, eventId)
         console.log('data', data);
         setResult(data as EventDetailsData)
         setStatus("success")
@@ -246,13 +246,6 @@ function AssignmentTab({
       return
     }
 
-    const userEmail = getWebAuthEmail()
-    if (!userEmail) {
-      setSubmitStatus("error")
-      setSubmitError("User email not found. Please log in again.")
-      return
-    }
-
     setSubmitStatus("submitting")
     setSubmitError("")
 
@@ -261,7 +254,7 @@ function AssignmentTab({
       const blockIds = selectedBlocks.map((b) => Number(b.value))
       const csrfToken = csrf ?? ""
 
-      const result = await updateUserBlocks(cookie, eventId, csrfToken, userIds, blockIds, userEmail)
+      const result = await updateUserBlocks({ cookie, csrf: csrfToken }, eventId, userIds, blockIds)
 
       if (result.success) {
         setSubmitStatus("success")

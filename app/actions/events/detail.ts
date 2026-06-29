@@ -1,0 +1,26 @@
+"use server";
+
+import { type LegacyWebContext, webFetch } from "@/app/actions/_shared";
+import { requiresReauth } from "@/lib/parsers/events";
+import { parseEventPage } from "@/lib/parsers/event-details";
+
+export async function getEventDetail(
+  ctx: LegacyWebContext,
+  id: string,
+): Promise<any> {
+  const baseUrl = process.env.SC_BASE_URL!;
+  const url = `${baseUrl}/event/edit/${id}`;
+  const res = await webFetch("getEventDetail", url, {
+    headers: {
+      Cookie: ctx.cookie,
+      Referer: `${baseUrl}/event`,
+    },
+  });
+  if (res.code >= 400) {
+    throw new Error(`Failed to fetch event edit page: ${res.code}`);
+  }
+  if (requiresReauth(res.body)) {
+    throw new Error("SESSION_EXPIRED");
+  }
+  return parseEventPage(res.body);
+}

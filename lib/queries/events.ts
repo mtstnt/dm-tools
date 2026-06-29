@@ -1,9 +1,12 @@
-import { fetchEvents, fetchEventEditPage, updateUserBlocks } from "@/app/actions"
+import { getEvents } from "@/app/actions/events/list"
+import { getEventDetail } from "@/app/actions/events/detail"
+import { updateUserBlocks } from "@/app/actions/events/user-blocks/update"
+import { type LegacyWebContext } from "@/app/actions/_shared"
 import { type EventDetail } from "@/lib/parsers/events"
 
 export const eventKeys = {
   all: ["events"] as const,
-  detail: (eventId: string) => ["events", eventId] as const,
+  detail: (id: string) => ["events", id] as const,
 }
 
-export { fetchEvents, fetchEventEditPage, updateUserBlocks, type EventDetail }
+export { getEvents, getEventDetail, updateUserBlocks, type LegacyWebContext, type EventDetail }

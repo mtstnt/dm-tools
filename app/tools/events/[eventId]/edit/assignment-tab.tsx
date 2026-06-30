@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Loader2, CheckCircle, X } from "lucide-react"
+import { Loader2, CheckCircle, X, Trash2 } from "lucide-react"
 import { getWebAuthCookie } from "@/components/web-auth-guard"
 import { updateUserBlocks, removeUserBlock, updateEventUsers } from "@/lib/queries/events"
 import {
@@ -84,6 +84,8 @@ export function AssignmentTab({
   const [submitError, setSubmitError] = useState("")
   const [deletingBlockId, setDeletingBlockId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState("")
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
+  const [deleteUserError, setDeleteUserError] = useState("")
 
   const assignedUserIds = useMemo(() => users.map((u) => u.id), [users])
   const assignedUserIdsSet = useMemo(() => new Set(assignedUserIds), [assignedUserIds])
@@ -172,6 +174,33 @@ export function AssignmentTab({
     }
   }
 
+  const handleDeleteUser = async (userId: number) => {
+    const cookie = getWebAuthCookie()
+    if (!cookie) {
+      setDeleteUserError("Not authenticated")
+      return
+    }
+
+    setDeletingUserId(userId)
+    setDeleteUserError("")
+
+    try {
+      const remainingUserIds = assignedUserIds
+        .filter((id) => id !== userId)
+        .map(String)
+      const result = await updateEventUsers({ cookie, csrf }, eventId, remainingUserIds)
+      if (result.success) {
+        window.location.reload()
+      } else {
+        setDeleteUserError(result.error ?? "Failed to remove user")
+        setDeletingUserId(null)
+      }
+    } catch (err) {
+      setDeleteUserError(err instanceof Error ? err.message : "Unknown error")
+      setDeletingUserId(null)
+    }
+  }
+
   const filteredUsers = useMemo(
     () =>
       allUsers.map((user) => ({
@@ -229,12 +258,13 @@ export function AssignmentTab({
           <TableRow>
             <TableHead>User</TableHead>
             <TableHead>Blocks</TableHead>
+            <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {users.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
                 No users assigned yet.
               </TableCell>
             </TableRow>
@@ -315,6 +345,41 @@ export function AssignmentTab({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <Dialog onOpenChange={(open) => { if (!open) setDeleteUserError("") }}>
+                      <DialogTrigger render={
+                        <button className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer" />
+                      }>
+                        <Trash2 className="size-4" />
+                      </DialogTrigger>
+                      <DialogContent showCloseButton={false}>
+                        <DialogHeader>
+                          <DialogTitle>Remove User</DialogTitle>
+                          <DialogDescription>
+                            Remove <strong>{user.fullName}</strong> from this event?
+                          </DialogDescription>
+                        </DialogHeader>
+                        {deleteUserError && (
+                          <p className="text-sm text-destructive">{deleteUserError}</p>
+                        )}
+                        <DialogFooter>
+                          <DialogClose render={<Button variant="outline" />}>
+                            Cancel
+                          </DialogClose>
+                          <Button
+                            variant="destructive"
+                            disabled={deletingUserId === user.id}
+                            onClick={() => handleDeleteUser(user.id)}
+                          >
+                            {deletingUserId === user.id && (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            )}
+                            Remove
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </TableCell>
                 </TableRow>
               )

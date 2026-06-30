@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MinistriesDialog } from "@/components/ministries-dialog";
-import { syncTallySessionMeta } from "@/lib/queries/tally-session";
+import { syncTallySessionMeta, fetchTallySession } from "@/lib/queries/tally-session";
 
 interface AltarCallEntry {
   text: string;
@@ -137,13 +137,59 @@ export default function ReportsPage() {
   const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(true);
   const [ministries, setMinistries] = useState<string[]>(DEFAULT_MINISTRIES);
 
+  // Tracks whether the altar_calls state has been fully restored from
+  // Firestore on mount before the sync effect is allowed to write.
+  const restoredFromFirestore = useRef(false);
+
   const currentData = dataMap[serviceType];
 
-  // Sync service type, date, and altar call count to Firestore so the Tally
-  // page can pick them up in real time. Runs on mount and whenever any of
-  // these three values change. If serviceType or date changed, syncTallySessionMeta
-  // will reset counts & logs in Firestore (new service occurrence).
+  // ── On mount: read Firestore and restore altarCallCount if service+date
+  //    already match — prevents the sync effect from downgrading the count
+  //    back to 1 when the page is reopened mid-session.
   useEffect(() => {
+    fetchTallySession().then((data) => {
+      if (!data?.altarCallCount) {
+        restoredFromFirestore.current = true;
+        return;
+      }
+      const todayStr = formatDateDisplay(new Date());
+      const defaultServiceType = "teen"; // matches useState default above
+
+      if (
+        data.serviceType === defaultServiceType &&
+        data.date === todayStr
+      ) {
+        const count = Math.max(data.altarCallCount, 1);
+        setDataMap((prev) => {
+          const existing = prev[defaultServiceType].altar_calls;
+          if (existing.length === count) return prev;
+          let newCalls = [...existing];
+          while (newCalls.length < count) newCalls.push({ text: "", count: "" });
+          newCalls = newCalls.slice(0, count);
+          return {
+            ...prev,
+            [defaultServiceType]: {
+              ...prev[defaultServiceType],
+              altar_calls: newCalls,
+            },
+          };
+        });
+      }
+
+      restoredFromFirestore.current = true;
+    }).catch(() => {
+      // Firestore read failed — allow sync to proceed anyway
+      restoredFromFirestore.current = true;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Sync service meta to Firestore so the Tally page stays in sync.
+  //    Waits until the mount-restore is done so the initial write carries
+  //    the correct altarCallCount (not the default 1).
+  useEffect(() => {
+    if (!restoredFromFirestore.current) return;
+
     syncTallySessionMeta({
       serviceType,
       date: formatDateDisplay(reportDate),

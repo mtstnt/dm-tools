@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -138,6 +138,18 @@ export default function ReportsPage() {
   const [ministries, setMinistries] = useState<string[]>(DEFAULT_MINISTRIES);
 
   const currentData = dataMap[serviceType];
+
+  // Sync service type, date, and altar call count to Firestore so the Tally
+  // page can pick them up in real time. Runs on mount and whenever any of
+  // these three values change. If serviceType or date changed, syncTallySessionMeta
+  // will reset counts & logs in Firestore (new service occurrence).
+  useEffect(() => {
+    syncTallySessionMeta({
+      serviceType,
+      date: formatDateDisplay(reportDate),
+      altarCallCount: currentData.altar_calls.length,
+    });
+  }, [serviceType, reportDate, currentData.altar_calls.length]);
 
   const handleChange = (
     field: keyof Omit<ReportData, "volunteers" | "altar_calls">,

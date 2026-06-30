@@ -71,12 +71,14 @@ export function AssignmentTab({
   blocks,
   csrf,
   eventId,
+  refetch,
 }: {
   users: EventAssignedUser[]
   allUsers: EventUser[]
   blocks: EventBlock[]
   csrf: string
   eventId: string
+  refetch: () => Promise<void>
 }) {
   const [selectedUsers, setSelectedUsers] = useState<MultiSelectOption[]>([])
   const [selectedBlocks, setSelectedBlocks] = useState<MultiSelectOption[]>([])
@@ -128,11 +130,11 @@ export function AssignmentTab({
 
       if (result.success) {
         setSubmitStatus("success")
+        await refetch()
         setTimeout(() => {
           setSubmitStatus("idle")
           setSelectedUsers([])
           setSelectedBlocks([])
-          window.location.reload()
         }, 2000)
       } else {
         setSubmitStatus("error")
@@ -163,7 +165,8 @@ export function AssignmentTab({
     try {
       const result = await removeUserBlock({ cookie, csrf }, eventId, block.id, block.userIds, userId)
       if (result.success) {
-        window.location.reload()
+        await refetch()
+        setDeletingBlockId(null)
       } else {
         setDeleteError(result.error ?? "Failed to remove block")
         setDeletingBlockId(null)
@@ -190,7 +193,8 @@ export function AssignmentTab({
         .map(String)
       const result = await updateEventUsers({ cookie, csrf }, eventId, remainingUserIds)
       if (result.success) {
-        window.location.reload()
+        await refetch()
+        setDeletingUserId(null)
       } else {
         setDeleteUserError(result.error ?? "Failed to remove user")
         setDeletingUserId(null)

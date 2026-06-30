@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
@@ -18,31 +18,27 @@ type FetchStatus = "idle" | "loading" | "success" | "error"
 export default function EventEditPage() {
   const params = useParams()
   const eventId = params.eventId as string
-  const [status, setStatus] = useState<FetchStatus>("idle")
+  const [status, setStatus] = useState<FetchStatus>("loading")
   const [error, setError] = useState("")
   const [result, setResult] = useState<EventDetail | null>(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setStatus("loading")
-      const cookie = getWebAuthCookie()
-      if (!cookie) {
-        setStatus("error")
-        setError("Not authenticated")
-        return
-      }
+  const refetch = useCallback(async () => {
+    const cookie = getWebAuthCookie()
+    if (!cookie) {
+      throw new Error("Not authenticated")
+    }
+    const data = await getEventDetail({ cookie, csrf: "" }, eventId)
+    setResult(data as EventDetail)
+  }, [eventId])
 
-      try {
-        const data = await getEventDetail({ cookie, csrf: "" }, eventId)
-        setResult(data as EventDetail)
-        setStatus("success")
-      } catch (err) {
+  useEffect(() => {
+    refetch()
+      .then(() => setStatus("success"))
+      .catch((err) => {
         setStatus("error")
         setError(err instanceof Error ? err.message : "Unknown error")
-      }
-    }
-    fetchData()
-  }, [eventId])
+      })
+  }, [refetch])
 
   return (
     <WebAuthGuard>
@@ -51,7 +47,9 @@ export default function EventEditPage() {
         {status === "error" && (
           <p className="text-sm text-destructive">Failed to load: {error}</p>
         )}
-        {status === "success" && result && <EventEditContent result={result} eventId={eventId} />}
+        {status === "success" && result && (
+          <EventEditContent result={result} eventId={eventId} refetch={refetch} />
+        )}
       </div>
     </WebAuthGuard>
   )
@@ -74,7 +72,15 @@ function LoadingSkeleton() {
   )
 }
 
-function EventEditContent({ result, eventId }: { result: EventDetail; eventId: string }) {
+function EventEditContent({
+  result,
+  eventId,
+  refetch,
+}: {
+  result: EventDetail
+  eventId: string
+  refetch: () => Promise<void>
+}) {
   const { name, location, users, allUsers, areas, csrf } = result
 
   const parsedTitle = useMemo(() => parseEventTitle(name), [name])
@@ -115,6 +121,7 @@ function EventEditContent({ result, eventId }: { result: EventDetail; eventId: s
               blocks={flatBlocks}
               csrf={csrf}
               eventId={eventId}
+              refetch={refetch}
             />
           </TabsContent>
 

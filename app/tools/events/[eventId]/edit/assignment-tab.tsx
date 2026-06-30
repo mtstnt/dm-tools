@@ -26,16 +26,9 @@ import {
 } from "@/components/ui/dialog"
 import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select"
 import { cn } from "@/lib/utils"
-import type { EventDetailsData } from "@/types/event"
+import type { EventAssignedUser, EventBlock, EventUser } from "@/types/event"
 
 type SubmitStatus = "idle" | "submitting" | "success" | "error"
-
-const ALLOWED_USER_IDS = new Set([
-  3086, 4554, 5457, 5456, 5918, 1644, 6456, 4553, 6203, 5907,
-  1399, 6844, 5444, 4636, 5882, 5443, 6870, 6860, 5464, 5458,
-  3735, 6874, 5436, 5912, 6199, 5439, 5875, 1631, 5437, 1682,
-  4709, 6871, 6445, 4678, 1685, 6846,
-])
 
 function hashString(str: string): number {
   let hash = 0
@@ -73,21 +66,17 @@ function getBlockColor(blockName: string) {
 }
 
 export function AssignmentTab({
-  rows,
   users,
-  assignedUserIds,
   allUsers,
   blocks,
   csrf,
   eventId,
 }: {
-  rows: { id: number; name: string; email: string | null; blocks: { id: number; name: string }[] }[]
-  users: EventDetailsData["users"]
-  allUsers: EventDetailsData["allUsers"]
-  blocks: EventDetailsData["blocks"]
-  csrf: string | null
+  users: EventAssignedUser[]
+  allUsers: EventUser[]
+  blocks: EventBlock[]
+  csrf: string
   eventId: string
-  assignedUserIds: number[]
 }) {
   const [selectedUsers, setSelectedUsers] = useState<MultiSelectOption[]>([])
   const [selectedBlocks, setSelectedBlocks] = useState<MultiSelectOption[]>([])
@@ -96,6 +85,7 @@ export function AssignmentTab({
   const [deletingBlockId, setDeletingBlockId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState("")
 
+  const assignedUserIds = useMemo(() => users.map((u) => u.id), [users])
   const assignedUserIdsSet = useMemo(() => new Set(assignedUserIds), [assignedUserIds])
 
   const blockOptions = useMemo<MultiSelectOption[]>(
@@ -123,17 +113,16 @@ export function AssignmentTab({
     try {
       const userIds = selectedUsers.map((u) => Number(u.value))
       const blockIds = selectedBlocks.map((b) => Number(b.value))
-      const csrfToken = csrf ?? ""
 
       const allUserIds = [...new Set([...assignedUserIds.map(String), ...userIds.map(String)])]
-      const updateResult = await updateEventUsers({ cookie, csrf: csrfToken }, eventId, allUserIds)
+      const updateResult = await updateEventUsers({ cookie, csrf }, eventId, allUserIds)
       if (!updateResult.success) {
         setSubmitStatus("error")
         setSubmitError(updateResult.error ?? "Failed to update event users")
         return
       }
 
-      const result = await updateUserBlocks({ cookie, csrf: csrfToken }, eventId, userIds, blockIds)
+      const result = await updateUserBlocks({ cookie, csrf }, eventId, userIds, blockIds)
 
       if (result.success) {
         setSubmitStatus("success")
@@ -170,7 +159,7 @@ export function AssignmentTab({
     setDeleteError("")
 
     try {
-      const result = await removeUserBlock({ cookie, csrf: csrf ?? "" }, eventId, userId, blockId, block.area_id)
+      const result = await removeUserBlock({ cookie, csrf }, eventId, block.id, block.userIds, userId)
       if (result.success) {
         window.location.reload()
       } else {
@@ -185,19 +174,12 @@ export function AssignmentTab({
 
   const filteredUsers = useMemo(
     () =>
-      allUsers
-        .filter((user) => ALLOWED_USER_IDS.has(Number(user.id)))
-        .map((user) => ({
-          label: user.fullName,
-          value: String(user.id),
-          isAssigned: assignedUserIdsSet.has(user.id),
-        })),
+      allUsers.map((user) => ({
+        label: user.fullName,
+        value: String(user.id),
+        isAssigned: assignedUserIdsSet.has(user.id),
+      })),
     [allUsers, assignedUserIdsSet],
-  )
-
-  const visibleRows = useMemo(
-    () => rows.filter((row) => assignedUserIdsSet.has(row.id)),
-    [rows, assignedUserIdsSet],
   )
 
   return (
@@ -250,85 +232,93 @@ export function AssignmentTab({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visibleRows.length === 0 ? (
+          {users.length === 0 ? (
             <TableRow>
               <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
                 No users assigned yet.
               </TableCell>
             </TableRow>
           ) : (
-            visibleRows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <p className="font-medium">{row.name}</p>
-                  {row.email && (
-                    <p className="text-xs text-muted-foreground">{row.email}</p>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {row.blocks.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {row.blocks.map((block) => {
-                        const color = getBlockColor(block.name)
-                        return (
-                          <Dialog key={block.id} onOpenChange={(open) => { if (!open) setDeleteError("") }}>
-                            <Badge
-                              className={cn(
-                                "h-7 pr-1 text-sm font-medium border-transparent",
-                                color.bg,
-                                color.text,
-                              )}
-                            >
-                              {block.name}
-                              <DialogTrigger
-                                render={
-                                  <button
-                                    className={cn(
-                                      "ml-1 cursor-pointer rounded-full p-0.5 transition-colors",
-                                      color.hover,
-                                    )}
-                                  />
-                                }
+            users.map((user) => {
+              const userBlocks = user.assignedBlocks
+                .map((blockId) => {
+                  const block = blocks.find((b) => b.id === blockId)
+                  return block ? { id: block.id, name: block.name } : null
+                })
+                .filter(Boolean) as { id: number; name: string }[]
+              return (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    <p className="font-medium">{user.fullName}</p>
+                    {user.email && (
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {userBlocks.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {userBlocks.map((block) => {
+                          const color = getBlockColor(block.name)
+                          return (
+                            <Dialog key={block.id} onOpenChange={(open) => { if (!open) setDeleteError("") }}>
+                              <Badge
+                                className={cn(
+                                  "h-7 pr-1 text-sm font-medium border-transparent",
+                                  color.bg,
+                                  color.text,
+                                )}
                               >
-                                <X className="size-3.5" />
-                              </DialogTrigger>
-                            </Badge>
-                            <DialogContent showCloseButton={false}>
-                              <DialogHeader>
-                                <DialogTitle>Remove Block</DialogTitle>
-                                <DialogDescription>
-                                  Remove <strong>{block.name}</strong> from <strong>{row.name}</strong>?
-                                </DialogDescription>
-                              </DialogHeader>
-                              {deleteError && (
-                                <p className="text-sm text-destructive">{deleteError}</p>
-                              )}
-                              <DialogFooter>
-                                <DialogClose render={<Button variant="outline" />}>
-                                  Cancel
-                                </DialogClose>
-                                <Button
-                                  variant="destructive"
-                                  disabled={deletingBlockId === block.id}
-                                  onClick={() => handleRemoveBlock(row.id, block.id)}
+                                {block.name}
+                                <DialogTrigger
+                                  render={
+                                    <button
+                                      className={cn(
+                                        "ml-1 cursor-pointer rounded-full p-0.5 transition-colors",
+                                        color.hover,
+                                      )}
+                                    />
+                                  }
                                 >
-                                  {deletingBlockId === block.id && (
-                                    <Loader2 className="mr-2 size-4 animate-spin" />
-                                  )}
-                                  Remove
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))
+                                  <X className="size-3.5" />
+                                </DialogTrigger>
+                              </Badge>
+                              <DialogContent showCloseButton={false}>
+                                <DialogHeader>
+                                  <DialogTitle>Remove Block</DialogTitle>
+                                  <DialogDescription>
+                                    Remove <strong>{block.name}</strong> from <strong>{user.fullName}</strong>?
+                                  </DialogDescription>
+                                </DialogHeader>
+                                {deleteError && (
+                                  <p className="text-sm text-destructive">{deleteError}</p>
+                                )}
+                                <DialogFooter>
+                                  <DialogClose render={<Button variant="outline" />}>
+                                    Cancel
+                                  </DialogClose>
+                                  <Button
+                                    variant="destructive"
+                                    disabled={deletingBlockId === block.id}
+                                    onClick={() => handleRemoveBlock(user.id, block.id)}
+                                  >
+                                    {deletingBlockId === block.id && (
+                                      <Loader2 className="mr-2 size-4 animate-spin" />
+                                    )}
+                                    Remove
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })
           )}
         </TableBody>
       </Table>

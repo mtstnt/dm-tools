@@ -5,11 +5,11 @@ import { removeUserBlock } from "@/app/actions/events/user-blocks/delete"
 import { updateEventUsers } from "@/app/actions/events/update"
 import { updateBlock } from "@/app/actions/events/blocks/update"
 import { type LegacyWebContext } from "@/app/actions/_shared"
-import { type EventDetail } from "@/lib/parsers/events"
+import { type EventInfo } from "@/lib/parsers/events"
 
 export const eventKeys = {
   all: ["events"] as const,
   detail: (id: string) => ["events", id] as const,
 }
 
-export { getEvents, getEventDetail, updateUserBlocks, removeUserBlock, updateEventUsers, updateBlock, type LegacyWebContext, type EventDetail }
+export { getEvents, getEventDetail, updateUserBlocks, removeUserBlock, updateEventUsers, updateBlock, type LegacyWebContext, type EventInfo }

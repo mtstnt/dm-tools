@@ -1,47 +1,45 @@
-export interface EventDetailsArea {
-  id: string;
-  name: string;
-  editUrl: string;
-}
+// Describes the complete data of the event.
+// TODO: Also add Volunteer data to merge into this structure.
 
-export interface EventDetailsUser {
+export interface EventDetail {
   id: number;
   name: string;
-  email: string | null;
-  blocks: number[];
+  date: string;
+  location: string;
+
+  areas: EventArea[];
+  users: EventAssignedUser[];
+
+  allUsers: EventUser[];
+
+  csrf: string;
 }
 
-export interface EventDetailsBlock {
-  area_id: number;
-  event_id: number;
+export interface EventArea {
+  id: number;
+  name: string;
+
+  blocks: EventBlock[];
+}
+
+export interface EventBlock {
   id: number;
   name: string;
   row: number;
   column: number;
-  chairs_data: number[][];
-  real_data: number[][];
-  createdAt: string; // ISO datetime
-  updatedAt: string; // ISO datetime
+  userIds: number[];
+  chairs: number[][];
 }
 
-export type EventDetailsAllUser = {
+export interface EventUser {
   id: number;
   fullName: string;
-  email: string | null;
-};
-
-export type EventDetailsEvent = {
-  name: string;
-  date: string;
-  location: string;
+  email: string;
 }
 
-export interface EventDetailsData {
-  allUsers: EventDetailsAllUser[];
-  assignedUserIds: number[];
-  event: EventDetailsEvent;
-  users: EventDetailsUser[];
-  areas: EventDetailsArea[];
-  blocks: EventDetailsBlock[];
-  csrf: string | null;
+export interface EventAssignedUser {
+  id: number;
+  fullName: string;
+  email: string;
+  assignedBlocks: number[];
 }

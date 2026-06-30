@@ -5,9 +5,9 @@ import { type LegacyWebContext, webFetch } from "@/app/actions/_shared";
 export async function removeUserBlock(
   ctx: LegacyWebContext,
   eventId: string,
-  userId: number,
   blockId: number,
-  areaId: number,
+  userAssignedToBlock: number[],
+  userToRemoveId: number,
 ): Promise<{ success: boolean; error?: string }> {
   const baseUrl = process.env.SC_BASE_URL!;
 
@@ -29,6 +29,8 @@ export async function removeUserBlock(
     console.log("[removeUserBlock] failed to parse csrfToken response, falling back to ctx.csrf");
   }
 
+  const usersToUpdate = userAssignedToBlock.filter(userId => userId !== userToRemoveId);
+
   const res = await webFetch("removeUserBlock", `${baseUrl}/event/set_users_blocks/${eventId}`, ctx, {
     method: "POST",
     headers: {
@@ -38,7 +40,7 @@ export async function removeUserBlock(
       ...(csrfToken && { "X-CSRF-Token": csrfToken }),
     },
     body: JSON.stringify({
-      data: [{ users: [userId], area_id: areaId, event_id: Number(eventId), id: blockId }],
+      data: [{ users: [usersToUpdate], event_id: Number(eventId), id: blockId }],
     }),
   });
 

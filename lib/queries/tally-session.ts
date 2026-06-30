@@ -1,6 +1,8 @@
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   onSnapshot,
   increment,
@@ -11,7 +13,6 @@ import {
 import { db } from "@/lib/firebase";
 
 export const TALLY_SESSION_COLLECTION = "tallySession";
-export const TALLY_SESSION_DOC_ID = "current";
 
 export interface TallyLogEntry {
   id: string;
@@ -29,62 +30,91 @@ export interface TallySessionDoc {
   logs?: TallyLogEntry[];
 }
 
-export function getTallySessionRef() {
-  return doc(db, TALLY_SESSION_COLLECTION, TALLY_SESSION_DOC_ID);
+export interface TallySessionSummary {
+  id: string;
+  serviceType: string;
+  date: string;
+  altarCallCount: number;
+  updatedAtMs: number | null;
+}
+
+export function buildSessionId(serviceType: string, date: string): string {
+  const slug = (s: string) =>
+    s
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "x";
+  return `${slug(serviceType)}__${slug(date)}`;
+}
+
+export function getTallySessionRef(sessionId: string) {
+  return doc(db, TALLY_SESSION_COLLECTION, sessionId);
 }
 
 export function subscribeToTallySession(
+  sessionId: string,
   onData: (data: TallySessionDoc | null) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
   return onSnapshot(
-    getTallySessionRef(),
+    getTallySessionRef(sessionId),
     (snap) => onData(snap.exists() ? (snap.data() as TallySessionDoc) : null),
     (err) => onError?.(err)
   );
 }
 
-/** One-shot fetch — used by the manual Refresh button as a fallback to the live listener. */
-export async function fetchTallySession(): Promise<TallySessionDoc | null> {
-  const snap = await getDoc(getTallySessionRef());
+export async function fetchTallySession(
+  sessionId: string
+): Promise<TallySessionDoc | null> {
+  const snap = await getDoc(getTallySessionRef(sessionId));
   return snap.exists() ? (snap.data() as TallySessionDoc) : null;
+}
+
+export async function listTallySessions(): Promise<TallySessionSummary[]> {
+  const snap = await getDocs(collection(db, TALLY_SESSION_COLLECTION));
+  const out: TallySessionSummary[] = [];
+
+  snap.forEach((d) => {
+    const data = d.data() as TallySessionDoc & {
+      updatedAt?: { toMillis?: () => number };
+    };
+    out.push({
+      id: d.id,
+      serviceType: data.serviceType ?? "(tanpa nama)",
+      date: data.date ?? "",
+      altarCallCount: Math.max(data.altarCallCount ?? 1, 1),
+      updatedAtMs: data.updatedAt?.toMillis?.() ?? null,
+    });
+  });
+
+  out.sort((a, b) => (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0));
+  return out;
 }
 
 export async function syncTallySessionMeta(meta: {
   serviceType: string;
   date: string;
   altarCallCount: number;
-}): Promise<void> {
-  const ref = getTallySessionRef();
-  const prev = await fetchTallySession();
-  const altarCallCount = Math.max(meta.altarCallCount, 1);
-  const isNewOccurrence =
-    !prev || prev.serviceType !== meta.serviceType || prev.date !== meta.date;
+}): Promise<string> {
+  const sessionId = buildSessionId(meta.serviceType, meta.date);
 
-  if (isNewOccurrence) {
-    await setDoc(ref, {
+  await setDoc(
+    getTallySessionRef(sessionId),
+    {
       serviceType: meta.serviceType,
       date: meta.date,
-      altarCallCount,
-      counts: {},
-      logs: [],
+      altarCallCount: Math.max(meta.altarCallCount, 1),
       updatedAt: serverTimestamp(),
-    });
-  } else {
-    await setDoc(
-      ref,
-      {
-        serviceType: meta.serviceType,
-        date: meta.date,
-        altarCallCount,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  }
+    },
+    { merge: true }
+  );
+
+  return sessionId;
 }
 
 export async function pushTallyDelta(
+  sessionId: string,
   label: string,
   delta: number,
   isCombo: boolean
@@ -98,10 +128,11 @@ export async function pushTallyDelta(
   };
 
   await setDoc(
-    getTallySessionRef(),
+    getTallySessionRef(sessionId),
     {
-      counts: { [label]: increment(delta) },
+      [`counts.${label}`]: increment(delta),
       logs: arrayUnion(entry),
+      updatedAt: serverTimestamp(),
     },
     { merge: true }
   );

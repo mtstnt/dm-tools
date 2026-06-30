@@ -8,19 +8,24 @@ import {
   subscribeToTallySession,
   fetchTallySession,
   pushTallyDelta,
+  listTallySessions,
   type TallyLogEntry,
+  type TallySessionSummary,
 } from "@/lib/queries/tally-session";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const COMBO_TIMEOUT_MS = 750;
 const MAX_LOG_ENTRIES = 200;
+// How long to trust a just-written local value over an incoming Firestore
+// snapshot for the SAME altar call, so an in-flight combo never visually
+// "rewinds" while the write round-trips to the server.
 const RECENT_WRITE_GRACE_MS = 2500;
 
 // ── Vibration patterns ────────────────────────────────────────────────────────
 // iOS Safari does NOT support navigator.vibrate — only works on Android Chrome.
 // Patterns: [waitMs, vibrateMs, waitMs, vibrateMs, ...]
-const VIBRATE_PLUS  = [0, 80];           // single strong buzz
+const VIBRATE_PLUS  = [0, 80];          // single strong buzz
 const VIBRATE_MINUS = [0, 30, 50, 30];  // double short buzz — clearly different from +
 
 function vibrate(pattern: number | number[]) {
@@ -37,7 +42,13 @@ function buildAltarCallLabels(count: number): string[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TallyPage() {
-  // Synced from Firestore
+  // ── Which session (service type + date) is this page connected to? ───────
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [sessionList, setSessionList] = useState<TallySessionSummary[]>([]);
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  // Synced from Firestore (the selected session's document)
   const [serviceType, setServiceType]     = useState("");
   const [serviceDate, setServiceDate]     = useState("");
   const [altarCallCount, setAltarCallCount] = useState(1);
@@ -78,10 +89,47 @@ export default function TallyPage() {
   const currentLabel = altarCalls[selectedIdx] ?? "Altar Call 1";
   const currentCount = counts[currentLabel] ?? 0;
 
-  // ── Real-time Firestore subscription ───────────────────────────────────────
+  // ── Load the list of available sessions, for the picker ───────────────────
+
+  const loadSessions = useCallback(async () => {
+    setLoadingSessions(true);
+    try {
+      const list = await listTallySessions();
+      setSessionList(list);
+      // Auto-pick the most recently updated session — but only the FIRST
+      // time, never overriding a choice the user already made.
+      setSelectedSessionId((prev) => prev ?? list[0]?.id ?? null);
+    } catch (err) {
+      console.error("Failed to list tally sessions:", err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, []);
 
   useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
+
+  // ── Real-time Firestore subscription to the SELECTED session ──────────────
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setHasSession(false);
+      return;
+    }
+
+    // Clear the previous session's data immediately so there's no flash of
+    // stale counts/log from the old session while the new one loads.
+    setCounts({});
+    setLogs([]);
+    setPendingLogs([]);
+    setCombo(0);
+    setComboVisible(false);
+    setMinusCombo(0);
+    setMinusComboVisible(false);
+
     const unsubscribe = subscribeToTallySession(
+      selectedSessionId,
       (data) => {
         setConnected(true);
         if (!data) { setHasSession(false); return; }
@@ -114,7 +162,7 @@ export default function TallyPage() {
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [selectedSessionId]);
 
   useEffect(() => {
     setSelectedIdx((i) => Math.min(i, Math.max(altarCalls.length - 1, 0)));
@@ -130,6 +178,7 @@ export default function TallyPage() {
   // ── Commit a delta to Firestore (with optimistic local log) ───────────────
 
   const commitDelta = useCallback((label: string, delta: number, isCombo: boolean) => {
+    if (!selectedSessionId) return;
     recentWritesRef.current[label] = Date.now();
     const optimisticEntry: TallyLogEntry = {
       id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -139,11 +188,11 @@ export default function TallyPage() {
       timestampMs: Date.now(),
     };
     setPendingLogs((prev) => [optimisticEntry, ...prev].slice(0, MAX_LOG_ENTRIES));
-    pushTallyDelta(label, delta, isCombo).catch((err) => {
+    pushTallyDelta(selectedSessionId, label, delta, isCombo).catch((err) => {
       console.error("Failed to push tally delta:", err);
       setConnected(false);
     });
-  }, []);
+  }, [selectedSessionId]);
 
   // ── Flush helpers ──────────────────────────────────────────────────────────
 
@@ -182,6 +231,7 @@ export default function TallyPage() {
   // ── + handler ─────────────────────────────────────────────────────────────
 
   const handlePlus = useCallback(() => {
+    if (!selectedSessionId) { setSessionPickerOpen(true); return; }
     vibrate(VIBRATE_PLUS);
 
     setPlusFlash(true);
@@ -204,11 +254,12 @@ export default function TallyPage() {
     comboTimerRef.current = setTimeout(() => {
       commitCombo(pendingLabelRef.current, comboRef.current);
     }, COMBO_TIMEOUT_MS);
-  }, [currentLabel, flushMinus, commitCombo]);
+  }, [selectedSessionId, currentLabel, flushMinus, commitCombo]);
 
   // ── − handler ─────────────────────────────────────────────────────────────
 
   const handleMinus = useCallback(() => {
+    if (!selectedSessionId) { setSessionPickerOpen(true); return; }
     const label = currentLabel;
     if ((counts[label] ?? 0) <= 0) return;
 
@@ -233,9 +284,9 @@ export default function TallyPage() {
     minusComboTimerRef.current = setTimeout(() => {
       commitMinusCombo(minusPendingLabelRef.current, minusComboRef.current);
     }, COMBO_TIMEOUT_MS);
-  }, [currentLabel, counts, flushPlus, commitMinusCombo]);
+  }, [selectedSessionId, currentLabel, counts, flushPlus, commitMinusCombo]);
 
-  // ── Dropdown select ────────────────────────────────────────────────────────
+  // ── Dropdown select (altar call) ───────────────────────────────────────────
 
   const handleSelect = (idx: number) => {
     flushPlus();
@@ -244,18 +295,31 @@ export default function TallyPage() {
     setDropdownOpen(false);
   };
 
+  // ── Session select (picker) ────────────────────────────────────────────────
+
+  const handleSelectSession = (id: string) => {
+    flushPlus();
+    flushMinus();
+    setSelectedSessionId(id);
+    setSelectedIdx(0);
+    setSessionPickerOpen(false);
+  };
+
   // ── Manual refresh ─────────────────────────────────────────────────────────
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const data = await fetchTallySession();
-      setConnected(true);
-      if (data) {
-        setHasSession(true);
-        setServiceType(data.serviceType ?? "");
-        setServiceDate(data.date ?? "");
-        setAltarCallCount(Math.max(data.altarCallCount ?? 1, 1));
+      await loadSessions();
+      if (selectedSessionId) {
+        const data = await fetchTallySession(selectedSessionId);
+        setConnected(true);
+        if (data) {
+          setHasSession(true);
+          setServiceType(data.serviceType ?? "");
+          setServiceDate(data.date ?? "");
+          setAltarCallCount(Math.max(data.altarCallCount ?? 1, 1));
+        }
       }
     } catch (err) {
       console.error("Manual refresh failed:", err);
@@ -280,11 +344,13 @@ export default function TallyPage() {
       second: "2-digit",
     });
 
-  const subtitle = serviceType
+  const subtitle = !selectedSessionId
+    ? (sessionList.length > 0 ? "Tap untuk pilih sesi" : "Belum ada data dari Reports")
+    : serviceType
     ? `${serviceType}${serviceDate ? ` · ${serviceDate}` : ""}`
     : hasSession
     ? "Menunggu jenis layanan…"
-    : "Belum ada data dari Reports";
+    : "Sesi tidak ditemukan";
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -312,7 +378,7 @@ export default function TallyPage() {
         {/* ══════════════════════ TOP 35% ══════════════════════ */}
         <div className="flex flex-col border-b border-border" style={{ height: "35%" }}>
 
-          {/* ── Dropdown + refresh ── */}
+          {/* ── Altar call dropdown + refresh ── */}
           <div className="relative flex items-center justify-center px-4 pt-3 shrink-0">
             <div className="relative">
               <button
@@ -362,17 +428,77 @@ export default function TallyPage() {
             </button>
           </div>
 
-          {/* ── Connection status ── */}
-          <div className="flex items-center justify-center gap-1.5 pb-1 pt-1.5 shrink-0">
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                connected ? "bg-green-500 animate-pulse" : "bg-red-500"
-              )}
-            />
-            <span className="max-w-[260px] truncate text-[11px] text-muted-foreground">
-              {subtitle}
-            </span>
+          {/* ── Session picker trigger + connection status ── */}
+          <div className="relative flex items-center justify-center pb-1 pt-1.5 shrink-0">
+            <button
+              className="flex items-center gap-1.5 rounded-full px-2 py-0.5"
+              style={{ touchAction: "manipulation" }}
+              onClick={() => setSessionPickerOpen((o) => !o)}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full shrink-0",
+                  connected ? "bg-green-500 animate-pulse" : "bg-red-500"
+                )}
+              />
+              <span className="max-w-[230px] truncate text-[11px] text-muted-foreground">
+                {subtitle}
+              </span>
+              <ChevronDown
+                size={11}
+                className={cn(
+                  "shrink-0 text-muted-foreground transition-transform duration-200",
+                  sessionPickerOpen && "rotate-180"
+                )}
+              />
+            </button>
+
+            {sessionPickerOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setSessionPickerOpen(false)} />
+                <div className="absolute left-1/2 top-full z-50 mt-1 w-[280px] max-w-[88vw] -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+                  <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                      Pilih sesi
+                    </span>
+                    <button
+                      className="rounded-full p-1 text-muted-foreground"
+                      style={{ touchAction: "manipulation" }}
+                      onClick={(e) => { e.stopPropagation(); loadSessions(); }}
+                    >
+                      <RefreshCw size={12} className={cn(loadingSessions && "animate-spin")} />
+                    </button>
+                  </div>
+                  <div className="max-h-[40vh] overflow-y-auto">
+                    {sessionList.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs italic text-muted-foreground">
+                        {loadingSessions ? "Memuat…" : "Belum ada data dari Reports"}
+                      </div>
+                    ) : (
+                      sessionList.map((s) => (
+                        <button
+                          key={s.id}
+                          className={cn(
+                            "flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors hover:bg-muted active:bg-muted/60",
+                            s.id === selectedSessionId && "bg-muted/60"
+                          )}
+                          style={{ touchAction: "manipulation" }}
+                          onClick={() => handleSelectSession(s.id)}
+                        >
+                          <span className="truncate text-sm font-semibold">
+                            {s.serviceType}
+                            {s.id === selectedSessionId && " ✓"}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {s.date} · {s.altarCallCount} altar call{s.altarCallCount > 1 ? "s" : ""}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* ── Counter + combo badges + log ── */}

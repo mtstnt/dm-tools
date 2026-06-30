@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -28,7 +28,11 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MinistriesDialog } from "@/components/ministries-dialog";
-import { syncTallySessionMeta, fetchTallySession } from "@/lib/queries/tally-session";
+import {
+  syncTallySessionMeta,
+  fetchTallySession,
+  buildSessionId,
+} from "@/lib/queries/tally-session";
 
 interface AltarCallEntry {
   text: string;
@@ -137,65 +141,56 @@ export default function ReportsPage() {
   const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(true);
   const [ministries, setMinistries] = useState<string[]>(DEFAULT_MINISTRIES);
 
-  // Tracks whether the altar_calls state has been fully restored from
-  // Firestore on mount before the sync effect is allowed to write.
-  const restoredFromFirestore = useRef(false);
-
   const currentData = dataMap[serviceType];
 
-  // ── On mount: read Firestore and restore altarCallCount if service+date
-  //    already match — prevents the sync effect from downgrading the count
-  //    back to 1 when the page is reopened mid-session.
-  useEffect(() => {
-    fetchTallySession().then((data) => {
-      if (!data?.altarCallCount) {
-        restoredFromFirestore.current = true;
-        return;
-      }
-      const todayStr = formatDateDisplay(new Date());
-      const defaultServiceType = "teen"; // matches useState default above
+  const volunteerSum = calculateVolunteerSum(currentData.volunteers, ministries);
+  const effectiveVolunteerCount = useVolunteerMinistries
+    ? String(volunteerSum)
+    : currentData.volunteer_count;
 
-      if (
-        data.serviceType === defaultServiceType &&
-        data.date === todayStr
-      ) {
+  const title =
+    serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
+  const date = formatDateDisplay(reportDate);
+  const altarCallText = formatAltarCalls(currentData.altar_calls);
+
+  useEffect(() => {
+    let cancelled = false;
+    const key = serviceType;
+
+    fetchTallySession(buildSessionId(title, date))
+      .then((data) => {
+        if (cancelled || !data?.altarCallCount) return;
         const count = Math.max(data.altarCallCount, 1);
         setDataMap((prev) => {
-          const existing = prev[defaultServiceType].altar_calls;
+          const existing = prev[key].altar_calls;
           if (existing.length === count) return prev;
           let newCalls = [...existing];
           while (newCalls.length < count) newCalls.push({ text: "", count: "" });
           newCalls = newCalls.slice(0, count);
-          return {
-            ...prev,
-            [defaultServiceType]: {
-              ...prev[defaultServiceType],
-              altar_calls: newCalls,
-            },
-          };
+          return { ...prev, [key]: { ...prev[key], altar_calls: newCalls } };
         });
-      }
+      })
+      .catch((err) => {
+        console.error("[Reports] Failed to read existing tally session:", err);
+      });
 
-      restoredFromFirestore.current = true;
-    }).catch(() => {
-      // Firestore read failed — allow sync to proceed anyway
-      restoredFromFirestore.current = true;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Sync service meta to Firestore so the Tally page stays in sync.
-  //    Waits until the mount-restore is done so the initial write carries
-  //    the correct altarCallCount (not the default 1).
+    return () => {
+      cancelled = true;
+    };
+  }, [title, date, serviceType]);
+  
   useEffect(() => {
-    if (!restoredFromFirestore.current) return;
-
-    syncTallySessionMeta({
-      serviceType,
-      date: formatDateDisplay(reportDate),
-      altarCallCount: currentData.altar_calls.length,
-    });
-  }, [serviceType, reportDate, currentData.altar_calls.length]);
+    const timer = setTimeout(() => {
+      syncTallySessionMeta({
+        serviceType: title,
+        date,
+        altarCallCount: currentData.altar_calls.length,
+      }).catch((err) => {
+        console.error("[Reports] syncTallySessionMeta failed:", err);
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [title, date, currentData.altar_calls.length]);
 
   const handleChange = (
     field: keyof Omit<ReportData, "volunteers" | "altar_calls">,
@@ -263,16 +258,6 @@ export default function ReportsPage() {
       };
     });
   };
-
-  const volunteerSum = calculateVolunteerSum(currentData.volunteers, ministries);
-  const effectiveVolunteerCount = useVolunteerMinistries
-    ? String(volunteerSum)
-    : currentData.volunteer_count;
-
-  const title =
-    serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
-  const date = formatDateDisplay(reportDate);
-  const altarCallText = formatAltarCalls(currentData.altar_calls);
 
   const generateReport = () => {
     const altarCallLine = altarCallText ? ` (Altarcall ${altarCallText})` : "";

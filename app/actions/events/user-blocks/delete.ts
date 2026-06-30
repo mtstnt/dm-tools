@@ -11,7 +11,7 @@ export async function removeUserBlock(
   const baseUrl = process.env.SC_BASE_URL!;
 
   const res = await webFetch("removeUserBlock", `${baseUrl}/event/set_users_blocks/${eventId}`, ctx, {
-    method: "POST",
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       "X-Requested-With": "XMLHttpRequest",

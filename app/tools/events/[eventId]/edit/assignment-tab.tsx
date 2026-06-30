@@ -160,11 +160,17 @@ export function AssignmentTab({
       return
     }
 
+    const block = blocks.find((b) => b.id === blockId)
+    if (!block) {
+      setDeleteError("Block not found")
+      return
+    }
+
     setDeletingBlockId(blockId)
     setDeleteError("")
 
     try {
-      const result = await removeUserBlock({ cookie, csrf: csrf ?? "" }, eventId, userId, blockId)
+      const result = await removeUserBlock({ cookie, csrf: csrf ?? "" }, eventId, userId, blockId, block.area_id)
       if (result.success) {
         window.location.reload()
       } else {

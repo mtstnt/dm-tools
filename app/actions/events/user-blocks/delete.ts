@@ -7,6 +7,7 @@ export async function removeUserBlock(
   eventId: string,
   userId: number,
   blockId: number,
+  areaId: number,
 ): Promise<{ success: boolean; error?: string }> {
   const baseUrl = process.env.SC_BASE_URL!;
 
@@ -18,7 +19,9 @@ export async function removeUserBlock(
       Referer: `${baseUrl}/event/edit/${eventId}`,
       ...(ctx.csrf && { "X-CSRF-Token": ctx.csrf }),
     },
-    body: JSON.stringify({ user_id: userId, block_id: blockId }),
+    body: JSON.stringify({
+      data: [{ users: [userId], area_id: areaId, event_id: Number(eventId), id: blockId }],
+    }),
   });
 
   const location = res.headers.get("location");

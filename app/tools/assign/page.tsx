@@ -565,11 +565,23 @@ export default function AssignPage() {
 
   /* ── Manual SR ── */
   const setEventSR = (ei: number, role: string, name: string | null) => {
-    setEvents((prev) =>
-      prev.map((e, i) => (i !== ei ? e : { ...e, sr: { ...e.sr, [role]: name || null } }))
-    );
-    setSRPicker(null);
-  };
+  setEvents((prev) =>
+    prev.map((e, i) => {
+      if (i !== ei) return e;
+
+      let newAssignments = { ...e.assignments };
+      if (name) {
+        Object.keys(newAssignments).forEach((block) => {
+          newAssignments[block] = (newAssignments[block] || []).filter((n) => n !== name);
+          if (newAssignments[block].length === 0) delete newAssignments[block];
+        });
+      }
+
+      return { ...e, sr: { ...e.sr, [role]: name || null }, assignments: newAssignments };
+    })
+  );
+  setSRPicker(null);
+};
 
   const getSREligible = (ei: number, excludeRole: string): Member[] => {
     const sr    = events[ei].sr;

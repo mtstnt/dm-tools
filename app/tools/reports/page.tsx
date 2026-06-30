@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,9 +25,18 @@ import {
   Plus,
   Trash2,
   Settings2,
+  Send,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MinistriesDialog } from "@/components/ministries-dialog";
+import { cn } from "@/lib/utils";
+import {
+  syncTallySessionMeta,
+  fetchTallySession,
+  buildSessionId,
+} from "@/lib/queries/tally-session";
 
 interface AltarCallEntry {
   text: string;
@@ -135,8 +144,68 @@ export default function ReportsPage() {
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(true);
   const [useVolunteerMinistries, setUseVolunteerMinistries] = useState(true);
   const [ministries, setMinistries] = useState<string[]>(DEFAULT_MINISTRIES);
+  const [syncStatus, setSyncStatus] = useState<
+    "idle" | "syncing" | "success" | "error"
+  >("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const currentData = dataMap[serviceType];
+
+  const volunteerSum = calculateVolunteerSum(currentData.volunteers, ministries);
+  const effectiveVolunteerCount = useVolunteerMinistries
+    ? String(volunteerSum)
+    : currentData.volunteer_count;
+
+  const title =
+    serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
+  const date = formatDateDisplay(reportDate);
+  const altarCallText = formatAltarCalls(currentData.altar_calls);
+
+  useEffect(() => {
+    let cancelled = false;
+    const key = serviceType;
+
+    fetchTallySession(buildSessionId(title, date))
+      .then((data) => {
+        if (cancelled || !data?.altarCallCount) return;
+        const count = Math.max(data.altarCallCount, 1);
+        setDataMap((prev) => {
+          const existing = prev[key].altar_calls;
+          if (existing.length === count) return prev;
+          let newCalls = [...existing];
+          while (newCalls.length < count) newCalls.push({ text: "", count: "" });
+          newCalls = newCalls.slice(0, count);
+          return { ...prev, [key]: { ...prev[key], altar_calls: newCalls } };
+        });
+      })
+      .catch((err) => {
+        console.error("[Reports] Failed to read existing tally session:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [title, date, serviceType]);
+  
+  const handleSyncTally = async () => {
+    setSyncStatus("syncing");
+    setSyncError(null);
+    try {
+      await syncTallySessionMeta({
+        serviceType: title,
+        date,
+        altarCallCount: currentData.altar_calls.length,
+      });
+      setSyncStatus("success");
+      setTimeout(() => setSyncStatus("idle"), 2500);
+    } catch (err) {
+      console.error("[Reports] syncTallySessionMeta failed:", err);
+      setSyncStatus("error");
+      setSyncError(
+        err instanceof Error ? err.message : "Gagal mengirim data ke Tally.",
+      );
+    }
+  };
 
   const handleChange = (
     field: keyof Omit<ReportData, "volunteers" | "altar_calls">,
@@ -204,16 +273,6 @@ export default function ReportsPage() {
       };
     });
   };
-
-  const volunteerSum = calculateVolunteerSum(currentData.volunteers, ministries);
-  const effectiveVolunteerCount = useVolunteerMinistries
-    ? String(volunteerSum)
-    : currentData.volunteer_count;
-
-  const title =
-    serviceType === "event" ? eventName || "Event" : serviceLabels[serviceType];
-  const date = formatDateDisplay(reportDate);
-  const altarCallText = formatAltarCalls(currentData.altar_calls);
 
   const generateReport = () => {
     const altarCallLine = altarCallText ? ` (Altarcall ${altarCallText})` : "";
@@ -407,19 +466,57 @@ export default function ReportsPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
                     Altar Calls
                   </label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={addAltarCall}
-                    className="h-7 px-2"
-                  >
-                    <Plus className="size-3" />
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncTally}
+                      disabled={syncStatus === "syncing"}
+                      title="Kirim service type, tanggal, dan jumlah altar call ke Tally Counter"
+                      className={cn(
+                        "h-7 gap-1 px-2 text-xs",
+                        syncStatus === "success" &&
+                          "border-green-500/50 text-green-600",
+                        syncStatus === "error" &&
+                          "border-destructive/50 text-destructive",
+                      )}
+                    >
+                      {syncStatus === "syncing" ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : syncStatus === "success" ? (
+                        <Check className="size-3" />
+                      ) : syncStatus === "error" ? (
+                        <AlertCircle className="size-3" />
+                      ) : (
+                        <Send className="size-3" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {syncStatus === "syncing"
+                          ? "Mengirim…"
+                          : syncStatus === "success"
+                          ? "Terkirim"
+                          : syncStatus === "error"
+                          ? "Gagal"
+                          : "Sync Tally"}
+                      </span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={addAltarCall}
+                      className="h-7 px-2"
+                    >
+                      <Plus className="size-3" />
+                    </Button>
+                  </div>
                 </div>
+                {syncStatus === "error" && syncError && (
+                  <p className="text-[11px] text-destructive">{syncError}</p>
+                )}
                 <div className="space-y-2">
                   {currentData.altar_calls.map((entry, index) => (
                     <div key={index} className="flex gap-2 items-center">

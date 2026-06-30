@@ -15,10 +15,19 @@ import {
 
 const COMBO_TIMEOUT_MS = 750;
 const MAX_LOG_ENTRIES = 200;
-// How long to trust a just-written local value over an incoming Firestore
-// snapshot for the SAME altar call, so an in-flight combo never visually
-// "rewinds" while the write round-trips to the server.
 const RECENT_WRITE_GRACE_MS = 2500;
+
+// ── Vibration patterns ────────────────────────────────────────────────────────
+// iOS Safari does NOT support navigator.vibrate — only works on Android Chrome.
+// Patterns: [waitMs, vibrateMs, waitMs, vibrateMs, ...]
+const VIBRATE_PLUS  = [0, 80];           // single strong buzz
+const VIBRATE_MINUS = [0, 30, 50, 30];  // double short buzz — clearly different from +
+
+function vibrate(pattern: number | number[]) {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    try { navigator.vibrate(pattern); } catch (_) { /* ignore */ }
+  }
+}
 
 function buildAltarCallLabels(count: number): string[] {
   const n = Math.max(count, 1);
@@ -28,32 +37,44 @@ function buildAltarCallLabels(count: number): string[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TallyPage() {
-  // Synced from Firestore (written by the Reports page)
-  const [serviceType, setServiceType] = useState("");
-  const [serviceDate, setServiceDate] = useState("");
+  // Synced from Firestore
+  const [serviceType, setServiceType]     = useState("");
+  const [serviceDate, setServiceDate]     = useState("");
   const [altarCallCount, setAltarCallCount] = useState(1);
-  const [hasSession, setHasSession] = useState(false);
+  const [hasSession, setHasSession]       = useState(false);
 
   // Local UI state
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [logs, setLogs] = useState<TallyLogEntry[]>([]);
-  const [pendingLogs, setPendingLogs] = useState<TallyLogEntry[]>([]);
-  const [combo, setCombo] = useState(0);
-  const [comboVisible, setComboVisible] = useState(false);
-  const [comboAnimKey, setComboAnimKey] = useState(0);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [plusFlash, setPlusFlash] = useState(false);
-  const [minusFlash, setMinusFlash] = useState(false);
-  const [connected, setConnected] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [selectedIdx, setSelectedIdx]     = useState(0);
+  const [counts, setCounts]               = useState<Record<string, number>>({});
+  const [logs, setLogs]                   = useState<TallyLogEntry[]>([]);
+  const [pendingLogs, setPendingLogs]     = useState<TallyLogEntry[]>([]);
 
-  const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const comboRef = useRef(0);
-  const pendingLabelRef = useRef("");
+  // ── Plus combo
+  const [combo, setCombo]                         = useState(0);
+  const [comboVisible, setComboVisible]           = useState(false);
+  const [comboAnimKey, setComboAnimKey]           = useState(0);
+  const comboTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const comboRef         = useRef(0);
+  const pendingLabelRef  = useRef("");
+
+  // ── Minus combo  (parallel system)
+  const [minusCombo, setMinusCombo]               = useState(0);
+  const [minusComboVisible, setMinusComboVisible] = useState(false);
+  const [minusComboAnimKey, setMinusComboAnimKey] = useState(0);
+  const minusComboTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const minusComboRef        = useRef(0);
+  const minusPendingLabelRef = useRef("");
+
+  // Misc
+  const [dropdownOpen, setDropdownOpen]   = useState(false);
+  const [plusFlash, setPlusFlash]         = useState(false);
+  const [minusFlash, setMinusFlash]       = useState(false);
+  const [connected, setConnected]         = useState(true);
+  const [refreshing, setRefreshing]       = useState(false);
+
   const recentWritesRef = useRef<Record<string, number>>({});
 
-  const altarCalls = useMemo(() => buildAltarCallLabels(altarCallCount), [altarCallCount]);
+  const altarCalls   = useMemo(() => buildAltarCallLabels(altarCallCount), [altarCallCount]);
   const currentLabel = altarCalls[selectedIdx] ?? "Altar Call 1";
   const currentCount = counts[currentLabel] ?? 0;
 
@@ -63,32 +84,25 @@ export default function TallyPage() {
     const unsubscribe = subscribeToTallySession(
       (data) => {
         setConnected(true);
+        if (!data) { setHasSession(false); return; }
 
-        if (!data) {
-          setHasSession(false);
-          return;
-        }
         setHasSession(true);
         setServiceType(data.serviceType ?? "");
         setServiceDate(data.date ?? "");
         setAltarCallCount(Math.max(data.altarCallCount ?? 1, 1));
 
-        // Merge counts: trust the server EXCEPT for a label we just wrote to
-        // locally within the grace window (avoids flicker on round-trip).
         const serverCounts = data.counts ?? {};
         const now = Date.now();
         setCounts((prev) => {
           const merged: Record<string, number> = { ...serverCounts };
           for (const label of Object.keys(recentWritesRef.current)) {
-            const writtenAt = recentWritesRef.current[label];
-            if (now - writtenAt < RECENT_WRITE_GRACE_MS) {
+            if (now - recentWritesRef.current[label] < RECENT_WRITE_GRACE_MS) {
               merged[label] = prev[label] ?? merged[label] ?? 0;
             }
           }
           return merged;
         });
 
-        // Logs: arrayUnion appends to the end, so reverse for newest-first.
         const serverLogs = (data.logs ?? []).slice(-MAX_LOG_ENTRIES).reverse();
         const confirmedIds = new Set(serverLogs.map((l) => l.id));
         setPendingLogs((prev) => prev.filter((l) => !confirmedIds.has(l.id)));
@@ -99,35 +113,24 @@ export default function TallyPage() {
         setConnected(false);
       }
     );
-
     return () => unsubscribe();
   }, []);
 
-  // Clamp selected index if altar call count shrinks
   useEffect(() => {
     setSelectedIdx((i) => Math.min(i, Math.max(altarCalls.length - 1, 0)));
   }, [altarCalls.length]);
 
-  // Cleanup combo timer on unmount
   useEffect(() => {
     return () => {
       if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+      if (minusComboTimerRef.current) clearTimeout(minusComboTimerRef.current);
     };
   }, []);
 
-  // ── Haptic feedback ─────────────────────────────────────────────────────────
-
-  const vibrate = (pattern: number | number[]) => {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      navigator.vibrate(pattern);
-    }
-  };
-
-  // ── Commit a delta to Firestore (with optimistic local log entry) ──────────
+  // ── Commit a delta to Firestore (with optimistic local log) ───────────────
 
   const commitDelta = useCallback((label: string, delta: number, isCombo: boolean) => {
     recentWritesRef.current[label] = Date.now();
-
     const optimisticEntry: TallyLogEntry = {
       id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       delta,
@@ -136,12 +139,13 @@ export default function TallyPage() {
       timestampMs: Date.now(),
     };
     setPendingLogs((prev) => [optimisticEntry, ...prev].slice(0, MAX_LOG_ENTRIES));
-
     pushTallyDelta(label, delta, isCombo).catch((err) => {
       console.error("Failed to push tally delta:", err);
       setConnected(false);
     });
   }, []);
+
+  // ── Flush helpers ──────────────────────────────────────────────────────────
 
   const commitCombo = useCallback(
     (label: string, count: number) => {
@@ -154,13 +158,37 @@ export default function TallyPage() {
     [commitDelta]
   );
 
-  // ── + handler ────────────────────────────────────────────────────────────
+  const commitMinusCombo = useCallback(
+    (label: string, count: number) => {
+      if (count <= 0) return;
+      commitDelta(label, -count, count > 1);
+      setMinusComboVisible(false);
+      setMinusCombo(0);
+      minusComboRef.current = 0;
+    },
+    [commitDelta]
+  );
+
+  const flushPlus = useCallback(() => {
+    if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+    if (comboRef.current > 0) commitCombo(pendingLabelRef.current, comboRef.current);
+  }, [commitCombo]);
+
+  const flushMinus = useCallback(() => {
+    if (minusComboTimerRef.current) clearTimeout(minusComboTimerRef.current);
+    if (minusComboRef.current > 0) commitMinusCombo(minusPendingLabelRef.current, minusComboRef.current);
+  }, [commitMinusCombo]);
+
+  // ── + handler ─────────────────────────────────────────────────────────────
 
   const handlePlus = useCallback(() => {
-    vibrate(40); // short crisp buzz
+    vibrate(VIBRATE_PLUS);
 
     setPlusFlash(true);
     setTimeout(() => setPlusFlash(false), 110);
+
+    // Flush any pending minus combo first
+    flushMinus();
 
     const label = currentLabel;
     setCounts((p) => ({ ...p, [label]: (p[label] ?? 0) + 1 }));
@@ -176,37 +204,47 @@ export default function TallyPage() {
     comboTimerRef.current = setTimeout(() => {
       commitCombo(pendingLabelRef.current, comboRef.current);
     }, COMBO_TIMEOUT_MS);
-  }, [currentLabel, commitCombo]);
+  }, [currentLabel, flushMinus, commitCombo]);
 
-  // ── − handler ────────────────────────────────────────────────────────────
+  // ── − handler ─────────────────────────────────────────────────────────────
 
   const handleMinus = useCallback(() => {
     const label = currentLabel;
     if ((counts[label] ?? 0) <= 0) return;
 
-    vibrate([15, 50, 15]); // double-tap feel — distinct from +
+    vibrate(VIBRATE_MINUS);
 
     setMinusFlash(true);
     setTimeout(() => setMinusFlash(false), 110);
 
-    // Flush any pending combo on this label first
-    if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
-    if (comboRef.current > 0) commitCombo(pendingLabelRef.current, comboRef.current);
+    // Flush any pending plus combo first
+    flushPlus();
 
     setCounts((p) => ({ ...p, [label]: Math.max(0, (p[label] ?? 0) - 1) }));
-    commitDelta(label, -1, false);
-  }, [currentLabel, counts, commitCombo, commitDelta]);
+    recentWritesRef.current[label] = Date.now();
 
-  // ── Dropdown select ──────────────────────────────────────────────────────
+    minusPendingLabelRef.current = label;
+    minusComboRef.current += 1;
+    setMinusCombo(minusComboRef.current);
+    setMinusComboVisible(true);
+    setMinusComboAnimKey((k) => k + 1);
+
+    if (minusComboTimerRef.current) clearTimeout(minusComboTimerRef.current);
+    minusComboTimerRef.current = setTimeout(() => {
+      commitMinusCombo(minusPendingLabelRef.current, minusComboRef.current);
+    }, COMBO_TIMEOUT_MS);
+  }, [currentLabel, counts, flushPlus, commitMinusCombo]);
+
+  // ── Dropdown select ────────────────────────────────────────────────────────
 
   const handleSelect = (idx: number) => {
-    if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
-    if (comboRef.current > 0) commitCombo(pendingLabelRef.current, comboRef.current);
+    flushPlus();
+    flushMinus();
     setSelectedIdx(idx);
     setDropdownOpen(false);
   };
 
-  // ── Manual refresh (fallback to the live listener) ──────────────────────
+  // ── Manual refresh ─────────────────────────────────────────────────────────
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -227,7 +265,7 @@ export default function TallyPage() {
     }
   };
 
-  // ── Derived: merged log (confirmed + optimistic, newest first) ──────────
+  // ── Derived: unified log (optimistic pending + confirmed, newest first) ────
 
   const displayLogs = useMemo(() => {
     const confirmedIds = new Set(logs.map((l) => l.id));
@@ -248,7 +286,7 @@ export default function TallyPage() {
     ? "Menunggu jenis layanan…"
     : "Belum ada data dari Reports";
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -271,10 +309,10 @@ export default function TallyPage() {
         style={{ userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties}
       >
 
-        {/* ════════════════════════ TOP 35% ════════════════════════ */}
+        {/* ══════════════════════ TOP 35% ══════════════════════ */}
         <div className="flex flex-col border-b border-border" style={{ height: "35%" }}>
 
-          {/* ── Top-center dropdown + refresh (top-right corner) ─────── */}
+          {/* ── Dropdown + refresh ── */}
           <div className="relative flex items-center justify-center px-4 pt-3 shrink-0">
             <div className="relative">
               <button
@@ -303,10 +341,7 @@ export default function TallyPage() {
                         style={{ touchAction: "manipulation" }}
                         onClick={() => handleSelect(i)}
                       >
-                        <span>
-                          {ac}
-                          {i === selectedIdx && " ✓"}
-                        </span>
+                        <span>{ac}{i === selectedIdx && " ✓"}</span>
                         <span className="ml-3 font-mono text-xs text-muted-foreground">
                           {counts[ac] ?? 0}
                         </span>
@@ -327,7 +362,7 @@ export default function TallyPage() {
             </button>
           </div>
 
-          {/* ── Connection + session subtitle ──────────────────────── */}
+          {/* ── Connection status ── */}
           <div className="flex items-center justify-center gap-1.5 pb-1 pt-1.5 shrink-0">
             <span
               className={cn(
@@ -340,10 +375,10 @@ export default function TallyPage() {
             </span>
           </div>
 
-          {/* ── Counter + inline log ─────────────────────────────── */}
+          {/* ── Counter + combo badges + log ── */}
           <div className="flex flex-1 min-h-0">
 
-            {/* Left: big number + combo badge */}
+            {/* Left: big number + combo badges */}
             <div className="flex flex-1 flex-col items-center justify-center pb-2 min-w-0">
               <div
                 className="tabular-nums font-bold font-mono leading-none text-center"
@@ -352,14 +387,26 @@ export default function TallyPage() {
                 {currentCount.toLocaleString("id-ID")}
               </div>
 
+              {/* Combo badge area — shows either + or − combo, whichever is active */}
               <div className="mt-1.5 flex h-8 items-center justify-center">
                 {comboVisible && combo >= 2 && (
                   <div
                     key={comboAnimKey}
                     className="combo-pop flex items-center gap-1.5 rounded-full bg-orange-500 px-3 py-1 text-white shadow-md shadow-orange-500/30"
                   >
-                    <span className="text-base font-black leading-none">×{combo}</span>
+                    <span className="text-base font-black leading-none">+{combo}</span>
                     <span className="text-[10px] font-semibold tracking-widest text-orange-100 uppercase">
+                      COMBO
+                    </span>
+                  </div>
+                )}
+                {minusComboVisible && minusCombo >= 2 && !comboVisible && (
+                  <div
+                    key={`m-${minusComboAnimKey}`}
+                    className="combo-pop flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-white shadow-md shadow-red-600/30"
+                  >
+                    <span className="text-base font-black leading-none">−{minusCombo}</span>
+                    <span className="text-[10px] font-semibold tracking-widest text-red-200 uppercase">
                       COMBO
                     </span>
                   </div>
@@ -367,7 +414,7 @@ export default function TallyPage() {
               </div>
             </div>
 
-            {/* Right: always-visible log panel */}
+            {/* Right: unified log panel */}
             <div className="flex w-[118px] shrink-0 flex-col py-2 pr-3 border-l border-border/50 ml-1">
               <div className="mb-1.5 text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground px-1">
                 Log
@@ -387,7 +434,16 @@ export default function TallyPage() {
                         )}
                       >
                         {log.delta > 0 ? `+${log.delta}` : log.delta}
-                        {log.isCombo && <span className="ml-[1px] text-orange-400 text-[9px]">●</span>}
+                        {log.isCombo && (
+                          <span
+                            className={cn(
+                              "ml-[1px] text-[9px]",
+                              log.delta > 0 ? "text-orange-400" : "text-red-400"
+                            )}
+                          >
+                            ●
+                          </span>
+                        )}
                       </span>
                       <span className="text-[9px] text-muted-foreground truncate">
                         {fmtTime(log.timestampMs)}
@@ -400,7 +456,7 @@ export default function TallyPage() {
           </div>
         </div>
 
-        {/* ════════════════════════ BOTTOM 65% ════════════════════ */}
+        {/* ══════════════════════ BOTTOM 65% ══════════════════ */}
         <div className="relative" style={{ height: "65%" }}>
 
           <button
@@ -439,7 +495,10 @@ export default function TallyPage() {
             }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <span className="pointer-events-none select-none leading-none" style={{ fontSize: "clamp(1.8rem, 9vw, 2.5rem)" }}>
+            <span
+              className="pointer-events-none select-none leading-none"
+              style={{ fontSize: "clamp(1.8rem, 9vw, 2.5rem)" }}
+            >
               −
             </span>
           </button>

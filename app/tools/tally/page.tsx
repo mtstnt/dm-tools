@@ -1,7 +1,8 @@
 // app/tools/tally/page.tsx
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -9,8 +10,13 @@ import {
   fetchTallySession,
   pushTallyDelta,
   listTallySessions,
+  TC_IN_LABEL,
+  TC_OUT_LABEL,
+  TC_LABELS,
+  tcTotals,
   type TallyLogEntry,
   type TallySessionSummary,
+  type TallySessionKind,
 } from "@/lib/queries/tally-session";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -42,8 +48,19 @@ function buildAltarCallLabels(count: number): string[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TallyPage() {
+  return (
+    <Suspense fallback={null}>
+      <TallyPageInner />
+    </Suspense>
+  );
+}
+
+function TallyPageInner() {
+  const searchParams = useSearchParams();
+  const sessionFromUrl = searchParams.get("session");
+
   // ── Which session (service type + date) is this page connected to? ───────
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessionFromUrl);
   const [sessionList, setSessionList] = useState<TallySessionSummary[]>([]);
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -52,11 +69,13 @@ export default function TallyPage() {
   const [serviceType, setServiceType]     = useState("");
   const [serviceDate, setServiceDate]     = useState("");
   const [altarCallCount, setAltarCallCount] = useState(1);
+  const [kind, setKind]                   = useState<TallySessionKind>("altarcall");
   const [hasSession, setHasSession]       = useState(false);
 
   // Local UI state
   const [selectedIdx, setSelectedIdx]     = useState(0);
   const [counts, setCounts]               = useState<Record<string, number>>({});
+  // logs are local-only — never written to or read from Firestore
   const [logs, setLogs]                   = useState<TallyLogEntry[]>([]);
   const [pendingLogs, setPendingLogs]     = useState<TallyLogEntry[]>([]);
 
@@ -85,9 +104,15 @@ export default function TallyPage() {
 
   const recentWritesRef = useRef<Record<string, number>>({});
 
-  const altarCalls   = useMemo(() => buildAltarCallLabels(altarCallCount), [altarCallCount]);
-  const currentLabel = altarCalls[selectedIdx] ?? "Altar Call 1";
-  const currentCount = counts[currentLabel] ?? 0;
+  const altarCalls   = useMemo(
+    () => (kind === "tc" ? [...TC_LABELS] : buildAltarCallLabels(altarCallCount)),
+    [kind, altarCallCount]
+  );
+  const currentLabel = altarCalls[selectedIdx] ?? altarCalls[0];
+  const isOutLabel    = kind === "tc" && currentLabel === TC_OUT_LABEL;
+  const rawCount      = counts[currentLabel] ?? 0;
+  // OUT is stored negative (0, -1, -2, …); flip sign for display.
+  const currentCount  = isOutLabel ? Math.max(0, -rawCount) : rawCount;
 
   // ── Load the list of available sessions, for the picker ───────────────────
 
@@ -119,7 +144,7 @@ export default function TallyPage() {
     }
 
     // Clear the previous session's data immediately so there's no flash of
-    // stale counts/log from the old session while the new one loads.
+    // stale counts from the old session while the new one loads.
     setCounts({});
     setLogs([]);
     setPendingLogs([]);
@@ -138,6 +163,7 @@ export default function TallyPage() {
         setServiceType(data.serviceType ?? "");
         setServiceDate(data.date ?? "");
         setAltarCallCount(Math.max(data.altarCallCount ?? 1, 1));
+        setKind(data.kind ?? "altarcall");
 
         const serverCounts = data.counts ?? {};
         const now = Date.now();
@@ -151,10 +177,7 @@ export default function TallyPage() {
           return merged;
         });
 
-        const serverLogs = (data.logs ?? []).slice(-MAX_LOG_ENTRIES).reverse();
-        const confirmedIds = new Set(serverLogs.map((l) => l.id));
-        setPendingLogs((prev) => prev.filter((l) => !confirmedIds.has(l.id)));
-        setLogs(serverLogs);
+        // logs are local-only — intentionally not read from Firestore
       },
       (err) => {
         console.error("Tally session subscription error:", err);
@@ -175,7 +198,7 @@ export default function TallyPage() {
     };
   }, []);
 
-  // ── Commit a delta to Firestore (with optimistic local log) ───────────────
+  // ── Commit a delta to Firestore (log stored locally only) ─────────────────
 
   const commitDelta = useCallback((label: string, delta: number, isCombo: boolean) => {
     if (!selectedSessionId) return;
@@ -188,10 +211,17 @@ export default function TallyPage() {
       timestampMs: Date.now(),
     };
     setPendingLogs((prev) => [optimisticEntry, ...prev].slice(0, MAX_LOG_ENTRIES));
-    pushTallyDelta(selectedSessionId, label, delta, isCombo).catch((err) => {
-      console.error("Failed to push tally delta:", err);
-      setConnected(false);
-    });
+    pushTallyDelta(selectedSessionId, label, delta, isCombo)
+      .then((confirmedEntry) => {
+        // Replace the optimistic entry with the confirmed one from pushTallyDelta.
+        // Neither entry ever touches Firestore — logs are local only.
+        setPendingLogs((prev) => prev.filter((l) => l.id !== optimisticEntry.id));
+        setLogs((prev) => [confirmedEntry, ...prev].slice(0, MAX_LOG_ENTRIES));
+      })
+      .catch((err) => {
+        console.error("Failed to push tally delta:", err);
+        setConnected(false);
+      });
   }, [selectedSessionId]);
 
   // ── Flush helpers ──────────────────────────────────────────────────────────
@@ -199,23 +229,25 @@ export default function TallyPage() {
   const commitCombo = useCallback(
     (label: string, count: number) => {
       if (count <= 0) return;
-      commitDelta(label, count, count > 1);
+      const outSign = kind === "tc" && label === TC_OUT_LABEL ? -1 : 1;
+      commitDelta(label, outSign * count, count > 1);
       setComboVisible(false);
       setCombo(0);
       comboRef.current = 0;
     },
-    [commitDelta]
+    [commitDelta, kind]
   );
 
   const commitMinusCombo = useCallback(
     (label: string, count: number) => {
       if (count <= 0) return;
-      commitDelta(label, -count, count > 1);
+      const outSign = kind === "tc" && label === TC_OUT_LABEL ? -1 : 1;
+      commitDelta(label, -outSign * count, count > 1);
       setMinusComboVisible(false);
       setMinusCombo(0);
       minusComboRef.current = 0;
     },
-    [commitDelta]
+    [commitDelta, kind]
   );
 
   const flushPlus = useCallback(() => {
@@ -241,7 +273,8 @@ export default function TallyPage() {
     flushMinus();
 
     const label = currentLabel;
-    setCounts((p) => ({ ...p, [label]: (p[label] ?? 0) + 1 }));
+    const outSign = kind === "tc" && label === TC_OUT_LABEL ? -1 : 1;
+    setCounts((p) => ({ ...p, [label]: (p[label] ?? 0) + outSign }));
     recentWritesRef.current[label] = Date.now();
 
     pendingLabelRef.current = label;
@@ -254,14 +287,16 @@ export default function TallyPage() {
     comboTimerRef.current = setTimeout(() => {
       commitCombo(pendingLabelRef.current, comboRef.current);
     }, COMBO_TIMEOUT_MS);
-  }, [selectedSessionId, currentLabel, flushMinus, commitCombo]);
+  }, [selectedSessionId, currentLabel, kind, flushMinus, commitCombo]);
 
   // ── − handler ─────────────────────────────────────────────────────────────
 
   const handleMinus = useCallback(() => {
     if (!selectedSessionId) { setSessionPickerOpen(true); return; }
     const label = currentLabel;
-    if ((counts[label] ?? 0) <= 0) return;
+    const outSign = kind === "tc" && label === TC_OUT_LABEL ? -1 : 1;
+    const displayed = outSign === -1 ? Math.max(0, -(counts[label] ?? 0)) : (counts[label] ?? 0);
+    if (displayed <= 0) return;
 
     vibrate(VIBRATE_MINUS);
 
@@ -271,7 +306,10 @@ export default function TallyPage() {
     // Flush any pending plus combo first
     flushPlus();
 
-    setCounts((p) => ({ ...p, [label]: Math.max(0, (p[label] ?? 0) - 1) }));
+    setCounts((p) => {
+      const next = (p[label] ?? 0) - outSign;
+      return { ...p, [label]: outSign === -1 ? Math.min(0, next) : Math.max(0, next) };
+    });
     recentWritesRef.current[label] = Date.now();
 
     minusPendingLabelRef.current = label;
@@ -284,7 +322,7 @@ export default function TallyPage() {
     minusComboTimerRef.current = setTimeout(() => {
       commitMinusCombo(minusPendingLabelRef.current, minusComboRef.current);
     }, COMBO_TIMEOUT_MS);
-  }, [selectedSessionId, currentLabel, counts, flushPlus, commitMinusCombo]);
+  }, [selectedSessionId, currentLabel, kind, counts, flushPlus, commitMinusCombo]);
 
   // ── Dropdown select (altar call) ───────────────────────────────────────────
 
@@ -319,6 +357,7 @@ export default function TallyPage() {
           setServiceType(data.serviceType ?? "");
           setServiceDate(data.date ?? "");
           setAltarCallCount(Math.max(data.altarCallCount ?? 1, 1));
+          setKind(data.kind ?? "altarcall");
         }
       }
     } catch (err) {

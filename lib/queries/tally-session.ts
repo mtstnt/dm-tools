@@ -6,13 +6,18 @@ import {
   setDoc,
   onSnapshot,
   increment,
-  arrayUnion,
   serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export const TALLY_SESSION_COLLECTION = "tallySession";
+
+export type TallySessionKind = "altarcall" | "tc";
+
+export const TC_IN_LABEL = "TC In";
+export const TC_OUT_LABEL = "TC Out";
+export const TC_LABELS = [TC_IN_LABEL, TC_OUT_LABEL] as const;
 
 export interface TallyLogEntry {
   id: string;
@@ -26,8 +31,8 @@ export interface TallySessionDoc {
   serviceType?: string;
   date?: string;
   altarCallCount?: number;
+  kind?: TallySessionKind;
   counts?: Record<string, number>;
-  logs?: TallyLogEntry[];
 }
 
 export interface TallySessionSummary {
@@ -35,7 +40,15 @@ export interface TallySessionSummary {
   serviceType: string;
   date: string;
   altarCallCount: number;
+  kind: TallySessionKind;
   updatedAtMs: number | null;
+}
+
+export function tcTotals(counts: Record<string, number> | undefined | null) {
+  const tcIn = Math.max(0, counts?.[TC_IN_LABEL] ?? 0);
+  const tcOutRaw = counts?.[TC_OUT_LABEL] ?? 0;
+  const tcOut = Math.max(0, -tcOutRaw);
+  return { tcIn, tcOut, total: tcIn - tcOut };
 }
 
 export function buildSessionId(serviceType: string, date: string): string {
@@ -84,6 +97,7 @@ export async function listTallySessions(): Promise<TallySessionSummary[]> {
       serviceType: data.serviceType ?? "(tanpa nama)",
       date: data.date ?? "",
       altarCallCount: Math.max(data.altarCallCount ?? 1, 1),
+      kind: data.kind ?? "altarcall",
       updatedAtMs: data.updatedAt?.toMillis?.() ?? null,
     });
   });
@@ -96,6 +110,7 @@ export async function syncTallySessionMeta(meta: {
   serviceType: string;
   date: string;
   altarCallCount: number;
+  kind?: TallySessionKind;
 }): Promise<string> {
   const sessionId = buildSessionId(meta.serviceType, meta.date);
 
@@ -105,12 +120,32 @@ export async function syncTallySessionMeta(meta: {
       serviceType: meta.serviceType,
       date: meta.date,
       altarCallCount: Math.max(meta.altarCallCount, 1),
+      kind: meta.kind ?? "altarcall",
       updatedAt: serverTimestamp(),
     },
     { merge: true }
   );
 
   return sessionId;
+}
+
+export async function ensureDoaWilayahTallySession(opts: {
+  sessionId: string;
+  label: string;
+  date: string;
+}): Promise<string> {
+  await setDoc(
+    getTallySessionRef(opts.sessionId),
+    {
+      serviceType: opts.label,
+      date: opts.date,
+      altarCallCount: 1,
+      kind: "tc" as TallySessionKind,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+  return opts.sessionId;
 }
 
 export async function pushTallyDelta(
@@ -127,11 +162,11 @@ export async function pushTallyDelta(
     timestampMs: Date.now(),
   };
 
+  // logs are intentionally NOT written to Firestore — local only
   await setDoc(
     getTallySessionRef(sessionId),
     {
       [`counts.${label}`]: increment(delta),
-      logs: arrayUnion(entry),
       updatedAt: serverTimestamp(),
     },
     { merge: true }

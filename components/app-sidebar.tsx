@@ -129,9 +129,15 @@ export function AppSidebar() {
                 >
                   <Hash className="size-4 text-muted-foreground" />
                   <span className="text-sm">AltarCalls</span>
-                  <span className="ml-auto text-[10px] font-medium tracking-wide text-muted-foreground/50 bg-muted/50 px-1.5 py-0.5 rounded">
-                    Exp
-                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<a href="/tools/doa-wilayah" />}
+                  className="gap-3 rounded-md transition-colors hover:bg-accent/60"
+                >
+                  <UserCheck className="size-4 text-muted-foreground" />
+                  <span className="text-sm">Doa Wilayah</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
           </SidebarGroupContent>

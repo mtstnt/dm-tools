@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import type { EventDetailsData } from "@/types/event"
+import type { EventArea } from "@/types/event"
 
 type SubmitStatus = "idle" | "submitting" | "success" | "error"
 
@@ -58,16 +58,10 @@ export function BlockProvider({ children }: { children: React.ReactNode }) {
 
 export function BlocksTab({
   areas,
-  blocks,
-  users,
   csrf,
-  eventId,
 }: {
-  areas: EventDetailsData["areas"]
-  blocks: EventDetailsData["blocks"]
-  users: EventDetailsData["users"]
-  csrf: string | null
-  eventId: string
+  areas: EventArea[]
+  csrf: string
 }) {
   const { selectedArea, setSelectedArea, selectedBlockId, setSelectedBlockId, grid, setGrid } =
     useBlockContext()
@@ -79,16 +73,8 @@ export function BlocksTab({
 
   const areaBlocks = useMemo(() => {
     if (!selectedArea) return []
-    return blocks.filter((b) => String(b.area_id) === selectedArea)
-  }, [selectedArea, blocks])
-
-  const blockUserIds = useMemo(() => {
-    if (!selectedBlockId) return []
-    const blockIdNum = Number(selectedBlockId)
-    return users
-      .filter((user) => user.blocks.includes(blockIdNum))
-      .map((user) => user.id)
-  }, [selectedBlockId, users])
+    return areas.find((a) => String(a.id) === selectedArea)?.blocks ?? []
+  }, [selectedArea, areas])
 
   const handleAreaChange = (value: string | null) => {
     setSelectedArea(value ?? "")
@@ -102,11 +88,11 @@ export function BlocksTab({
     const id = value ?? ""
     setSelectedBlockId(id)
     if (id) {
-      const block = blocks.find((b) => String(b.id) === id)
+      const block = areaBlocks.find((b) => String(b.id) === id)
       if (block) {
         setRowInput(String(block.row))
         setColInput(String(block.column))
-        setGrid(block.chairs_data.map((row) => [...row]))
+        setGrid(block.chairs.map((row) => [...row]))
       }
     } else {
       setGrid([])
@@ -162,17 +148,17 @@ export function BlocksTab({
 
   const handleRevert = () => {
     if (!selectedBlockId) return
-    const block = blocks.find((b) => String(b.id) === selectedBlockId)
+    const block = areaBlocks.find((b) => String(b.id) === selectedBlockId)
     if (block) {
       setRowInput(String(block.row))
       setColInput(String(block.column))
-      setGrid(block.chairs_data.map((row) => [...row]))
+      setGrid(block.chairs.map((row) => [...row]))
     }
   }
 
   const handleUpdate = async () => {
     if (!selectedBlockId) return
-    const block = blocks.find((b) => String(b.id) === selectedBlockId)
+    const block = areaBlocks.find((b) => String(b.id) === selectedBlockId)
     if (!block) return
     const cookie = getWebAuthCookie()
     if (!cookie) {
@@ -186,13 +172,13 @@ export function BlocksTab({
 
     try {
       const result = await updateBlock(
-        { cookie, csrf: csrf ?? "" },
+        { cookie, csrf },
         selectedBlockId,
         block.name,
         parseInt(rowInput, 10),
         parseInt(colInput, 10),
         grid,
-        blockUserIds,
+        block.userIds,
       )
       if (result.success) {
         setUpdateStatus("success")
@@ -215,14 +201,14 @@ export function BlocksTab({
             <SelectValue placeholder="Area">
               {(value) => {
                 if (!value) return "Area"
-                const area = areas.find((a) => a.id === value)
+                const area = areas.find((a) => String(a.id) === value)
                 return area?.name ?? value
               }}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {areas.map((area) => (
-              <SelectItem key={area.id} value={area.id}>
+              <SelectItem key={area.id} value={String(area.id)}>
                 {area.name}
               </SelectItem>
             ))}

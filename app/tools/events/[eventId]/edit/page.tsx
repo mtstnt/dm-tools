@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
@@ -9,7 +9,7 @@ import { getEventDetail } from "@/lib/queries/events"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { parseEventTitle } from "@/lib/utils"
-import type { EventDetailsData } from "@/types/event"
+import type { EventDetail } from "@/types/event"
 import { AssignmentTab } from "./assignment-tab"
 import { BlockProvider, BlocksTab } from "./blocks-tab"
 
@@ -18,31 +18,27 @@ type FetchStatus = "idle" | "loading" | "success" | "error"
 export default function EventEditPage() {
   const params = useParams()
   const eventId = params.eventId as string
-  const [status, setStatus] = useState<FetchStatus>("idle")
+  const [status, setStatus] = useState<FetchStatus>("loading")
   const [error, setError] = useState("")
-  const [result, setResult] = useState<EventDetailsData | null>(null)
+  const [result, setResult] = useState<EventDetail | null>(null)
+
+  const refetch = useCallback(async () => {
+    const cookie = getWebAuthCookie()
+    if (!cookie) {
+      throw new Error("Not authenticated")
+    }
+    const data = await getEventDetail({ cookie, csrf: "" }, eventId)
+    setResult(data as EventDetail)
+  }, [eventId])
 
   useEffect(() => {
-    const fetchData = async () => {
-      setStatus("loading")
-      const cookie = getWebAuthCookie()
-      if (!cookie) {
-        setStatus("error")
-        setError("Not authenticated")
-        return
-      }
-
-      try {
-        const data = await getEventDetail({ cookie, csrf: "" }, eventId)
-        setResult(data as EventDetailsData)
-        setStatus("success")
-      } catch (err) {
+    refetch()
+      .then(() => setStatus("success"))
+      .catch((err) => {
         setStatus("error")
         setError(err instanceof Error ? err.message : "Unknown error")
-      }
-    }
-    fetchData()
-  }, [eventId])
+      })
+  }, [refetch])
 
   return (
     <WebAuthGuard>
@@ -51,7 +47,9 @@ export default function EventEditPage() {
         {status === "error" && (
           <p className="text-sm text-destructive">Failed to load: {error}</p>
         )}
-        {status === "success" && result && <EventEditContent result={result} eventId={eventId} />}
+        {status === "success" && result && (
+          <EventEditContent result={result} eventId={eventId} refetch={refetch} />
+        )}
       </div>
     </WebAuthGuard>
   )
@@ -74,22 +72,20 @@ function LoadingSkeleton() {
   )
 }
 
-function EventEditContent({ result, eventId }: { result: EventDetailsData; eventId: string }) {
-  const { event, users, assignedUserIds, allUsers, areas, blocks, csrf } = result
+function EventEditContent({
+  result,
+  eventId,
+  refetch,
+}: {
+  result: EventDetail
+  eventId: string
+  refetch: () => Promise<void>
+}) {
+  const { name, location, users, allUsers, areas, csrf } = result
 
-  const parsedTitle = useMemo(() => parseEventTitle(event.name), [event.name])
+  const parsedTitle = useMemo(() => parseEventTitle(name), [name])
 
-  const assignmentRows = useMemo(() => {
-    return users.map((user) => {
-      const userBlocks = user.blocks
-        .map((blockId) => {
-          const block = blocks.find((b) => b.id === blockId)
-          return block ? { id: block.id, name: block.name } : null
-        })
-        .filter(Boolean) as { id: number; name: string }[]
-      return { id: user.id, name: user.name, email: user.email, blocks: userBlocks }
-    })
-  }, [users, blocks])
+  const flatBlocks = useMemo(() => areas.flatMap((a) => a.blocks), [areas])
 
   return (
     <div className="space-y-6">
@@ -106,7 +102,7 @@ function EventEditContent({ result, eventId }: { result: EventDetailsData; event
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           {parsedTitle.date || "No date"}
-          {event.location ? ` · ${event.location}` : ""}
+          {location ? ` · ${location}` : ""}
         </p>
       </div>
 
@@ -120,18 +116,17 @@ function EventEditContent({ result, eventId }: { result: EventDetailsData; event
 
           <TabsContent value="assignment">
             <AssignmentTab
-              rows={assignmentRows}
               users={users}
               allUsers={allUsers}
-              blocks={blocks}
+              blocks={flatBlocks}
               csrf={csrf}
               eventId={eventId}
-              assignedUserIds={assignedUserIds}
+              refetch={refetch}
             />
           </TabsContent>
 
           <TabsContent value="blocks">
-            <BlocksTab areas={areas} blocks={blocks} users={users} csrf={csrf} eventId={eventId} />
+            <BlocksTab areas={areas} csrf={csrf} />
           </TabsContent>
 
           <TabsContent value="dashboard">

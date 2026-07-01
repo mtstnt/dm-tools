@@ -7,7 +7,7 @@ export enum Role {
   Member = "Member",
 }
 
-export type EventDetail = {
+export type EventInfo = {
   eventId: string | null;
   name: string | null;
   date: string | null;
@@ -79,7 +79,7 @@ export const getRole = (html: string): Role => {
 /**
  * Parse events list
  */
-export const parseEventDetail = (html: string): EventDetail[] => {
+export const parseEventDetail = (html: string): EventInfo[] => {
   const $ = cheerio.load(html);
   const role = getRole(html);
 

@@ -4,12 +4,12 @@ import { type LegacyWebContext, webFetch } from "@/app/actions/_shared";
 import {
   parseEventDetail,
   requiresReauth,
-  type EventDetail,
+  type EventInfo,
 } from "@/lib/parsers/events";
 
 export async function getEvents(
   ctx: LegacyWebContext,
-): Promise<EventDetail[]> {
+): Promise<EventInfo[]> {
   const baseUrl = process.env.SC_BASE_URL!;
 
   const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];

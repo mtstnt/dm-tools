@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getEvents, eventKeys, type EventDetail } from "@/lib/queries/events"
+import { getEvents, eventKeys, type EventInfo } from "@/lib/queries/events"
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
@@ -266,7 +266,7 @@ function EventsGrid() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {filtered.map((event: EventDetail) => (
+          {filtered.map((event: EventInfo) => (
             <EventCard key={event.eventId ?? `${event.date}-${event.name}`} event={event} />
           ))}
         </div>
@@ -275,7 +275,7 @@ function EventsGrid() {
   )
 }
 
-function EventCard({ event }: { event: EventDetail }) {
+function EventCard({ event }: { event: EventInfo }) {
   return (
     <Card>
       <CardHeader>

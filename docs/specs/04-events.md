@@ -2,20 +2,29 @@
 
 ## Overview
 
-Experimental page that scrapes event data from an external API using Cheerio. Uses a separate web auth flow (not Firebase) with credentials stored in localStorage.
+Page that scrapes event data from an external API using Cheerio. Uses a separate web auth flow (not Firebase) with credentials stored in localStorage.
 
 ## Files
 
 | File | Role |
 |------|------|
 | `app/tools/events/page.tsx` | Events grid with filters (client component) |
-| `app/tools/events/[eventId]/edit/page.tsx` | Event edit page — assignment tab + blocks viewer |
-| `app/actions.ts` | Server actions: `webAuthLogin()`, `fetchEvents()`, `fetchEventEditPage()`, `updateUserBlocks()` |
+| `app/tools/events/[eventId]/edit/page.tsx` | Event edit page — fetches `EventDetail`, renders tabs |
+| `app/tools/events/[eventId]/edit/assignment-tab.tsx` | Assignment tab — assign/remove blocks, remove users |
+| `app/tools/events/[eventId]/edit/blocks-tab.tsx` | Blocks tab — edit chair grid per block |
+| `app/actions/events/list.ts` | `getEvents()` server action |
+| `app/actions/events/detail.ts` | `getEventDetail()` server action |
+| `app/actions/events/update.ts` | `updateEventUsers()` server action |
+| `app/actions/events/user-blocks/update.ts` | `updateUserBlocks()` server action |
+| `app/actions/events/user-blocks/delete.ts` | `removeUserBlock()` server action |
+| `app/actions/events/blocks/update.ts` | `updateBlock()` server action |
+| `app/actions/_shared.ts` | Shared `webFetch()` + `LegacyWebContext` type |
 | `components/web-auth-guard.tsx` | Auth gate dialog for external API credentials |
 | `components/ui/multi-select.tsx` | Shadcn-compatible react-select wrapper for multi-select dropdowns |
-| `lib/parsers/events.ts` | Cheerio HTML parser → `Event[]` |
-| `lib/parsers/event-details.ts` | Cheerio parser for event edit page HTML → `EventDetailsData` |
-| `lib/queries/events.ts` | Re-exports + `eventKeys` query key factory |
+| `lib/parsers/events.ts` | Cheerio HTML parser → `EventInfo[]` (event list) |
+| `lib/parsers/event-details.ts` | Cheerio parser for event edit page HTML → `EventDetail` |
+| `lib/queries/events.ts` | Re-exports all event server actions + `eventKeys` query key factory + `EventInfo` type |
+| `types/event.ts` | `EventDetail`, `EventArea`, `EventBlock`, `EventUser`, `EventAssignedUser` interfaces |
 
 ## Auth Flow (Web Auth)
 
@@ -42,102 +51,143 @@ Click "Sign out" button → `clearWebAuth()` removes all three localStorage keys
 ## Data Fetching
 
 - Uses TanStack React Query with `eventKeys.all` query key
-- `fetchEvents(cookie)` server action scrapes pages 1–3 from `SC_BASE_URL/event?page={n}`
-- Parses HTML with Cheerio, extracts `.card` elements
+- `getEvents(ctx)` server action scrapes pages 1–10 from `SC_BASE_URL/event?page={n}`
+- Parses HTML with Cheerio, extracts `.card` elements → `EventInfo[]`
+- Filters to events with name in `["AOG TEEN", "AOG YOUTH"]` and location `GMS Surabaya Selatan`
 - Query runs only when `WebAuthGuard` is authenticated
 
 ## Event Edit Page
 
 - Route: `/tools/events/[eventId]/edit`
-- Calls `fetchEventEditPage(cookie, eventId)` which GETs `SC_BASE_URL/event/edit/{eventId}`
-- Parses the edit form HTML via `parseEventPage()` into `EventDetailsData`
-- Contains two tabs: **Assignment** and **Blocks**
+- Calls `getEventDetail(ctx, eventId)` which GETs `SC_BASE_URL/event/edit/{eventId}`
+- Parses the edit form HTML via `parseEventPage()` into `EventDetail`
+- Contains three tabs: **Assignment**, **Blocks**, **Dashboard** (placeholder)
 - Auth-gated by `WebAuthGuard`
+
+### Refresh Mechanism
+
+- `page.tsx` exposes a `refetch` callback (`useCallback` wrapping `getEventDetail`) and passes it down to `AssignmentTab`
+- All mutations (assign, remove block, remove user) call `await refetch()` on success instead of `window.location.reload()`
+- `page.tsx` initial mount state is `"loading"`; the same `refetch` is invoked in `useEffect`
 
 ### Assignment Tab
 
-Allows SPV/PIC users to assign blocks to users.
+Allows SPV/PIC users to assign blocks to users and remove users/blocks.
 
 **UI Components:**
-- Left multi-select dropdown: Users (filtered to allowed IDs only)
-- Right multi-select dropdown: Blocks (all available blocks from event)
+- Left multi-select dropdown: Users (all available users, pre-filtered by `ALLOWED_USER_IDS` in the parser)
+- Right multi-select dropdown: Blocks (flattened from `areas[].blocks`)
 - Submit button: POSTs assignment to external API
-
-**User Filter:**
-Only 36 specific user IDs are shown in the users dropdown (hardcoded `ALLOWED_USER_IDS` set).
+- Per-user trash icon (rightmost column): removes the user from the event
 
 **Submit Flow:**
-1. Gets web auth cookie and email from localStorage
-2. Calls `updateUserBlocks()` server action
-3. Server action checks user's role in Firebase Firestore (`members` collection)
-4. Only users with role "SPV" or "PIC" can perform assignments
-5. POSTs to `SC_BASE_URL/event/update_users_blocks/{eventId}` with `users[]`, `blocks[]`, `_csrf`
-6. Checks response for redirect (success) or HTML with "Forbidden" message (failure)
-7. On success, refreshes page data via `router.refresh()`
+1. Gets web auth cookie from localStorage
+2. Calls `updateEventUsers()` to merge new user IDs with existing assigned IDs
+3. Calls `updateUserBlocks()` to assign selected blocks to selected users
+4. On success → `await refetch()` (re-fetches `EventDetail`), resets selection after 2s
+
+**Remove Block Flow:**
+1. Click X on a block badge → confirmation dialog
+2. Calls `removeUserBlock(ctx, eventId, blockId, block.userIds, userIdToRemove)` — sends the block's remaining user list (excluding the removed user)
+3. On success → `await refetch()`
+
+**Remove User Flow:**
+1. Click trash icon → confirmation dialog
+2. Calls `updateEventUsers(ctx, eventId, remainingUserIds)` with all assigned user IDs except the selected one
+3. On success → `await refetch()`
 
 ### Blocks Tab
 
 - Select area → select block → displays chair grid visualization
+- Reads nested `areas[].blocks` for the selected area (no flat `blocks` array or `area_id` field)
 - Grid shows occupied (green) and empty (muted) seats
+- `block.userIds` is passed directly to `updateBlock()` (no client-side derivation from `users`)
+- Revert button restores grid from `block.chairs`
 
 ## Server Actions
 
-### `updateUserBlocks(cookie, eventId, csrf, userIds, blockIds, userEmail)`
+### `updateUserBlocks(ctx, eventId, userIds, blockIds)`
 
 Assigns users to blocks in the external events system.
-
-**Parameters:**
-- `cookie`: Web auth cookie from localStorage
-- `eventId`: Event ID from URL
-- `csrf`: CSRF token extracted from event edit page HTML
-- `userIds`: Array of user IDs to assign
-- `blockIds`: Array of block IDs to assign
-- `userEmail`: Current user's email for role verification
-
-**Role Guard:**
-Queries Firebase Firestore `members` collection by email. Only allows users with role "SPV" or "PIC".
 
 **Response Handling:**
 - Redirect (Location header) → success
 - HTML with "Forbidden" + "don't have permission" → returns forbidden error
 - Non-ok status → returns generic error
 
+### `removeUserBlock(ctx, eventId, blockId, userAssignedToBlock, userToRemoveId)`
+
+Removes a single user from a block by re-sending the block's user list minus that user. Fetches a fresh CSRF token from `/csrfToken` before the request.
+
+### `updateEventUsers(ctx, eventId, userIds)`
+
+Replaces the event's entire user list. Used both for adding users (assign flow) and removing users (delete flow sends the remaining IDs).
+
+### `updateBlock(ctx, blockId, name, row, col, chairsData, userIds)`
+
+Updates a block's name, grid dimensions, chairs layout, and assigned users.
+
 ## Event Interfaces
 
+Defined in `types/event.ts`:
+
 ```typescript
-interface EventDetailsData {
-  allUsers: EventDetailsAllUser[];  // All users from #users li elements
-  event: EventDetailsEvent;
-  users: EventDetailsUser[];        // Users with block assignments
-  areas: EventDetailsArea[];
-  blocks: EventDetailsBlockItem[];
-  csrf: string | null;              // CSRF token from edit page
-}
-
-interface EventDetailsAllUser {
-  id: number;
-  fullName: string;
-  email: string | null;
-}
-
-interface EventDetailsUser {
+interface EventDetail {
   id: number;
   name: string;
-  email: string | null;
-  blocks: number[];                 // Assigned block IDs
+  date: string;
+  location: string;
+  areas: EventArea[];
+  users: EventAssignedUser[];   // assigned users only (filtered by ALLOWED_USER_IDS in parser)
+  allUsers: EventUser[];        // pre-filtered by ALLOWED_USER_IDS in parser
+  csrf: string;
+}
+
+interface EventArea {
+  id: number;
+  name: string;
+  blocks: EventBlock[];
+}
+
+interface EventBlock {
+  id: number;
+  name: string;
+  row: number;
+  column: number;
+  userIds: number[];
+  chairs: number[][];
+}
+
+interface EventUser {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
+interface EventAssignedUser {
+  id: number;
+  fullName: string;
+  email: string;
+  assignedBlocks: number[];
 }
 ```
+
+`EventInfo` (event list cards) is defined in `lib/parsers/events.ts` and re-exported via `lib/queries/events.ts`.
 
 ## HTML Parsing
 
 ### Event List Parser (`lib/parsers/events.ts`)
-Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`.
+Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Returns `EventInfo[]` with `eventId`, `name`, `date`, `time`, `location`, `showUrl`, `editUrl`, `locked`.
 
 ### Event Details Parser (`lib/parsers/event-details.ts`)
-- Extracts users from `#users li` elements
+- `parseEventPage(id, html)` → `EventDetail`
+- Extracts users from `#users li` and `#event_users li` elements (merged, deduped)
 - Extracts areas from form groups with "Area" heading
-- Extracts blocks from `var blocks = [...]` in script tags
-- Extracts CSRF token from `<input name="_csrf">` or script patterns
+- Extracts blocks from `var blocks = [...]` in script tags (filters out "All Block")
+- Builds `users[i].assignedBlocks` by inverting the block→users mapping
+- Pre-filters `allUsers` to `ALLOWED_USER_IDS` (hardcoded set of 36 IDs)
+- Extracts CSRF token from `<input name="_csrf">` or `window._token` script pattern
+- `allUsers` field is pre-filtered; `users` field contains only assigned users
 
 ## UI Features
 
@@ -150,16 +200,18 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`.
 
 ## Environment Requirements
 
-- `SC_BASE_URL` — Server-only, used in `app/actions.ts` for fetch requests
+- `SC_BASE_URL` — Server-only, used in `app/actions/events/` for fetch requests
 - `NEXT_PUBLIC_SC_BASE_URL` — Client-side, used for link generation in event cards
 
 ## Gotchas
 
 - Web auth is completely separate from Firebase auth — different credentials
 - Password stored as base64 in localStorage (not encrypted)
-- `fetchEvents` scrapes 3 pages in parallel — if site structure changes, parser breaks
+- `getEvents` scrapes 10 pages in parallel — if site structure changes, parser breaks
 - Cheerio parser assumes specific HTML structure (`.card`, `b` tag header, `.container > div`)
 - Event IDs extracted via regex from URLs, may be null
-- The "Experimental" label is shown in the page subtitle
 - Assignment feature requires SPV/PIC role in Firebase `members` collection
-- CSRF token must be extracted from event edit page HTML before calling `updateUserBlocks`
+- CSRF token is extracted from event edit page HTML; `removeUserBlock` additionally fetches a fresh token from `/csrfToken`
+- `allUsers` is pre-filtered to `ALLOWED_USER_IDS` in the parser (`lib/parsers/event-details.ts`), not in the client component
+- `getEventDetail` returns `Promise<EventDetail>` (typed via `detail.ts`); `page.tsx` still casts `as EventDetail` because the re-export in `lib/queries/events.ts` goes through the action
+- Mutations refresh via `refetch` callback (re-calls `getEventDetail`), not `window.location.reload`

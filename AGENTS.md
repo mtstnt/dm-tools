@@ -41,7 +41,16 @@ Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4.
 ```
 app/
   layout.tsx          Root: fonts (Instrument Serif, DM Sans, IBM Plex Mono), ThemeProvider, QueryClient
-  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents(), fetchEventEditPage(), updateUserBlocks()
+  actions/
+    _shared.ts        Shared webFetch() + LegacyWebContext type for all external-API actions
+    auth/web-login.ts webAuthLogin() server action
+    events/
+      list.ts         getEvents() — paginated fetch + cheerio parse → EventInfo[]
+      detail.ts       getEventDetail() — fetch + cheerio parse → EventDetail
+      update.ts       updateEventUsers() — replace event's user list
+      blocks/update.ts    updateBlock() — update a block's chairs/rows/cols/users
+      user-blocks/update.ts updateUserBlocks() — assign users to blocks
+      user-blocks/delete.ts removeUserBlock() — remove a single user from a block
   auth/
     login/page.tsx    Firebase email/password login
     forget-password/  Firebase password reset email
@@ -59,10 +68,12 @@ lib/
   firebase.ts         Firebase client init — hardcoded config, "use client"
   queries/
     reports.ts        Firestore fetch for reports collection
-    events.ts         Re-exports fetchEvents, fetchEventEditPage + types from app/actions
+    events.ts         Re-exports all event server actions + eventKeys query key factory
   parsers/
-    events.ts         Cheerio parser for external event HTML
-    event-details.ts  Cheerio parser for event edit page HTML → ParsedResult
+    events.ts         Cheerio parser for event list HTML → EventInfo[]
+    event-details.ts  Cheerio parser for event edit page HTML → EventDetail
+types/
+  event.ts            EventDetail, EventArea, EventBlock, EventUser, EventAssignedUser interfaces
 ```
 
 ## Key Facts
@@ -75,7 +86,7 @@ lib/
 - **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and `formatDateDisplay()` in reports page.
 - **Reports page**: Client-only form that generates text for clipboard. Does NOT save to Firestore.
 - **Reports history**: Reads from Firestore `reports` collection. Fields include `divisions` (map of ministry→count), `type` (AOG_YOUTH, AOG_TEEN, EVENT).
-- **Events page**: Experimental. Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. Event edit page displays parsed JSON from `fetchEventEditPage`. Assignment tab allows SPV/PIC users to assign blocks to users via `updateUserBlocks` server action.
+- **Events page**: Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. List page shows `EventInfo` cards (filterable by location/name/date). Event edit page parses HTML into `EventDetail` via `getEventDetail()`. Assignment tab allows SPV/PIC users to assign blocks to users (`updateUserBlocks`), remove a block from a user (`removeUserBlock`), and remove a user from the event (`updateEventUsers` with remaining IDs). Blocks tab edits a block's chairs grid (`updateBlock`). All mutations refresh data via a `refetch` callback (re-calls `getEventDetail`) instead of `window.location.reload`.
 - **Assign page**: SVG-based service block allocation tool. Generates Teen/Youth assignments. Client-only, no persistence.
 - **Theme**: Light mode default, class-based dark mode via `next-themes`.
 - **Fonts**: CSS variables `--font-display` (Instrument Serif), `--font-sans` (DM Sans), `--font-mono` (IBM Plex Mono).

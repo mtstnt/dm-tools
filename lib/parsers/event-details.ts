@@ -1,4 +1,4 @@
-import { EventArea, EventAssignedUser, EventDetail } from "@/types/event";
+import { EventArea, EventAssignedUser, EventDetail, EventUser } from "@/types/event";
 import * as cheerio from "cheerio";
 
 const ALLOWED_USER_IDS = new Set([
@@ -55,6 +55,16 @@ export type RawEventDetailUser = {
   login_token: null;
   createdAt:   Date;
   updatedAt:   Date;
+}
+
+export function parseEventAllUsers(html: string): EventUser[] {
+  const $ = cheerio.load(html);
+  const eventUsers = extractUsers($);
+  return eventUsers.allUsers.map(u => ({
+    id: u.id,
+    fullName: u.fullName,
+    email: u.email,
+  }));
 }
 
 export function parseEventPage(id: number, html: string): EventDetail {

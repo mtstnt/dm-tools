@@ -10,6 +10,7 @@ import {
   buildDoaWilayahSessionId,
   monthKey,
   type MonthPerson,
+  type DoaWilayahDate,
   type DoaWilayahMonth,
   type DoaWilayahYearDoc,
 } from "@/lib/queries/doa-wilayah";
@@ -19,9 +20,9 @@ import {
   tcTotals,
   type TallySessionDoc,
 } from "@/lib/queries/tally-session";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -46,6 +47,10 @@ import {
   TrendingUp,
   CheckCircle2,
   Circle,
+  CalendarDays,
+  Plus,
+  Trash2,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -71,11 +76,6 @@ const NONE_VALUE   = "__none__";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function displayName(p?: MonthPerson | null): string {
-  if (!p) return "—";
-  return p.name;
-}
-
 function memberLabel(m: Member): string {
   return m.nickname ? `${m.name} (${m.nickname})` : m.name;
 }
@@ -85,15 +85,58 @@ function assignedIds(month: DoaWilayahMonth): string[] {
   return [month.pic?.id, month.tc1?.id, month.tc2?.id].filter(Boolean) as string[];
 }
 
-/** Count total appearances across all months (for the Ringkasan section). */
+/**
+ * Count total appearances across all months (for the Ringkasan section).
+ * A month counts as `dates.length` occurrences if dates were entered,
+ * otherwise it falls back to 1 occurrence (for older records saved before
+ * per-date scheduling existed).
+ */
 function buildServiceCount(months: Record<string, DoaWilayahMonth>): Record<string, number> {
   const count: Record<string, number> = {};
   for (const m of Object.values(months)) {
-    for (const id of assignedIds(m)) {
-      count[id] = (count[id] ?? 0) + 1;
+    const ids = assignedIds(m);
+    if (ids.length === 0) continue;
+    const occurrences = m.dates && m.dates.length > 0 ? m.dates.length : 1;
+    for (const id of ids) {
+      count[id] = (count[id] ?? 0) + occurrences;
     }
   }
   return count;
+}
+
+function formatDateID(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+/** Sums live TC counts across several tally sessions at once (e.g. all dates in a month). */
+function useAggregatedTC(sessionIds: string[]): TCSnapshot | null {
+  const key = sessionIds.join(",");
+  const [snaps, setSnaps] = useState<Record<string, TCSnapshot>>({});
+
+  useEffect(() => {
+    if (sessionIds.length === 0) { setSnaps({}); return; }
+    const unsubs = sessionIds.map((id) =>
+      subscribeToTallySession(id, (data: TallySessionDoc | null) => {
+        setSnaps((prev) => ({
+          ...prev,
+          [id]: data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 },
+        }));
+      })
+    );
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (sessionIds.length === 0) return null;
+  const vals = Object.values(snaps);
+  return {
+    tcIn:  vals.reduce((s, v) => s + v.tcIn,  0),
+    tcOut: vals.reduce((s, v) => s + v.tcOut, 0),
+    total: vals.reduce((s, v) => s + v.total, 0),
+  };
 }
 
 // ── MemberSelect sub-component ────────────────────────────────────────────────
@@ -109,6 +152,16 @@ function MemberSelect({
   members: Member[];
   onChange: (p: MonthPerson | null) => void;
 }) {
+  // Always resolve to a display NAME — never fall back to showing the raw id.
+  // If the member is still in the roster we show "Name (nickname)"; if they've
+  // since been removed from `members`, we still show the name that was saved
+  // on the record itself rather than its id.
+  const selectedLabel = useMemo(() => {
+    if (!value) return null;
+    const m = members.find((x) => x.id === value.id);
+    return m ? memberLabel(m) : value.name;
+  }, [value, members]);
+
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
@@ -123,7 +176,9 @@ function MemberSelect({
         }}
       >
         <SelectTrigger className="h-8 text-sm">
-          <SelectValue />
+          <SelectValue placeholder="— Pilih —">
+            {selectedLabel ?? "— Pilih —"}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={NONE_VALUE}>— Pilih —</SelectItem>
@@ -167,6 +222,136 @@ function TCLiveBadge({ sessionId }: { sessionId: string }) {
   );
 }
 
+function TCAggregateBadge({ sessionIds }: { sessionIds: string[] }) {
+  const snap = useAggregatedTC(sessionIds);
+  if (!snap) return null;
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5 text-[11px] font-mono">
+      <span className="text-green-500">▲ In {snap.tcIn}</span>
+      <span className="text-muted-foreground/40">·</span>
+      <span className="text-red-400">▼ Out {snap.tcOut}</span>
+      <span className="text-muted-foreground/40">·</span>
+      <span className="font-bold text-foreground">= {snap.total}</span>
+    </div>
+  );
+}
+
+// ── Date list editor (list of Doa Wilayah dates within the month) ─────────────
+
+function DateListEditor({
+  dates,
+  savedDates,
+  hasUnsavedChanges,
+  onChange,
+  onOpenTally,
+}: {
+  dates: DoaWilayahDate[];
+  savedDates: DoaWilayahDate[];
+  /** true while the row has edits not yet persisted (Save not pressed) */
+  hasUnsavedChanges: boolean;
+  onChange: (next: DoaWilayahDate[]) => void;
+  onOpenTally: (dateStr: string) => void;
+}) {
+  const addDate = () => onChange([...dates, { date: "" }]);
+  const removeDate = (idx: number) => onChange(dates.filter((_, i) => i !== idx));
+  const setDate = (idx: number, value: string) =>
+    onChange(dates.map((d, i) => (i === idx ? { ...d, date: value } : d)));
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+        <CalendarDays size={12} />
+        Tanggal Doa Wilayah
+      </span>
+
+      {dates.length === 0 && (
+        <p className="text-[11px] italic text-muted-foreground/70">
+          Belum ada tanggal. Klik &quot;Tambah Tanggal&quot; untuk menjadwalkan.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {dates.map((d, idx) => {
+          const saved  = savedDates.find((sd) => sd.date === d.date && d.date !== "");
+          const opened = !!saved?.tallySessionId;
+          const canOpenTally = !!d.date && !hasUnsavedChanges && !opened;
+
+          return (
+            <div key={idx} className="flex flex-col gap-1.5 rounded-lg border border-border/40 bg-background/60 p-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={d.date}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDate(idx, e.target.value)}
+                  disabled={opened}
+                  className="h-8 flex-1 text-sm"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={opened ? "secondary" : "outline"}
+                  disabled={!canOpenTally && !opened}
+                  onClick={() => d.date && onOpenTally(d.date)}
+                  className="h-8 shrink-0 gap-1.5 text-xs"
+                >
+                  {opened ? (
+                    <>
+                      <Lock size={11} />
+                      TC Terkunci
+                    </>
+                  ) : (
+                    <>
+                      <Hash size={11} />
+                      Buka TC
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={opened}
+                  onClick={() => removeDate(idx)}
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+
+              {d.date && (
+                <span className="pl-0.5 text-[10px] text-muted-foreground">
+                  {formatDateID(d.date)}
+                </span>
+              )}
+
+              {opened && saved?.tallySessionId && (
+                <TCLiveBadge sessionId={saved.tallySessionId} />
+              )}
+
+              {!opened && d.date && hasUnsavedChanges && (
+                <span className="pl-0.5 text-[10px] italic text-amber-500/80">
+                  Simpan perubahan dulu supaya tombol Buka TC aktif.
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={addDate}
+        className="h-7 w-fit gap-1.5 text-xs"
+      >
+        <Plus size={12} />
+        Tambah Tanggal
+      </Button>
+    </div>
+  );
+}
+
 // ── Month Row ─────────────────────────────────────────────────────────────────
 
 function MonthRow({
@@ -180,43 +365,51 @@ function MonthRow({
   year: number;
   data: DoaWilayahMonth;
   members: Member[];
-  onOpenTally: (monthIndex: number) => void;
+  onOpenTally: (monthIndex: number, dateStr: string) => void;
 }) {
   const [open,  setOpen]  = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft,  setDraft] = useState<DoaWilayahMonth>(data);
 
-  // Sync when external data changes
+  // Sync when external (server) data changes — e.g. after Save, or after a
+  // TC session gets linked to one of this month's dates.
   useEffect(() => { setDraft(data); }, [data]);
 
-  const monthName = MONTH_NAMES[monthIndex - 1];
-  const sessionId = buildDoaWilayahSessionId(year, monthIndex);
-  const hasTally  = !!data.tallySessionId;
+  const monthName   = MONTH_NAMES[monthIndex - 1];
+  const savedDates  = useMemo(() => data.dates ?? [], [data.dates]);
+  const draftDates  = useMemo(() => draft.dates ?? [], [draft.dates]);
+  const openedSessionIds = savedDates.map((d) => d.tallySessionId).filter(Boolean) as string[];
+  const hasTally    = openedSessionIds.length > 0;
 
   const isDirty = useMemo(() => {
     return (
       draft.pic?.id !== data.pic?.id ||
       draft.tc1?.id !== data.tc1?.id ||
       draft.tc2?.id !== data.tc2?.id ||
-      (draft.notes ?? "") !== (data.notes ?? "")
+      (draft.notes ?? "") !== (data.notes ?? "") ||
+      JSON.stringify(draftDates) !== JSON.stringify(savedDates)
     );
-  }, [draft, data]);
+  }, [draft, data, draftDates, savedDates]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Drop blank date rows before persisting — one month is still one
+      // Doa Wilayah record; this just replaces its `dates` array wholesale.
+      const cleanedDates = draftDates.filter((d) => !!d.date);
       await updateDoaWilayahMonth(year, monthIndex, {
         pic:   draft.pic   ?? null,
         tc1:   draft.tc1   ?? null,
         tc2:   draft.tc2   ?? null,
         notes: draft.notes ?? "",
+        dates: cleanedDates,
       });
     } finally {
       setSaving(false);
     }
   };
 
-  const isAssigned = !!(data.pic || data.tc1 || data.tc2);
+  const isAssigned = !!(data.pic || data.tc1 || data.tc2 || savedDates.length > 0);
 
   return (
     <div className={cn(
@@ -243,9 +436,9 @@ function MonthRow({
           <Circle size={15} className="shrink-0 text-muted-foreground/30" />
         )}
 
-        {/* TC live badge or link */}
+        {/* TC live badge (aggregated across all opened dates this month) */}
         {hasTally && (
-          <TCLiveBadge sessionId={sessionId} />
+          <TCAggregateBadge sessionIds={openedSessionIds} />
         )}
 
         {/* PIC pill */}
@@ -297,46 +490,15 @@ function MonthRow({
             />
           </div>
 
-          {/* TC Tally section */}
+          {/* Tanggal Doa Wilayah + per-date TC */}
           <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-            <div className="mb-2.5 flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold">
-                <Hash size={13} className="text-violet-400" />
-                Tally Counter (TC)
-              </span>
-              {hasTally && <TCLiveBadge sessionId={sessionId} />}
-            </div>
-
-            {hasTally ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={() => onOpenTally(monthIndex)}
-                >
-                  <ExternalLink size={11} />
-                  Buka Tally
-                </Button>
-                <span className="text-[10px] text-muted-foreground">
-                  Sesi tersambung
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  className="h-7 gap-1.5 text-xs bg-violet-600 hover:bg-violet-700"
-                  onClick={() => onOpenTally(monthIndex)}
-                >
-                  <Hash size={11} />
-                  Buat &amp; Buka Tally
-                </Button>
-                <span className="text-[10px] text-muted-foreground">
-                  Belum ada sesi TC
-                </span>
-              </div>
-            )}
+            <DateListEditor
+              dates={draftDates}
+              savedDates={savedDates}
+              hasUnsavedChanges={isDirty}
+              onChange={(next) => setDraft((d: DoaWilayahMonth) => ({ ...d, dates: next }))}
+              onOpenTally={(dateStr) => onOpenTally(monthIndex, dateStr)}
+            />
           </div>
 
           {/* Save */}
@@ -402,7 +564,7 @@ function ServiceSummary({
   );
 }
 
-// ── TC Tally Summary (detailed per-month) ─────────────────────────────────────
+// ── TC Tally Summary (detailed per-month, aggregated across each month's dates) ─
 
 function TCMonthlySummary({
   year,
@@ -411,37 +573,51 @@ function TCMonthlySummary({
   year: number;
   months: Record<string, DoaWilayahMonth>;
 }) {
-  const [snapshots, setSnapshots] = useState<Record<number, TCSnapshot>>({});
+  const [snapshots, setSnapshots] = useState<Record<string, TCSnapshot>>({}); // key: sessionId
 
-  // Subscribe to all months that have a tally session
+  // Subscribe to every tally session linked to any date in the year
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     for (let m = 1; m <= 12; m++) {
-      const mData = months[monthKey(m)];
-      if (!mData?.tallySessionId) continue;
-      const sessionId = buildDoaWilayahSessionId(year, m);
-      const monthNum  = m;
-      const unsub = subscribeToTallySession(
-        sessionId,
-        (data: TallySessionDoc | null) => {
-          const snap = data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 };
-          setSnapshots((prev: Record<number, TCSnapshot>) => ({ ...prev, [monthNum]: snap }));
-        }
-      );
-      unsubs.push(unsub);
+      const mDates = months[monthKey(m)]?.dates ?? [];
+      for (const d of mDates) {
+        if (!d.tallySessionId) continue;
+        const sid = d.tallySessionId;
+        const unsub = subscribeToTallySession(
+          sid,
+          (data: TallySessionDoc | null) => {
+            const snap = data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 };
+            setSnapshots((prev: Record<string, TCSnapshot>) => ({ ...prev, [sid]: snap }));
+          }
+        );
+        unsubs.push(unsub);
+      }
     }
     return () => unsubs.forEach((u) => u());
   }, [year, months]);
 
   const monthsWithTally = Array.from({ length: 12 }, (_, i) => i + 1).filter(
-    (m) => !!months[monthKey(m)]?.tallySessionId
+    (m) => (months[monthKey(m)]?.dates ?? []).some((d) => !!d.tallySessionId)
   );
 
   if (monthsWithTally.length === 0) return null;
 
-  const snapValues = Object.values(snapshots) as TCSnapshot[];
-  const yearIn    = snapValues.reduce((s: number, v: TCSnapshot) => s + v.tcIn,  0);
-  const yearOut   = snapValues.reduce((s: number, v: TCSnapshot) => s + v.tcOut, 0);
+  const monthTotals: Record<number, TCSnapshot> = {};
+  for (const m of monthsWithTally) {
+    const sids = (months[monthKey(m)]?.dates ?? [])
+      .map((d) => d.tallySessionId)
+      .filter(Boolean) as string[];
+    const vals = sids.map((sid) => snapshots[sid]).filter(Boolean) as TCSnapshot[];
+    monthTotals[m] = {
+      tcIn:  vals.reduce((s, v) => s + v.tcIn,  0),
+      tcOut: vals.reduce((s, v) => s + v.tcOut, 0),
+      total: vals.reduce((s, v) => s + v.total, 0),
+    };
+  }
+
+  const totalValues = Object.values(monthTotals);
+  const yearIn    = totalValues.reduce((s: number, v: TCSnapshot) => s + v.tcIn,  0);
+  const yearOut   = totalValues.reduce((s: number, v: TCSnapshot) => s + v.tcOut, 0);
   const yearTotal = yearIn - yearOut;
 
   return (
@@ -470,7 +646,7 @@ function TCMonthlySummary({
       {/* Per-month breakdown */}
       <div className="space-y-1.5">
         {monthsWithTally.map((m) => {
-          const snap = snapshots[m];
+          const snap = monthTotals[m];
           return (
             <div key={m} className="flex items-center gap-2 text-xs">
               <span className="w-24 shrink-0 font-medium text-muted-foreground">
@@ -504,7 +680,7 @@ export default function DoaWilayahPage() {
   const [loading, setLoading] = useState(true);
 
   // Tally open dialog
-  const [tallyDialog,    setTallyDialog]    = useState<{ monthIndex: number; sessionId: string } | null>(null);
+  const [tallyDialog,    setTallyDialog]    = useState<{ monthIndex: number; dateStr: string; sessionId: string } | null>(null);
   const [tallyCreating, setTallyCreating]  = useState(false);
 
   // ── Load members from Firebase ────────────────────────────────────────────
@@ -541,30 +717,37 @@ export default function DoaWilayahPage() {
     return () => unsub();
   }, [year]);
 
-  // ── Tally open: ensure the TC session exists, then navigate ───────────────
-  const handleOpenTally = useCallback(async (monthIndex: number) => {
-    const sessionId = buildDoaWilayahSessionId(year, monthIndex);
-    const monthName = MONTH_NAMES[monthIndex - 1];
-    setTallyDialog({ monthIndex, sessionId });
+  // ── Tally open: ensure the TC session exists for THIS date, link it onto
+  //    the matching date entry (server truth), then let the user jump in.
+  //    Once `tallySessionId` is set on a date entry, the "Buka TC" button for
+  //    that date is permanently disabled (see DateListEditor).
+  const handleOpenTally = useCallback(async (monthIndex: number, dateStr: string) => {
+    const sessionId = buildDoaWilayahSessionId(dateStr);
+    setTallyDialog({ monthIndex, dateStr, sessionId });
     setTallyCreating(true);
     try {
       await ensureDoaWilayahTallySession({
         sessionId,
-        label: `Doa Wilayah — ${monthName} ${year}`,
-        date:  `${monthName} ${year}`,
+        label: `Doa Wilayah — ${formatDateID(dateStr)}`,
+        date:  dateStr,
       });
-      // Mark session id on the month doc
-      await updateDoaWilayahMonth(year, monthIndex, { tallySessionId: sessionId });
+
+      const key = monthKey(monthIndex);
+      const currentDates = yearDoc.months[key]?.dates ?? [];
+      const updatedDates = currentDates.map((d) =>
+        d.date === dateStr ? { ...d, tallySessionId: sessionId } : d
+      );
+      await updateDoaWilayahMonth(year, monthIndex, { dates: updatedDates });
     } finally {
       setTallyCreating(false);
     }
-  }, [year]);
+  }, [year, yearDoc]);
 
   const months = yearDoc.months;
   const assignedMonthCount = Array.from({ length: 12 }, (_, i) => i + 1)
     .filter((m) => {
       const d = months[monthKey(m)];
-      return !!(d?.pic || d?.tc1 || d?.tc2);
+      return !!(d?.pic || d?.tc1 || d?.tc2 || (d?.dates?.length ?? 0) > 0);
     }).length;
 
   const yearOptions = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
@@ -577,7 +760,7 @@ export default function DoaWilayahPage() {
         <div>
           <h1 className="font-display text-2xl tracking-tight">Doa Wilayah</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Jadwal PIC &amp; TC, catatan bulanan, dan tally count per event
+            Jadwal PIC &amp; TC, tanggal pelaksanaan, dan tally count per event
           </p>
         </div>
 
@@ -643,7 +826,7 @@ export default function DoaWilayahPage() {
               year={year as number}
               data={(months[monthKey(m)] ?? {}) as DoaWilayahMonth}
               members={members as Member[]}
-              onOpenTally={handleOpenTally as (monthIndex: number) => void}
+              onOpenTally={handleOpenTally}
             />
           ))
         )}
@@ -654,7 +837,7 @@ export default function DoaWilayahPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              Tally Counter — {tallyDialog ? MONTH_NAMES[tallyDialog.monthIndex - 1] : ""}
+              Tally Counter — {tallyDialog ? `${MONTH_NAMES[tallyDialog.monthIndex - 1]}, ${formatDateID(tallyDialog.dateStr)}` : ""}
             </DialogTitle>
           </DialogHeader>
 
@@ -668,7 +851,7 @@ export default function DoaWilayahPage() {
               {tallyDialog && <TCLiveBadge sessionId={tallyDialog.sessionId} />}
 
               <p className="text-sm text-muted-foreground">
-                Buka halaman Tally untuk mulai menghitung. Sesi TC In/Out sudah disiapkan dan tersambung otomatis.
+                Buka halaman Tally untuk mulai menghitung. Sesi TC In/Out sudah disiapkan dan tersambung otomatis untuk tanggal ini. Setelah dibuka, tombol &quot;Buka TC&quot; untuk tanggal ini akan terkunci agar sesi tidak dibuat ulang.
               </p>
 
               <div className="flex gap-2">

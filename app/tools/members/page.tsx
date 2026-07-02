@@ -310,7 +310,7 @@ function MembersContent() {
             <ReactSelect<SelectOption, false>
               options={userOptions}
               value={selectedSourceUser}
-              onChange={(opt) => {
+              onChange={(opt: SelectOption | null) => {
                 if (!opt) {
                   setForm({ ...form, sourceId: undefined });
                   return;
@@ -328,7 +328,7 @@ function MembersContent() {
               isDisabled={usersLoading}
               isClearable
               styles={{
-                control: (base, state) => ({
+                control: (base: any, state: any) => ({
                   ...base,
                   minHeight: "2.25rem",
                   borderRadius: "var(--radius-md)",
@@ -342,10 +342,10 @@ function MembersContent() {
                   lineHeight: "1.25rem",
                   cursor: "pointer",
                 }),
-                valueContainer: (base) => ({ ...base, padding: "0.25rem 0.5rem" }),
-                input: (base) => ({ ...base, color: "var(--foreground)", margin: 0, padding: 0 }),
-                placeholder: (base) => ({ ...base, color: "var(--muted-foreground)" }),
-                menu: (base) => ({
+                valueContainer: (base: any) => ({ ...base, padding: "0.25rem 0.5rem" }),
+                input: (base: any) => ({ ...base, color: "var(--foreground)", margin: 0, padding: 0 }),
+                placeholder: (base: any) => ({ ...base, color: "var(--muted-foreground)" }),
+                menu: (base: any) => ({
                   ...base,
                   backgroundColor: "var(--popover)",
                   border: "1px solid var(--border)",
@@ -354,8 +354,8 @@ function MembersContent() {
                   overflow: "hidden",
                   zIndex: 50,
                 }),
-                menuList: (base) => ({ ...base, padding: "0.25rem" }),
-                option: (base, state) => ({
+                menuList: (base: any) => ({ ...base, padding: "0.25rem" }),
+                option: (base: any, state: any) => ({
                   ...base,
                   borderRadius: "calc(var(--radius-md) - 2px)",
                   padding: "0.375rem 0.5rem",
@@ -365,7 +365,7 @@ function MembersContent() {
                   color: state.isSelected ? "var(--accent-foreground)" : "var(--popover-foreground)",
                 }),
                 indicatorSeparator: () => ({ display: "none" }),
-                dropdownIndicator: (base, state) => ({
+                dropdownIndicator: (base: any, state: any) => ({
                   ...base,
                   color: "var(--muted-foreground)",
                   padding: "0.25rem",
@@ -373,19 +373,19 @@ function MembersContent() {
                   transform: state.selectProps.menuIsOpen ? "rotate(180deg)" : "rotate(0deg)",
                   "&:hover": { color: "var(--foreground)" },
                 }),
-                clearIndicator: (base) => ({
+                clearIndicator: (base: any) => ({
                   ...base,
                   color: "var(--muted-foreground)",
                   padding: "0.25rem",
                   "&:hover": { color: "var(--foreground)" },
                 }),
-                noOptionsMessage: (base) => ({
+                noOptionsMessage: (base: any) => ({
                   ...base,
                   color: "var(--muted-foreground)",
                   fontSize: "0.875rem",
                   padding: "0.5rem",
                 }),
-                singleValue: (base) => ({
+                singleValue: (base: any) => ({
                   ...base,
                   color: "var(--foreground)",
                 }),

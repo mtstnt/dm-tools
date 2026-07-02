@@ -20,12 +20,35 @@ export interface MonthPerson {
   name: string;
 }
 
+/**
+ * A single Doa Wilayah prayer date scheduled within a month.
+ * `tallySessionId` is only set once the TC tally session for THIS specific
+ * date has been opened — after that, the "Buka TC" action for this date
+ * is locked (see doa-wilayah/page.tsx).
+ */
+export interface DoaWilayahDate {
+  date: string; // ISO date string "YYYY-MM-DD"
+  tallySessionId?: string;
+}
+
 export interface DoaWilayahMonth {
   pic?: MonthPerson | null;
   tc1?: MonthPerson | null;
   tc2?: MonthPerson | null;
   notes?: string;
-  /** Linked tools/tally session id (kind: "tc") for this month, if opened. */
+  /**
+   * All Doa Wilayah dates scheduled for this month. A month can have more
+   * than one prayer date, but the month itself always resolves to a single
+   * Doa Wilayah record — saving replaces this array wholesale (see
+   * `updateDoaWilayahMonth`), it never appends a second record for the
+   * same month.
+   */
+  dates?: DoaWilayahDate[];
+  /**
+   * @deprecated legacy single-session id used before per-date TC sessions
+   * existed. Kept only so older documents keep rendering; new writes
+   * should use `dates[].tallySessionId` instead.
+   */
   tallySessionId?: string;
 }
 
@@ -42,9 +65,13 @@ export function monthKey(month: number) {
   return String(month); // 1-12
 }
 
-/** Stable, deterministic tally session id for a given year+month. */
-export function buildDoaWilayahSessionId(year: number, month: number) {
-  return `doa-wilayah__${year}-${String(month).padStart(2, "0")}`;
+/**
+ * Stable, deterministic tally session id for a specific Doa Wilayah date.
+ * Because the date string already encodes year+month+day, this is unique
+ * per prayer date without needing extra arguments.
+ */
+export function buildDoaWilayahSessionId(dateStr: string) {
+  return `doa-wilayah__${dateStr}`;
 }
 
 export function subscribeDoaWilayahYear(
@@ -73,7 +100,6 @@ export async function fetchDoaWilayahYear(year: number): Promise<DoaWilayahYearD
   return { year, months: data.months ?? {} };
 }
 
-/** Partial update of a single month's fields (merge, dot-path safe). */
 export async function updateDoaWilayahMonth(
   year: number,
   month: number,

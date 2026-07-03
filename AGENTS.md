@@ -7,9 +7,14 @@ Use Bun, not npm/yarn/pnpm.
 ## Commands
 
 ```bash
-bun dev          # Start dev server (localhost:3000)
-bun run build    # Production build
-bun run lint     # ESLint (flat config, eslint-config-next)
+bun dev                   # Start dev server (localhost:3000)
+bun run build             # Production build
+bun run lint              # ESLint (flat config, eslint-config-next)
+npx tsc --noEmit          # Type check (no script configured)
+bunx drizzle-kit generate # Generate migration from schema.ts
+bunx drizzle-kit migrate  # Apply pending migrations
+bunx drizzle-kit check    # Validate schema and migration state
+bunx drizzle-kit studio   # Open Drizzle Studio
 ```
 
 No typecheck script exists. Run `npx tsc --noEmit` manually if needed.
@@ -26,10 +31,13 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=    # Firebase project ID
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
+DATABASE_URL=                       # libsql://... (Turso) or file:./<name>.db (local SQLite)
+DATABASE_AUTH_TOKEN=                # Turso auth token; omit for local SQLite
 SC_BASE_URL=                        # Server-only. Base URL for external events API (used by server actions)
 NEXT_PUBLIC_SC_BASE_URL=            # Client-exposed. Same value, used for link generation in event cards
 ```
 
+`DATABASE_URL` and `DATABASE_AUTH_TOKEN` are consumed by `db/connection.ts`. Use `file:./<name>.db` for local development; for Turso, use the `libsql://` URL and auth token.
 `SC_BASE_URL` is server-only (used in `app/actions.ts` for web auth and event fetching).
 `NEXT_PUBLIC_SC_BASE_URL` is client-side (used in `app/tools/events/` card links).
 Firebase config is hardcoded in `lib/firebase.ts` but env vars are available for future migration.
@@ -39,6 +47,10 @@ Firebase config is hardcoded in `lib/firebase.ts` but env vars are available for
 Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4.
 
 ```
+db/
+  schema.ts           Drizzle ORM schema (libsql/Turso/SQLite) — tables, enums, indexes, relations
+  connection.ts       Drizzle client initialized from DATABASE_URL + DATABASE_AUTH_TOKEN
+
 app/
   layout.tsx          Root: fonts (Instrument Serif, DM Sans, IBM Plex Mono), ThemeProvider, QueryClient
   actions/

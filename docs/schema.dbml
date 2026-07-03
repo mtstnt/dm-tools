@@ -1,0 +1,428 @@
+// ##### MASTER DATA #####
+
+Table teams {
+  id serial [pk, increment]
+
+  name varchar
+  region_id int [ref: > regions.id]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+Table regions {
+  id serial [pk, increment]
+
+  name varchar
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+// Stores: AOG_TEEN, AOG_YOUTH, CUSTOM (non-service event).
+Table event_types {
+  id serial [pk, increment]
+
+  name varchar
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+Table ministries {
+  id serial [pk, increment]
+
+  name varchar
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+// Stores what kind of metric is collected on the event.
+// Examples:
+// - SEAT COUNT
+// - TALLY COUNT
+// - WHL
+// - BAPTISM
+// - ONE MINUTE PRAYER
+Table metrics {
+  id serial [pk, increment]
+
+  name varchar
+  notes text
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+// Example:
+// SC, TCIN, TCOUT, FD, etc.
+Table tasks {
+  id serial [pk, increment]
+
+  name varchar
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+// ##### END MASTER DATA #####
+
+
+
+// ##### CONFIGURATION #####
+
+Table configurations {
+  id serial [pk, increment]
+
+  name varchar
+  value varchar
+
+  notes text
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    name [unique]
+  }
+}
+
+// ##### END CONFIGURATION #####
+
+
+
+// ##### USERS & PERMISSIONS #####
+
+Table users {
+  id serial [pk, increment]
+
+  full_name varchar
+
+  // Used to map against the legacy application.
+  email varchar [unique]
+
+  // Reserved for future self-authentication.
+  password varchar [default: null]
+
+  // Legacy application user id.
+  source_id int
+
+  team_id int [ref: > teams.id]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+Enum actions {
+  create
+  read
+  update
+  delete
+  execute
+}
+
+Table permissions {
+  id serial [pk, increment]
+
+  resource varchar
+  action actions
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (resource, action) [unique]
+  }
+}
+
+Table roles {
+  id serial [pk, increment]
+
+  name varchar
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+Table role_permissions {
+  id serial [pk, increment]
+
+  role_id int [ref: > roles.id]
+  permission_id int [ref: > permissions.id]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (role_id, permission_id) [unique]
+  }
+}
+
+Table user_permissions {
+  id serial [pk, increment]
+
+  user_id int [ref: > users.id]
+  permission_id int [ref: > permissions.id]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (user_id, permission_id) [unique]
+  }
+}
+
+Table user_roles {
+  id serial [pk, increment]
+
+  user_id int [ref: > users.id]
+  role_id int [ref: > roles.id]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (user_id, role_id) [unique]
+  }
+}
+
+// ##### END USERS & PERMISSIONS #####
+
+
+
+// ##### EVENT DATA COLLECTION #####
+
+Enum event_status {
+  pending
+  incomplete
+  completed
+}
+
+Table events {
+  id serial [pk, increment]
+
+  region_id int [ref: > regions.id]
+  event_type_id int [ref: > event_types.id]
+
+  date date
+  name varchar
+
+  // Legacy event id.
+  source_id int [default: null]
+
+  status event_status [default: "pending"]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+}
+
+// Which teams are responsible for an event.
+Table event_teams {
+  id serial [pk, increment]
+
+  event_id int [ref: > events.id]
+  team_id int [ref: > teams.id]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (event_id, team_id) [unique]
+  }
+}
+
+// Generated H-2/H-1 from event teams.
+// This becomes the actual assignment list.
+Table event_assignments {
+  id serial [pk, increment]
+
+  event_id int [ref: > events.id]
+  user_id int [ref: > users.id]
+
+  task_id int [ref: > tasks.id]
+  block_name varchar [default: null]
+
+  rating int [default: null]
+
+  technical_notes text
+  non_technical_notes text
+
+  rated_by_user_id int [ref: > users.id]
+  rated_by varchar
+  rated_at timestamp
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (user_id, event_id, task_id, block_name) [unique]
+  }
+}
+
+// User swap / absence requests.
+Enum approval_status {
+  pending
+  approved
+  rejected
+}
+
+Table event_assignment_change_requests {
+  id serial [pk, increment]
+
+  event_id int [ref: > events.id]
+
+  user_from_id int [ref: > users.id]
+
+  // Nullable if no replacement yet.
+  user_to_id int [ref: > users.id, null]
+
+  status approval_status [default: "pending"]
+
+  approved_by int [ref: > users.id, null]
+  approved_at timestamp
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (event_id, user_from_id, user_to_id) [unique]
+  }
+}
+
+// Generic metrics.
+Table event_metrics {
+  id serial [pk, increment]
+
+  event_id int [ref: > events.id]
+  metric_id int [ref: > metrics.id]
+
+  count int
+  notes text
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (event_id, metric_id) [unique]
+  }
+}
+
+Table event_volunteers {
+  id serial [pk, increment]
+
+  event_id int [ref: > events.id]
+  ministry_id int [ref: > ministries.id]
+
+  count int
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (event_id, ministry_id) [unique]
+  }
+}
+
+Table event_altar_calls {
+  id serial [pk, increment]
+
+  event_id int [ref: > events.id]
+
+  description text
+  count int
+
+  sequence int [default: 0]
+
+  created_at timestamp
+  updated_at timestamp
+
+  created_by varchar
+  updated_by varchar
+
+  indexes {
+    (event_id, sequence) [unique]
+  }
+}
+
+// ##### END EVENT DATA COLLECTION #####
+
+
+
+// ##### AUDIT TRAIL #####
+
+Table audit_trails {
+  id serial [pk, increment]
+
+  resource varchar
+  record_id int
+
+  action varchar
+
+  user_id int [ref: > users.id, null]
+  user_name varchar
+
+  old_data text
+  new_data text
+
+  changed_at timestamp
+}
+
+// ##### END AUDIT TRAIL #####

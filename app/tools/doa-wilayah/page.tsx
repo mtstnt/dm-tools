@@ -12,7 +12,7 @@ import {
   type DoaWilayahYearDoc,
 } from "@/lib/queries/doa-wilayah";
 import { fetchMembers, type Member } from "@/lib/queries/members";
-import { rankByFuzzyName } from "@/lib/fuzzy-search";
+import { rankByFuzzyName } from "../../../lib/fuzzy-search";
 import {
   ensureDoaWilayahTallySession,
   subscribeToTallySession,
@@ -168,7 +168,7 @@ function MemberCombobox({
                 Tidak ditemukan
               </div>
             ) : (
-              results.map((m) => (
+              results.map((m: Member) => (
                 <div
                   key={m.id}
                   onClick={() => selectMember(m)}

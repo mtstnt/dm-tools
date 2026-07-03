@@ -20,34 +20,22 @@ export interface MonthPerson {
   name: string;
 }
 
-/**
- * A single Doa Wilayah prayer date scheduled within a month.
- * `tallySessionId` is only set once the TC tally session for THIS specific
- * date has been opened — after that, the "Buka TC" action for this date
- * is locked (see doa-wilayah/page.tsx).
- */
-export interface DoaWilayahDate {
-  date: string; // ISO date string "YYYY-MM-DD"
-  tallySessionId?: string;
-}
-
 export interface DoaWilayahMonth {
   pic?: MonthPerson | null;
   tc1?: MonthPerson | null;
   tc2?: MonthPerson | null;
   notes?: string;
   /**
-   * All Doa Wilayah dates scheduled for this month. A month can have more
-   * than one prayer date, but the month itself always resolves to a single
-   * Doa Wilayah record — saving replaces this array wholesale (see
-   * `updateDoaWilayahMonth`), it never appends a second record for the
-   * same month.
+   * The Doa Wilayah date for this month — "YYYY-MM-DD". A month always has
+   * exactly one Doa Wilayah, so this is a single field, not a list: there is
+   * one record per month (12 per year), and saving always PUTs over
+   * whatever was there before (see `updateDoaWilayahMonth`).
    */
-  dates?: DoaWilayahDate[];
+  date?: string;
   /**
-   * @deprecated legacy single-session id used before per-date TC sessions
-   * existed. Kept only so older documents keep rendering; new writes
-   * should use `dates[].tallySessionId` instead.
+   * TC tally session tied to `date`. Set once via "Buka TC" — after that,
+   * both the date field and the "Buka TC" button lock, because a month can
+   * only ever have this one, fixed TC session.
    */
   tallySessionId?: string;
 }
@@ -100,6 +88,16 @@ export async function fetchDoaWilayahYear(year: number): Promise<DoaWilayahYearD
   return { year, months: data.months ?? {} };
 }
 
+/**
+ * Partial update of a single month's fields (merge, dot-path safe).
+ *
+ * A month only ever has ONE Doa Wilayah record. Every call here writes into
+ * `months.{month}.*` on the same year document, and each field passed in
+ * `patch` REPLACES whatever was saved before at that exact path — i.e. this
+ * is a PUT per field, not an append. Re-assigning PIC/TC1/TC2, editing
+ * notes, or changing the date all work by calling this with just the
+ * field(s) that changed; the rest of the month document is left untouched.
+ */
 export async function updateDoaWilayahMonth(
   year: number,
   month: number,

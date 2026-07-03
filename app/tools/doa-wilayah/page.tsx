@@ -1,8 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   MONTH_NAMES,
   subscribeDoaWilayahYear,
@@ -10,10 +8,11 @@ import {
   buildDoaWilayahSessionId,
   monthKey,
   type MonthPerson,
-  type DoaWilayahDate,
   type DoaWilayahMonth,
   type DoaWilayahYearDoc,
 } from "@/lib/queries/doa-wilayah";
+import { fetchMembers, type Member } from "@/lib/queries/members";
+import { rankByFuzzyName } from "@/lib/fuzzy-search";
 import {
   ensureDoaWilayahTallySession,
   subscribeToTallySession,
@@ -48,20 +47,11 @@ import {
   CheckCircle2,
   Circle,
   CalendarDays,
-  Plus,
-  Trash2,
   Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-interface Member {
-  id: string;
-  name: string;
-  nickname?: string;
-  team?: string;
-}
 
 interface TCSnapshot {
   tcIn: number;
@@ -72,13 +62,8 @@ interface TCSnapshot {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear();
-const NONE_VALUE   = "__none__";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function memberLabel(m: Member): string {
-  return m.nickname ? `${m.name} (${m.nickname})` : m.name;
-}
 
 /** Who has been assigned (PIC/TC1/TC2) in a given month. */
 function assignedIds(month: DoaWilayahMonth): string[] {
@@ -86,19 +71,15 @@ function assignedIds(month: DoaWilayahMonth): string[] {
 }
 
 /**
- * Count total appearances across all months (for the Ringkasan section).
- * A month counts as `dates.length` occurrences if dates were entered,
- * otherwise it falls back to 1 occurrence (for older records saved before
- * per-date scheduling existed).
+ * Count how many months (out of the year) each person has served in,
+ * across PIC/TC1/TC2. Since a month can only ever have one Doa Wilayah,
+ * this is naturally "how many times this year" — no extra weighting needed.
  */
 function buildServiceCount(months: Record<string, DoaWilayahMonth>): Record<string, number> {
   const count: Record<string, number> = {};
   for (const m of Object.values(months)) {
-    const ids = assignedIds(m);
-    if (ids.length === 0) continue;
-    const occurrences = m.dates && m.dates.length > 0 ? m.dates.length : 1;
-    for (const id of ids) {
-      count[id] = (count[id] ?? 0) + occurrences;
+    for (const id of assignedIds(m)) {
+      count[id] = (count[id] ?? 0) + 1;
     }
   }
   return count;
@@ -111,89 +92,104 @@ function formatDateID(iso: string): string {
   return d.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
-/** Sums live TC counts across several tally sessions at once (e.g. all dates in a month). */
-function useAggregatedTC(sessionIds: string[]): TCSnapshot | null {
-  const key = sessionIds.join(",");
-  const [snaps, setSnaps] = useState<Record<string, TCSnapshot>>({});
+// ── MemberCombobox: searchable, fuzzy-matched person picker ───────────────────
+// Same search-bar pattern as app/tools/assign/page.tsx (typo-tolerant name/
+// nickname ranking), adapted into a single-select field for PIC/TC1/TC2.
 
-  useEffect(() => {
-    if (sessionIds.length === 0) { setSnaps({}); return; }
-    const unsubs = sessionIds.map((id) =>
-      subscribeToTallySession(id, (data: TallySessionDoc | null) => {
-        setSnaps((prev) => ({
-          ...prev,
-          [id]: data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 },
-        }));
-      })
-    );
-    return () => unsubs.forEach((u) => u());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  if (sessionIds.length === 0) return null;
-  const vals = Object.values(snaps);
-  return {
-    tcIn:  vals.reduce((s, v) => s + v.tcIn,  0),
-    tcOut: vals.reduce((s, v) => s + v.tcOut, 0),
-    total: vals.reduce((s, v) => s + v.total, 0),
-  };
-}
-
-// ── MemberSelect sub-component ────────────────────────────────────────────────
-
-function MemberSelect({
+function MemberCombobox({
   label,
   value,
   members,
   onChange,
+  disabled,
 }: {
   label: string;
   value?: MonthPerson | null;
   members: Member[];
   onChange: (p: MonthPerson | null) => void;
+  disabled?: boolean;
 }) {
-  // Always resolve to a display NAME — never fall back to showing the raw id.
-  // If the member is still in the roster we show "Name (nickname)"; if they've
-  // since been removed from `members`, we still show the name that was saved
-  // on the record itself rather than its id.
-  const selectedLabel = useMemo(() => {
-    if (!value) return null;
-    const m = members.find((x) => x.id === value.id);
-    return m ? memberLabel(m) : value.name;
-  }, [value, members]);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // No query yet → browse everyone. Typing → fuzzy rank by name/nickname.
+  const results = useMemo(() => {
+    if (!query.trim()) return members;
+    return rankByFuzzyName(query, members, 8);
+  }, [query, members]);
+
+  const selectMember = (m: Member | null) => {
+    onChange(m ? { id: m.id, name: m.name } : null);
+    setQuery("");
+    setOpen(false);
+  };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1" ref={ref}>
       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
         {label}
       </span>
-      <Select
-        value={value?.id ?? NONE_VALUE}
-        onValueChange={(v: string | null) => {
-          if (!v || v === NONE_VALUE) { onChange(null); return; }
-          const m = members.find((x) => x.id === v);
-          if (m) onChange({ id: m.id, name: m.name });
-        }}
-      >
-        <SelectTrigger className="h-8 text-sm">
-          <SelectValue placeholder="— Pilih —">
-            {selectedLabel ?? "— Pilih —"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE_VALUE}>— Pilih —</SelectItem>
-          {members.map((m) => (
-            <SelectItem key={m.id} value={m.id}>
-              {memberLabel(m)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 select-none text-xs text-muted-foreground">
+          🔍
+        </span>
+        <Input
+          value={open ? query : (value?.name ?? "")}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { if (!disabled) { setQuery(""); setOpen(true); } }}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Escape") { setOpen(false); (e.target as HTMLInputElement).blur(); }
+            if (e.key === "Enter" && results.length > 0) { e.preventDefault(); selectMember(results[0]); }
+          }}
+          placeholder={disabled ? "— belum ditentukan —" : "Cari nama…"}
+          disabled={disabled}
+          className="h-8 pl-7 text-sm"
+        />
+
+        {open && !disabled && (
+          <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+            <div
+              onClick={() => selectMember(null)}
+              className="cursor-pointer border-b border-border/50 px-3 py-2 text-xs text-muted-foreground hover:bg-muted"
+            >
+              — Kosongkan —
+            </div>
+            {results.length === 0 ? (
+              <div className="px-3 py-3 text-center text-[11px] text-muted-foreground">
+                Tidak ditemukan
+              </div>
+            ) : (
+              results.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => selectMember(m)}
+                  className={cn(
+                    "cursor-pointer px-3 py-2 text-xs hover:bg-muted",
+                    value?.id === m.id && "bg-muted font-medium"
+                  )}
+                >
+                  {m.name}
+                  {m.team && <span className="ml-1.5 text-[10px] text-muted-foreground">· {m.team}</span>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// ── TC Tally summary mini-widget (live read) ──────────────────────────────────
+// ── TC Tally live-read badge ───────────────────────────────────────────────────
 
 function TCLiveBadge({ sessionId }: { sessionId: string }) {
   const [snap, setSnap] = useState<TCSnapshot | null>(null);
@@ -202,8 +198,7 @@ function TCLiveBadge({ sessionId }: { sessionId: string }) {
     const unsub = subscribeToTallySession(
       sessionId,
       (data: TallySessionDoc | null) => {
-        if (!data) { setSnap(null); return; }
-        setSnap(tcTotals(data.counts));
+        setSnap(data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 });
       }
     );
     return () => unsub();
@@ -222,40 +217,29 @@ function TCLiveBadge({ sessionId }: { sessionId: string }) {
   );
 }
 
-function TCAggregateBadge({ sessionIds }: { sessionIds: string[] }) {
-  const snap = useAggregatedTC(sessionIds);
-  if (!snap) return null;
-  return (
-    <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5 text-[11px] font-mono">
-      <span className="text-green-500">▲ In {snap.tcIn}</span>
-      <span className="text-muted-foreground/40">·</span>
-      <span className="text-red-400">▼ Out {snap.tcOut}</span>
-      <span className="text-muted-foreground/40">·</span>
-      <span className="font-bold text-foreground">= {snap.total}</span>
-    </div>
-  );
-}
+// ── Single date + single TC section for a month ────────────────────────────────
+// Only one Doa Wilayah per month → only one date, only one TC session. Once the
+// TC session is opened, both the date field and the "Buka TC" button lock.
 
-// ── Date list editor (list of Doa Wilayah dates within the month) ─────────────
-
-function DateListEditor({
-  dates,
-  savedDates,
-  hasUnsavedChanges,
-  onChange,
+function DateAndTallySection({
+  date,
+  savedDate,
+  tallySessionId,
+  isDirty,
+  canWrite,
+  onDateChange,
   onOpenTally,
 }: {
-  dates: DoaWilayahDate[];
-  savedDates: DoaWilayahDate[];
-  /** true while the row has edits not yet persisted (Save not pressed) */
-  hasUnsavedChanges: boolean;
-  onChange: (next: DoaWilayahDate[]) => void;
-  onOpenTally: (dateStr: string) => void;
+  date: string;
+  savedDate?: string;
+  tallySessionId?: string;
+  isDirty: boolean;
+  canWrite: boolean;
+  onDateChange: (v: string) => void;
+  onOpenTally: () => void;
 }) {
-  const addDate = () => onChange([...dates, { date: "" }]);
-  const removeDate = (idx: number) => onChange(dates.filter((_, i) => i !== idx));
-  const setDate = (idx: number, value: string) =>
-    onChange(dates.map((d, i) => (i === idx ? { ...d, date: value } : d)));
+  const opened = !!tallySessionId;
+  const canOpenTally = canWrite && !opened && !!savedDate && !isDirty;
 
   return (
     <div className="flex flex-col gap-2">
@@ -264,90 +248,53 @@ function DateListEditor({
         Tanggal Doa Wilayah
       </span>
 
-      {dates.length === 0 && (
-        <p className="text-[11px] italic text-muted-foreground/70">
-          Belum ada tanggal. Klik &quot;Tambah Tanggal&quot; untuk menjadwalkan.
-        </p>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {dates.map((d, idx) => {
-          const saved  = savedDates.find((sd) => sd.date === d.date && d.date !== "");
-          const opened = !!saved?.tallySessionId;
-          const canOpenTally = !!d.date && !hasUnsavedChanges && !opened;
-
-          return (
-            <div key={idx} className="flex flex-col gap-1.5 rounded-lg border border-border/40 bg-background/60 p-2">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={d.date}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDate(idx, e.target.value)}
-                  disabled={opened}
-                  className="h-8 flex-1 text-sm"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={opened ? "secondary" : "outline"}
-                  disabled={!canOpenTally && !opened}
-                  onClick={() => d.date && onOpenTally(d.date)}
-                  className="h-8 shrink-0 gap-1.5 text-xs"
-                >
-                  {opened ? (
-                    <>
-                      <Lock size={11} />
-                      TC Terkunci
-                    </>
-                  ) : (
-                    <>
-                      <Hash size={11} />
-                      Buka TC
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  disabled={opened}
-                  onClick={() => removeDate(idx)}
-                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 size={13} />
-                </Button>
-              </div>
-
-              {d.date && (
-                <span className="pl-0.5 text-[10px] text-muted-foreground">
-                  {formatDateID(d.date)}
-                </span>
-              )}
-
-              {opened && saved?.tallySessionId && (
-                <TCLiveBadge sessionId={saved.tallySessionId} />
-              )}
-
-              {!opened && d.date && hasUnsavedChanges && (
-                <span className="pl-0.5 text-[10px] italic text-amber-500/80">
-                  Simpan perubahan dulu supaya tombol Buka TC aktif.
-                </span>
-              )}
-            </div>
-          );
-        })}
+      <div className="flex items-center gap-2">
+        <Input
+          type="date"
+          value={date}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onDateChange(e.target.value)}
+          disabled={!canWrite || opened}
+          className="h-8 flex-1 text-sm"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant={opened ? "secondary" : "outline"}
+          disabled={opened || !canOpenTally}
+          onClick={onOpenTally}
+          className="h-8 shrink-0 gap-1.5 text-xs"
+        >
+          {opened ? (
+            <>
+              <Lock size={11} />
+              TC Terkunci
+            </>
+          ) : (
+            <>
+              <Hash size={11} />
+              Buka TC
+            </>
+          )}
+        </Button>
       </div>
 
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={addDate}
-        className="h-7 w-fit gap-1.5 text-xs"
-      >
-        <Plus size={12} />
-        Tambah Tanggal
-      </Button>
+      {date && (
+        <span className="pl-0.5 text-[10px] text-muted-foreground">{formatDateID(date)}</span>
+      )}
+
+      {opened && tallySessionId && <TCLiveBadge sessionId={tallySessionId} />}
+
+      {!opened && canWrite && date && isDirty && (
+        <span className="pl-0.5 text-[10px] italic text-amber-500/80">
+          Simpan perubahan dulu supaya tombol Buka TC aktif.
+        </span>
+      )}
+
+      {opened && (
+        <span className="pl-0.5 text-[10px] italic text-muted-foreground/70">
+          Tanggal terkunci — TC untuk bulan ini sudah dibuka dan tidak bisa dibuat ulang.
+        </span>
+      )}
     </div>
   );
 }
@@ -359,57 +306,60 @@ function MonthRow({
   year,
   data,
   members,
+  canWrite,
   onOpenTally,
 }: {
   monthIndex: number;   // 1-12
   year: number;
   data: DoaWilayahMonth;
   members: Member[];
+  canWrite: boolean;
   onOpenTally: (monthIndex: number, dateStr: string) => void;
 }) {
   const [open,  setOpen]  = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft,  setDraft] = useState<DoaWilayahMonth>(data);
 
-  // Sync when external (server) data changes — e.g. after Save, or after a
-  // TC session gets linked to one of this month's dates.
+  // Sync when the saved record changes — e.g. right after Save, or after a
+  // TC session gets linked to this month's date. This is what makes the
+  // month row always show the latest persisted data when you open it, and
+  // makes editing act like a PUT: the draft you edit always starts from
+  // exactly what's stored, and Save fully replaces those fields.
   useEffect(() => { setDraft(data); }, [data]);
 
-  const monthName   = MONTH_NAMES[monthIndex - 1];
-  const savedDates  = useMemo(() => data.dates ?? [], [data.dates]);
-  const draftDates  = useMemo(() => draft.dates ?? [], [draft.dates]);
-  const openedSessionIds = savedDates.map((d) => d.tallySessionId).filter(Boolean) as string[];
-  const hasTally    = openedSessionIds.length > 0;
+  const monthName = MONTH_NAMES[monthIndex - 1];
+  const hasTally  = !!data.tallySessionId;
 
   const isDirty = useMemo(() => {
     return (
-      draft.pic?.id !== data.pic?.id ||
-      draft.tc1?.id !== data.tc1?.id ||
-      draft.tc2?.id !== data.tc2?.id ||
-      (draft.notes ?? "") !== (data.notes ?? "") ||
-      JSON.stringify(draftDates) !== JSON.stringify(savedDates)
+      (draft.pic?.id ?? null)  !== (data.pic?.id ?? null)  ||
+      (draft.tc1?.id ?? null)  !== (data.tc1?.id ?? null)  ||
+      (draft.tc2?.id ?? null)  !== (data.tc2?.id ?? null)  ||
+      (draft.notes ?? "")      !== (data.notes ?? "")      ||
+      (draft.date ?? "")       !== (data.date ?? "")
     );
-  }, [draft, data, draftDates, savedDates]);
+  }, [draft, data]);
 
   const handleSave = async () => {
+    if (!canWrite || saving) return;
     setSaving(true);
     try {
-      // Drop blank date rows before persisting — one month is still one
-      // Doa Wilayah record; this just replaces its `dates` array wholesale.
-      const cleanedDates = draftDates.filter((d) => !!d.date);
+      // PUT semantics: every field here replaces whatever was saved before
+      // for this month — reassigning PIC/TC1/TC2, editing notes, or
+      // changing the date all just overwrite the previous value.
       await updateDoaWilayahMonth(year, monthIndex, {
         pic:   draft.pic   ?? null,
         tc1:   draft.tc1   ?? null,
         tc2:   draft.tc2   ?? null,
         notes: draft.notes ?? "",
-        dates: cleanedDates,
+        date:  draft.date  ?? "",
       });
     } finally {
       setSaving(false);
     }
   };
 
-  const isAssigned = !!(data.pic || data.tc1 || data.tc2 || savedDates.length > 0);
+  const isAssigned = !!(data.pic || data.tc1 || data.tc2 || data.date);
 
   return (
     <div className={cn(
@@ -421,27 +371,20 @@ function MonthRow({
         className="flex w-full items-center gap-3 px-4 py-3 text-left"
         onClick={() => setOpen((o: boolean) => !o)}
       >
-        {/* Month number badge */}
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
           {monthIndex}
         </span>
 
-        {/* Month name */}
         <span className="flex-1 text-sm font-semibold">{monthName}</span>
 
-        {/* Assigned indicator */}
         {isAssigned ? (
           <CheckCircle2 size={15} className="shrink-0 text-green-500" />
         ) : (
           <Circle size={15} className="shrink-0 text-muted-foreground/30" />
         )}
 
-        {/* TC live badge (aggregated across all opened dates this month) */}
-        {hasTally && (
-          <TCAggregateBadge sessionIds={openedSessionIds} />
-        )}
+        {hasTally && data.tallySessionId && <TCLiveBadge sessionId={data.tallySessionId} />}
 
-        {/* PIC pill */}
         {data.pic && (
           <span className="hidden sm:inline max-w-[120px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
             {data.pic.name}
@@ -455,29 +398,30 @@ function MonthRow({
       {open && (
         <div className="border-t border-border/50 px-4 pb-4 pt-3 space-y-4">
 
-          {/* Person picks */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <MemberSelect
+            <MemberCombobox
               label="PIC"
               value={draft.pic}
               members={members}
+              disabled={!canWrite}
               onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, pic: p }))}
             />
-            <MemberSelect
+            <MemberCombobox
               label="TC 1"
               value={draft.tc1}
               members={members}
+              disabled={!canWrite}
               onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc1: p }))}
             />
-            <MemberSelect
+            <MemberCombobox
               label="TC 2"
               value={draft.tc2}
               members={members}
+              disabled={!canWrite}
               onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc2: p }))}
             />
           </div>
 
-          {/* Notes */}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
               Catatan
@@ -486,35 +430,38 @@ function MonthRow({
               className="min-h-[72px] resize-none text-sm"
               placeholder="Catatan untuk bulan ini…"
               value={draft.notes ?? ""}
+              disabled={!canWrite}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft((d: DoaWilayahMonth) => ({ ...d, notes: e.target.value }))}
             />
           </div>
 
-          {/* Tanggal Doa Wilayah + per-date TC */}
           <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-            <DateListEditor
-              dates={draftDates}
-              savedDates={savedDates}
-              hasUnsavedChanges={isDirty}
-              onChange={(next) => setDraft((d: DoaWilayahMonth) => ({ ...d, dates: next }))}
-              onOpenTally={(dateStr) => onOpenTally(monthIndex, dateStr)}
+            <DateAndTallySection
+              date={draft.date ?? ""}
+              savedDate={data.date}
+              tallySessionId={data.tallySessionId}
+              isDirty={isDirty}
+              canWrite={canWrite}
+              onDateChange={(v) => setDraft((d: DoaWilayahMonth) => ({ ...d, date: v }))}
+              onOpenTally={() => data.date && onOpenTally(monthIndex, data.date)}
             />
           </div>
 
-          {/* Save */}
-          <div className="flex items-center justify-end gap-2">
-            {isDirty && (
-              <span className="text-[11px] text-muted-foreground italic">Ada perubahan belum disimpan</span>
-            )}
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={saving || !isDirty}
-              className="h-8"
-            >
-              {saving ? "Menyimpan…" : "Simpan"}
-            </Button>
-          </div>
+          {canWrite && (
+            <div className="flex items-center justify-end gap-2">
+              {isDirty && (
+                <span className="text-[11px] text-muted-foreground italic">Ada perubahan belum disimpan</span>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving || !isDirty}
+                className="h-8"
+              >
+                {saving ? "Menyimpan…" : "Simpan"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -564,7 +511,7 @@ function ServiceSummary({
   );
 }
 
-// ── TC Tally Summary (detailed per-month, aggregated across each month's dates) ─
+// ── TC Tally Summary (one session per month) ───────────────────────────────────
 
 function TCMonthlySummary({
   year,
@@ -573,51 +520,34 @@ function TCMonthlySummary({
   year: number;
   months: Record<string, DoaWilayahMonth>;
 }) {
-  const [snapshots, setSnapshots] = useState<Record<string, TCSnapshot>>({}); // key: sessionId
+  const [snapshots, setSnapshots] = useState<Record<number, TCSnapshot>>({});
 
-  // Subscribe to every tally session linked to any date in the year
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     for (let m = 1; m <= 12; m++) {
-      const mDates = months[monthKey(m)]?.dates ?? [];
-      for (const d of mDates) {
-        if (!d.tallySessionId) continue;
-        const sid = d.tallySessionId;
-        const unsub = subscribeToTallySession(
-          sid,
-          (data: TallySessionDoc | null) => {
-            const snap = data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 };
-            setSnapshots((prev: Record<string, TCSnapshot>) => ({ ...prev, [sid]: snap }));
-          }
-        );
-        unsubs.push(unsub);
-      }
+      const sid = months[monthKey(m)]?.tallySessionId;
+      if (!sid) continue;
+      const unsub = subscribeToTallySession(
+        sid,
+        (data: TallySessionDoc | null) => {
+          const snap = data ? tcTotals(data.counts) : { tcIn: 0, tcOut: 0, total: 0 };
+          setSnapshots((prev: Record<number, TCSnapshot>) => ({ ...prev, [m]: snap }));
+        }
+      );
+      unsubs.push(unsub);
     }
     return () => unsubs.forEach((u) => u());
   }, [year, months]);
 
   const monthsWithTally = Array.from({ length: 12 }, (_, i) => i + 1).filter(
-    (m) => (months[monthKey(m)]?.dates ?? []).some((d) => !!d.tallySessionId)
+    (m) => !!months[monthKey(m)]?.tallySessionId
   );
 
   if (monthsWithTally.length === 0) return null;
 
-  const monthTotals: Record<number, TCSnapshot> = {};
-  for (const m of monthsWithTally) {
-    const sids = (months[monthKey(m)]?.dates ?? [])
-      .map((d) => d.tallySessionId)
-      .filter(Boolean) as string[];
-    const vals = sids.map((sid) => snapshots[sid]).filter(Boolean) as TCSnapshot[];
-    monthTotals[m] = {
-      tcIn:  vals.reduce((s, v) => s + v.tcIn,  0),
-      tcOut: vals.reduce((s, v) => s + v.tcOut, 0),
-      total: vals.reduce((s, v) => s + v.total, 0),
-    };
-  }
-
-  const totalValues = Object.values(monthTotals);
-  const yearIn    = totalValues.reduce((s: number, v: TCSnapshot) => s + v.tcIn,  0);
-  const yearOut   = totalValues.reduce((s: number, v: TCSnapshot) => s + v.tcOut, 0);
+  const totalValues = monthsWithTally.map((m) => snapshots[m]).filter(Boolean) as TCSnapshot[];
+  const yearIn    = totalValues.reduce((s, v) => s + v.tcIn,  0);
+  const yearOut   = totalValues.reduce((s, v) => s + v.tcOut, 0);
   const yearTotal = yearIn - yearOut;
 
   return (
@@ -627,7 +557,6 @@ function TCMonthlySummary({
         <h3 className="text-sm font-semibold">Tally Count Doa Wilayah</h3>
       </div>
 
-      {/* Year totals */}
       <div className="mb-4 grid grid-cols-3 gap-2">
         {[
           { label: "TC In",  value: yearIn,    color: "text-green-500" },
@@ -643,10 +572,9 @@ function TCMonthlySummary({
         ))}
       </div>
 
-      {/* Per-month breakdown */}
       <div className="space-y-1.5">
         {monthsWithTally.map((m) => {
-          const snap = monthTotals[m];
+          const snap = snapshots[m];
           return (
             <div key={m} className="flex items-center gap-2 text-xs">
               <span className="w-24 shrink-0 font-medium text-muted-foreground">
@@ -676,52 +604,46 @@ function TCMonthlySummary({
 export default function DoaWilayahPage() {
   const [year,    setYear]    = useState(CURRENT_YEAR);
   const [yearDoc, setYearDoc] = useState<DoaWilayahYearDoc>({ year, months: {} });
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [yearLoading, setYearLoading] = useState(true);
 
-  // Tally open dialog
+  const [members,        setMembers]        = useState<Member[]>([]);
+  const [membersError,   setMembersError]   = useState(false);
+
   const [tallyDialog,    setTallyDialog]    = useState<{ monthIndex: number; dateStr: string; sessionId: string } | null>(null);
   const [tallyCreating, setTallyCreating]  = useState(false);
 
-  // ── Load members from Firebase ────────────────────────────────────────────
+  // ── Load members (used for the PIC/TC1/TC2 picker). ──
   useEffect(() => {
-    const load = async () => {
-      try {
-        const snap = await getDocs(collection(db, "members"));
-        const rows: Member[] = snap.docs.map((d: import("firebase/firestore").QueryDocumentSnapshot) => {
-          const data = d.data() as Record<string, unknown>;
-          return {
-            id: d.id,
-            name: (data.name as string) ?? "(tanpa nama)",
-            nickname: (data.nickname as string) ?? undefined,
-            team: (data.team as string) ?? undefined,
-          };
-        });
-        rows.sort((a, b) => a.name.localeCompare(b.name, "id"));
-        setMembers(rows);
-      } catch (e) {
-        console.error("Failed to load members:", e);
-      }
-    };
-    void load();
+    let mounted = true;
+    fetchMembers()
+      .then((rows) => { if (mounted) { setMembers(rows); setMembersError(false); } })
+      .catch((e) => { console.error("Failed to load members:", e); if (mounted) setMembersError(true); });
+    return () => { mounted = false; };
   }, []);
 
-  // ── Subscribe to year doc ─────────────────────────────────────────────────
+  // Anyone can read and write Doa Wilayah for now — no role/permission
+  // checks. `canWrite` is kept as a constant (rather than inlining `true`
+  // everywhere) so the write-gated UI below (disabled inputs, Save button,
+  // etc.) has a single switch to flip if role-based access is reintroduced
+  // later.
+  const canWrite = true;
+
   useEffect(() => {
-    setLoading(true);
+    setYearLoading(true);
     const unsub = subscribeDoaWilayahYear(
       year,
-      (data) => { setYearDoc(data); setLoading(false); },
-      (err)  => { console.error("Doa Wilayah subscription error:", err); setLoading(false); }
+      (data) => { setYearDoc(data); setYearLoading(false); },
+      (err)  => { console.error("Doa Wilayah subscription error:", err); setYearLoading(false); }
     );
     return () => unsub();
   }, [year]);
 
   // ── Tally open: ensure the TC session exists for THIS date, link it onto
-  //    the matching date entry (server truth), then let the user jump in.
-  //    Once `tallySessionId` is set on a date entry, the "Buka TC" button for
-  //    that date is permanently disabled (see DateListEditor).
+  //    the month (server truth), then let the user jump in. Once
+  //    `tallySessionId` is set, the date field and the "Buka TC" button lock
+  //    permanently for that month (see DateAndTallySection).
   const handleOpenTally = useCallback(async (monthIndex: number, dateStr: string) => {
+    if (!canWrite) return;
     const sessionId = buildDoaWilayahSessionId(dateStr);
     setTallyDialog({ monthIndex, dateStr, sessionId });
     setTallyCreating(true);
@@ -731,23 +653,17 @@ export default function DoaWilayahPage() {
         label: `Doa Wilayah — ${formatDateID(dateStr)}`,
         date:  dateStr,
       });
-
-      const key = monthKey(monthIndex);
-      const currentDates = yearDoc.months[key]?.dates ?? [];
-      const updatedDates = currentDates.map((d) =>
-        d.date === dateStr ? { ...d, tallySessionId: sessionId } : d
-      );
-      await updateDoaWilayahMonth(year, monthIndex, { dates: updatedDates });
+      await updateDoaWilayahMonth(year, monthIndex, { tallySessionId: sessionId });
     } finally {
       setTallyCreating(false);
     }
-  }, [year, yearDoc]);
+  }, [year, canWrite]);
 
   const months = yearDoc.months;
   const assignedMonthCount = Array.from({ length: 12 }, (_, i) => i + 1)
     .filter((m) => {
       const d = months[monthKey(m)];
-      return !!(d?.pic || d?.tc1 || d?.tc2 || (d?.dates?.length ?? 0) > 0);
+      return !!(d?.pic || d?.tc1 || d?.tc2 || d?.date);
     }).length;
 
   const yearOptions = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
@@ -760,11 +676,10 @@ export default function DoaWilayahPage() {
         <div>
           <h1 className="font-display text-2xl tracking-tight">Doa Wilayah</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Jadwal PIC &amp; TC, tanggal pelaksanaan, dan tally count per event
+            Jadwal PIC &amp; TC, tanggal pelaksanaan, dan tally count per bulan
           </p>
         </div>
 
-        {/* Year picker */}
         <Select
           value={String(year)}
           onValueChange={(v: string | null) => setYear(Number(v ?? CURRENT_YEAR))}
@@ -779,6 +694,14 @@ export default function DoaWilayahPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* ── Members failed to load — picker will be limited, but the rest of
+            the page (saved schedule, tally counts) still works fine. ── */}
+      {membersError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+          Gagal memuat daftar member. Pilihan PIC/TC mungkin tidak lengkap — coba muat ulang halaman.
+        </div>
+      )}
 
       {/* ── Quick stats bar ── */}
       <div className="grid grid-cols-3 gap-3">
@@ -812,7 +735,7 @@ export default function DoaWilayahPage() {
           </h2>
         </div>
 
-        {loading ? (
+        {yearLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />
@@ -826,6 +749,7 @@ export default function DoaWilayahPage() {
               year={year as number}
               data={(months[monthKey(m)] ?? {}) as DoaWilayahMonth}
               members={members as Member[]}
+              canWrite={canWrite}
               onOpenTally={handleOpenTally}
             />
           ))
@@ -847,11 +771,10 @@ export default function DoaWilayahPage() {
             </div>
           ) : (
             <div className="space-y-4 pt-1">
-              {/* TC Live preview */}
               {tallyDialog && <TCLiveBadge sessionId={tallyDialog.sessionId} />}
 
               <p className="text-sm text-muted-foreground">
-                Buka halaman Tally untuk mulai menghitung. Sesi TC In/Out sudah disiapkan dan tersambung otomatis untuk tanggal ini. Setelah dibuka, tombol &quot;Buka TC&quot; untuk tanggal ini akan terkunci agar sesi tidak dibuat ulang.
+                Buka halaman Tally untuk mulai menghitung. Sesi TC In/Out sudah disiapkan dan tersambung otomatis ke tanggal ini. Karena hanya ada satu Doa Wilayah per bulan, tombol &quot;Buka TC&quot; untuk bulan ini sekarang terkunci agar sesi tidak dibuat ulang.
               </p>
 
               <div className="flex gap-2">

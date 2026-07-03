@@ -102,12 +102,18 @@ function MemberCombobox({
   members,
   onChange,
   disabled,
+  excludeIds,
 }: {
   label: string;
   value?: MonthPerson | null;
   members: Member[];
   onChange: (p: MonthPerson | null) => void;
   disabled?: boolean;
+  /** People already picked in one of the OTHER PIC/TC1/TC2 fields for this
+   *  same month (with which role they hold) — filtered out of this field's
+   *  options so the same person can't be selected twice. The field's own
+   *  current value is never excluded from itself. */
+  excludeIds?: { id: string; label: string }[];
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -121,11 +127,35 @@ function MemberCombobox({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // No query yet → browse everyone. Typing → fuzzy rank by name/nickname.
+  const excludedSet = useMemo(
+    () => new Set((excludeIds ?? []).map((e) => e.id)),
+    [excludeIds]
+  );
+
+  // Pool this field is allowed to pick from: everyone minus whoever is
+  // already PIC/TC1/TC2 elsewhere in this same month.
+  const availableMembers = useMemo(
+    () => members.filter((m) => !excludedSet.has(m.id)),
+    [members, excludedSet]
+  );
+
+  // No query yet → browse everyone available. Typing → fuzzy rank by name/nickname.
   const results = useMemo(() => {
-    if (!query.trim()) return members;
-    return rankByFuzzyName(query, members, 8);
-  }, [query, members]);
+    if (!query.trim()) return availableMembers;
+    return rankByFuzzyName(query, availableMembers, 8);
+  }, [query, availableMembers]);
+
+  // If a search comes up empty, check whether the person the user is
+  // typing actually exists but is already taken by another field — so we
+  // can explain *why*, instead of just saying "not found".
+  const excludedMatch = useMemo(() => {
+    if (!query.trim() || results.length > 0 || excludedSet.size === 0) return null;
+    const excludedMembers = members.filter((m) => excludedSet.has(m.id));
+    const hit = rankByFuzzyName(query, excludedMembers, 1)[0];
+    if (!hit) return null;
+    const info = (excludeIds ?? []).find((e) => e.id === hit.id);
+    return info ? { name: hit.name, roleLabel: info.label } : null;
+  }, [query, results, excludedSet, members, excludeIds]);
 
   const selectMember = (m: Member | null) => {
     onChange(m ? { id: m.id, name: m.name } : null);
@@ -165,7 +195,9 @@ function MemberCombobox({
             </div>
             {results.length === 0 ? (
               <div className="px-3 py-3 text-center text-[11px] text-muted-foreground">
-                Tidak ditemukan
+                {excludedMatch
+                  ? `${excludedMatch.name} sudah dipilih sebagai ${excludedMatch.roleLabel}`
+                  : "Tidak ditemukan"}
               </div>
             ) : (
               results.map((m: Member) => (
@@ -320,8 +352,7 @@ function MonthRow({
 }) {
   const [open,  setOpen]  = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(true);
-  const [draft,  setDraft] = useState<DoaWilayahMonth>(data);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const monthName = MONTH_NAMES[monthIndex - 1];
   const hasTally = !!data.tallySessionId;
@@ -329,15 +360,28 @@ function MonthRow({
     data.pic || data.tc1 || data.tc2 || data.date || (data.notes ?? "")
   );
 
-  // Sync when the saved record changes — e.g. right after Save, or after a
-  // TC session gets linked to this month's date. This is what makes the
-  // month row always show the latest persisted data when you open it, and
-  // makes editing act like a PUT: the draft you edit always starts from
-  // exactly what's stored, and Save fully replaces those fields.
+  // editing/draft start from whatever is on the server right now: empty
+  // month → straight into the blank input form (mode 1); month with data →
+  // start in the read-only summary (mode 2), with "Ubah" to enter the form.
+  const [editing, setEditing] = useState(() => !hasSavedValues);
+  const [draft,  setDraft] = useState<DoaWilayahMonth>(data);
+
+  // Re-sync draft/editing from the server ONLY when this row is (re)opened —
+  // never continuously while it's open. A month's data lives on the same
+  // Firestore document as the other 11 months, so unrelated changes
+  // elsewhere in the year (someone else saving a different month, a TC
+  // session opening) fire this component's `data` prop with a new object on
+  // every keystroke-adjacent update; re-syncing on every such change used to
+  // wipe in-progress edits and could unexpectedly kick the form back to
+  // "view" mode mid-edit. Re-syncing only on open means you always see the
+  // latest saved data when you open a month, without that risk.
   useEffect(() => {
-    setDraft(data);
-    setEditing(!hasSavedValues);
-  }, [data, hasSavedValues]);
+    if (open) {
+      setDraft(data);
+      setEditing(!hasSavedValues);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const isDirty = useMemo(() => {
     return (
@@ -349,36 +393,75 @@ function MonthRow({
     );
   }, [draft, data]);
 
+  // A month only ever has ONE PIC, ONE TC1, ONE TC2 — the same person can't
+  // fill two of those roles at once. MemberCombobox already filters each
+  // dropdown's options to prevent picking a duplicate in the first place;
+  // this is the belt-and-suspenders check that blocks Save too, in case a
+  // duplicate ever ends up in `draft` some other way (e.g. old data).
+  const duplicatePersonError = useMemo(() => {
+    const picks: { roleLabel: string; id?: string }[] = [
+      { roleLabel: "PIC",  id: draft.pic?.id },
+      { roleLabel: "TC 1", id: draft.tc1?.id },
+      { roleLabel: "TC 2", id: draft.tc2?.id },
+    ];
+    const seenBy = new Map<string, string>();
+    for (const p of picks) {
+      if (!p.id) continue;
+      const seenRole = seenBy.get(p.id);
+      if (seenRole) return `${seenRole} dan ${p.roleLabel} tidak boleh orang yang sama.`;
+      seenBy.set(p.id, p.roleLabel);
+    }
+    return null;
+  }, [draft.pic, draft.tc1, draft.tc2]);
+
+  // The actual write — always a PUT into months.{monthIndex}.* on this same
+  // year document, so there is structurally only ever one Doa Wilayah per
+  // month; saving again just replaces whatever was there before.
   const handleSave = async () => {
-    if (!canWrite || saving) return;
+    if (!canWrite || saving || duplicatePersonError) return;
     setSaving(true);
     try {
-      // PUT semantics: every field here replaces whatever was saved before
-      // for this month — reassigning PIC/TC1/TC2, editing notes, or
-      // changing the date all just overwrite the previous value.
-      await updateDoaWilayahMonth(year, monthIndex, {
-        pic:   draft.pic   ?? null,
-        tc1:   draft.tc1   ?? null,
-        tc2:   draft.tc2   ?? null,
-        notes: draft.notes ?? "",
-        date:  draft.date  ?? "",
-      });
-      onSaved(monthIndex, {
+      const saved: DoaWilayahMonth = {
         pic:   draft.pic   ?? null,
         tc1:   draft.tc1   ?? null,
         tc2:   draft.tc2   ?? null,
         notes: draft.notes ?? "",
         date:  draft.date  ?? "",
         tallySessionId: data.tallySessionId,
+      };
+      await updateDoaWilayahMonth(year, monthIndex, {
+        pic: saved.pic, tc1: saved.tc1, tc2: saved.tc2, notes: saved.notes, date: saved.date,
       });
+      onSaved(monthIndex, saved);
+      setDraft(saved);
+      setEditing(false);
+      setConfirmOpen(false);
     } finally {
       setSaving(false);
     }
   };
 
+  // Mode 2 (editing pre-existing data) asks for confirmation first, since
+  // saving here replaces what's already stored — mode 1 (nothing saved yet
+  // for this month) just saves straight away, there's nothing to overwrite.
+  const handleSaveClick = () => {
+    if (!canWrite || saving || duplicatePersonError) return;
+    if (hasSavedValues) {
+      setConfirmOpen(true);
+    } else {
+      void handleSave();
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setDraft(data);
+    setEditing(false);
+  };
+
   const isAssigned = !!(data.pic || data.tc1 || data.tc2 || data.date);
 
   return (
+    <>
     <div className={cn(
       "rounded-xl border border-border/60 bg-card transition-all",
       open && "border-border"
@@ -444,20 +527,33 @@ function MonthRow({
                 <div className="font-medium">{data.date ? formatDateID(data.date) : "—"}</div>
               </div>
 
-              <div className="flex justify-end">
-                <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="h-8">
-                  Ubah
-                </Button>
-              </div>
+              {canWrite && (
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="h-8">
+                    Ubah
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <>
+              {hasSavedValues && (
+                <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-amber-500/80">
+                  <Lock size={11} />
+                  Mode Edit — mengubah data yang sudah tersimpan
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <MemberCombobox
                   label="PIC"
                   value={draft.pic}
                   members={members}
                   disabled={!canWrite}
+                  excludeIds={[
+                    draft.tc1?.id ? { id: draft.tc1.id, label: "TC 1" } : null,
+                    draft.tc2?.id ? { id: draft.tc2.id, label: "TC 2" } : null,
+                  ].filter(Boolean) as { id: string; label: string }[]}
                   onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, pic: p }))}
                 />
                 <MemberCombobox
@@ -465,6 +561,10 @@ function MonthRow({
                   value={draft.tc1}
                   members={members}
                   disabled={!canWrite}
+                  excludeIds={[
+                    draft.pic?.id ? { id: draft.pic.id, label: "PIC" } : null,
+                    draft.tc2?.id ? { id: draft.tc2.id, label: "TC 2" } : null,
+                  ].filter(Boolean) as { id: string; label: string }[]}
                   onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc1: p }))}
                 />
                 <MemberCombobox
@@ -472,6 +572,10 @@ function MonthRow({
                   value={draft.tc2}
                   members={members}
                   disabled={!canWrite}
+                  excludeIds={[
+                    draft.pic?.id ? { id: draft.pic.id, label: "PIC" } : null,
+                    draft.tc1?.id ? { id: draft.tc1.id, label: "TC 1" } : null,
+                  ].filter(Boolean) as { id: string; label: string }[]}
                   onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc2: p }))}
                 />
               </div>
@@ -503,16 +607,29 @@ function MonthRow({
 
               {canWrite && (
                 <div className="flex items-center justify-end gap-2">
-                  {isDirty && (
+                  {duplicatePersonError ? (
+                    <span className="text-[11px] text-red-500">{duplicatePersonError}</span>
+                  ) : isDirty ? (
                     <span className="text-[11px] text-muted-foreground italic">Ada perubahan belum disimpan</span>
+                  ) : null}
+                  {hasSavedValues && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                      disabled={saving}
+                      className="h-8"
+                    >
+                      Batal
+                    </Button>
                   )}
                   <Button
                     size="sm"
-                    onClick={handleSave}
-                    disabled={saving || !isDirty}
+                    onClick={handleSaveClick}
+                    disabled={saving || !isDirty || !!duplicatePersonError}
                     className="h-8"
                   >
-                    {saving ? "Menyimpan…" : "Simpan"}
+                    {saving ? "Menyimpan…" : hasSavedValues ? "Simpan Perubahan" : "Simpan"}
                   </Button>
                 </div>
               )}
@@ -521,6 +638,35 @@ function MonthRow({
         </div>
       )}
     </div>
+
+    <Dialog open={confirmOpen} onOpenChange={(o: boolean) => !saving && setConfirmOpen(o)}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ganti Data Doa Wilayah — {monthName}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Bulan {monthName} {year} sudah punya data Doa Wilayah tersimpan. Menyimpan sekarang akan
+          <strong className="text-foreground"> mengganti PIC, TC 1, TC 2, catatan, dan tanggal</strong> yang lama dengan data baru ini — data lama tidak bisa dikembalikan.
+        </p>
+        <div className="flex gap-2 pt-1">
+          <Button
+            className="flex-1"
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
+            {saving ? "Menyimpan…" : "Ya, Ganti Data"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setConfirmOpen(false)}
+            disabled={saving}
+          >
+            Batal
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

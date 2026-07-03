@@ -143,7 +143,7 @@ function MemberCombobox({
           🔍
         </span>
         <Input
-          value={open ? query : (value?.name ?? "")}
+          value={open && query ? query : (value?.name ?? "")}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => { if (!disabled) { setQuery(""); setOpen(true); } }}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -320,17 +320,24 @@ function MonthRow({
 }) {
   const [open,  setOpen]  = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(true);
   const [draft,  setDraft] = useState<DoaWilayahMonth>(data);
+
+  const monthName = MONTH_NAMES[monthIndex - 1];
+  const hasTally = !!data.tallySessionId;
+  const hasSavedValues = !!(
+    data.pic || data.tc1 || data.tc2 || data.date || (data.notes ?? "")
+  );
 
   // Sync when the saved record changes — e.g. right after Save, or after a
   // TC session gets linked to this month's date. This is what makes the
   // month row always show the latest persisted data when you open it, and
   // makes editing act like a PUT: the draft you edit always starts from
   // exactly what's stored, and Save fully replaces those fields.
-  useEffect(() => { setDraft(data); }, [data]);
-
-  const monthName = MONTH_NAMES[monthIndex - 1];
-  const hasTally  = !!data.tallySessionId;
+  useEffect(() => {
+    setDraft(data);
+    setEditing(!hasSavedValues);
+  }, [data, hasSavedValues]);
 
   const isDirty = useMemo(() => {
     return (
@@ -407,70 +414,109 @@ function MonthRow({
       {/* ── Expanded body ── */}
       {open && (
         <div className="border-t border-border/50 px-4 pb-4 pt-3 space-y-4">
+          {hasSavedValues && !editing ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-border/50 bg-muted/50 px-3 py-3 text-sm">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">PIC</span>
+                  <div className="mt-2 font-medium">{data.pic?.name ?? "—"}</div>
+                </div>
+                <div className="rounded-xl border border-border/50 bg-muted/50 px-3 py-3 text-sm">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">TC 1</span>
+                  <div className="mt-2 font-medium">{data.tc1?.name ?? "—"}</div>
+                </div>
+                <div className="rounded-xl border border-border/50 bg-muted/50 px-3 py-3 text-sm">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">TC 2</span>
+                  <div className="mt-2 font-medium">{data.tc2?.name ?? "—"}</div>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <MemberCombobox
-              label="PIC"
-              value={draft.pic}
-              members={members}
-              disabled={!canWrite}
-              onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, pic: p }))}
-            />
-            <MemberCombobox
-              label="TC 1"
-              value={draft.tc1}
-              members={members}
-              disabled={!canWrite}
-              onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc1: p }))}
-            />
-            <MemberCombobox
-              label="TC 2"
-              value={draft.tc2}
-              members={members}
-              disabled={!canWrite}
-              onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc2: p }))}
-            />
-          </div>
+              <div className="rounded-xl border border-border/50 bg-muted/50 p-3 text-sm">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">Catatan</span>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{data.notes || "—"}</p>
+              </div>
 
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-              Catatan
-            </span>
-            <Textarea
-              className="min-h-[72px] resize-none text-sm"
-              placeholder="Catatan untuk bulan ini…"
-              value={draft.notes ?? ""}
-              disabled={!canWrite}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft((d: DoaWilayahMonth) => ({ ...d, notes: e.target.value }))}
-            />
-          </div>
+              <div className="rounded-xl border border-border/50 bg-muted/50 p-3 text-sm">
+                <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+                  <CalendarDays size={12} />
+                  Tanggal Doa Wilayah
+                </div>
+                <div className="font-medium">{data.date ? formatDateID(data.date) : "—"}</div>
+              </div>
 
-          <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
-            <DateAndTallySection
-              date={draft.date ?? ""}
-              savedDate={data.date}
-              tallySessionId={data.tallySessionId}
-              isDirty={isDirty}
-              canWrite={canWrite}
-              onDateChange={(v) => setDraft((d: DoaWilayahMonth) => ({ ...d, date: v }))}
-              onOpenTally={() => data.date && onOpenTally(monthIndex, data.date)}
-            />
-          </div>
-
-          {canWrite && (
-            <div className="flex items-center justify-end gap-2">
-              {isDirty && (
-                <span className="text-[11px] text-muted-foreground italic">Ada perubahan belum disimpan</span>
-              )}
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={saving || !isDirty}
-                className="h-8"
-              >
-                {saving ? "Menyimpan…" : "Simpan"}
-              </Button>
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="h-8">
+                  Ubah
+                </Button>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <MemberCombobox
+                  label="PIC"
+                  value={draft.pic}
+                  members={members}
+                  disabled={!canWrite}
+                  onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, pic: p }))}
+                />
+                <MemberCombobox
+                  label="TC 1"
+                  value={draft.tc1}
+                  members={members}
+                  disabled={!canWrite}
+                  onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc1: p }))}
+                />
+                <MemberCombobox
+                  label="TC 2"
+                  value={draft.tc2}
+                  members={members}
+                  disabled={!canWrite}
+                  onChange={(p) => setDraft((d: DoaWilayahMonth) => ({ ...d, tc2: p }))}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+                  Catatan
+                </span>
+                <Textarea
+                  className="min-h-[72px] resize-none text-sm"
+                  placeholder="Catatan untuk bulan ini…"
+                  value={draft.notes ?? ""}
+                  disabled={!canWrite}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDraft((d: DoaWilayahMonth) => ({ ...d, notes: e.target.value }))}
+                />
+              </div>
+
+              <div className="rounded-lg border border-border/40 bg-muted/30 p-3">
+                <DateAndTallySection
+                  date={draft.date ?? ""}
+                  savedDate={data.date}
+                  tallySessionId={data.tallySessionId}
+                  isDirty={isDirty}
+                  canWrite={canWrite}
+                  onDateChange={(v) => setDraft((d: DoaWilayahMonth) => ({ ...d, date: v }))}
+                  onOpenTally={() => data.date && onOpenTally(monthIndex, data.date)}
+                />
+              </div>
+
+              {canWrite && (
+                <div className="flex items-center justify-end gap-2">
+                  {isDirty && (
+                    <span className="text-[11px] text-muted-foreground italic">Ada perubahan belum disimpan</span>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={saving || !isDirty}
+                    className="h-8"
+                  >
+                    {saving ? "Menyimpan…" : "Simpan"}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

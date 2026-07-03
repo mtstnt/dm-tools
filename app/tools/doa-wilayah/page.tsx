@@ -308,6 +308,7 @@ function MonthRow({
   members,
   canWrite,
   onOpenTally,
+  onSaved,
 }: {
   monthIndex: number;   // 1-12
   year: number;
@@ -315,6 +316,7 @@ function MonthRow({
   members: Member[];
   canWrite: boolean;
   onOpenTally: (monthIndex: number, dateStr: string) => void;
+  onSaved: (monthIndex: number, month: DoaWilayahMonth) => void;
 }) {
   const [open,  setOpen]  = useState(false);
   const [saving, setSaving] = useState(false);
@@ -353,6 +355,14 @@ function MonthRow({
         tc2:   draft.tc2   ?? null,
         notes: draft.notes ?? "",
         date:  draft.date  ?? "",
+      });
+      onSaved(monthIndex, {
+        pic:   draft.pic   ?? null,
+        tc1:   draft.tc1   ?? null,
+        tc2:   draft.tc2   ?? null,
+        notes: draft.notes ?? "",
+        date:  draft.date  ?? "",
+        tallySessionId: data.tallySessionId,
       });
     } finally {
       setSaving(false);
@@ -751,6 +761,15 @@ export default function DoaWilayahPage() {
               members={members as Member[]}
               canWrite={canWrite}
               onOpenTally={handleOpenTally}
+              onSaved={(monthIndex, month) => {
+                setYearDoc((prev) => ({
+                  ...prev,
+                  months: {
+                    ...prev.months,
+                    [monthKey(monthIndex)]: month,
+                  },
+                }));
+              }}
             />
           ))
         )}

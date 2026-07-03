@@ -5,7 +5,7 @@ import {
   type WebAuthResult,
   extractCookieHeader,
   webFetch,
-} from "@/app/actions/_shared";
+} from "@/actions/legacy-web/_shared";
 
 const NULL_CTX = { cookie: null, csrf: "" };
 

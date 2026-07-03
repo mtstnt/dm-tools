@@ -1,10 +1,10 @@
-import { getEvents } from "@/app/actions/events/list"
-import { getEventDetail } from "@/app/actions/events/detail"
-import { updateUserBlocks } from "@/app/actions/events/user-blocks/update"
-import { removeUserBlock } from "@/app/actions/events/user-blocks/delete"
-import { updateEventUsers } from "@/app/actions/events/update"
-import { updateBlock } from "@/app/actions/events/blocks/update"
-import { type LegacyWebContext } from "@/app/actions/_shared"
+import { getEvents } from "@/actions/legacy-web/events/list"
+import { getEventDetail } from "@/actions/legacy-web/events/detail"
+import { updateUserBlocks } from "@/actions/legacy-web/events/user-blocks/update"
+import { removeUserBlock } from "@/actions/legacy-web/events/user-blocks/delete"
+import { updateEventUsers } from "@/actions/legacy-web/events/update"
+import { updateBlock } from "@/actions/legacy-web/events/blocks/update"
+import { type LegacyWebContext } from "@/actions/legacy-web/_shared"
 import { type EventInfo } from "@/lib/parsers/events"
 
 export const eventKeys = {

@@ -1,6 +1,6 @@
 "use server";
 
-import { type LegacyWebContext, webFetch } from "@/app/actions/_shared";
+import { type LegacyWebContext, webFetch } from "@/actions/legacy-web/_shared";
 import { requiresReauth } from "@/lib/parsers/events";
 import { parseEventPage } from "@/lib/parsers/event-details";
 import { EventDetail } from "@/types/event";

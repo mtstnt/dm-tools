@@ -1,6 +1,6 @@
 "use server";
 
-import { type LegacyWebContext, webFetch } from "@/app/actions/_shared";
+import { type LegacyWebContext, webFetch } from "@/actions/legacy-web/_shared";
 import {
   parseEventDetail,
   requiresReauth,

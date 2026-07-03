@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { webLogin } from "@/app/actions/auth/web-login"
+import { webLogin } from "@/actions/legacy-web/auth/web-login"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 

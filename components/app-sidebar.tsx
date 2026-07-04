@@ -19,7 +19,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { collection, query as qf, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Calculator } from "lucide-react";
 import { Hash } from "lucide-react";
 
 export function AppSidebar() {
@@ -39,6 +38,7 @@ export function AppSidebar() {
     });
     return () => unsub();
   }, []);
+
   return (
     <Sidebar className="border-r-0">
       <SidebarHeader className="pb-2">

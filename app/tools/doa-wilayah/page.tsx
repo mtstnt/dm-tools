@@ -366,22 +366,30 @@ function MonthRow({
   const [editing, setEditing] = useState(() => !hasSavedValues);
   const [draft,  setDraft] = useState<DoaWilayahMonth>(data);
 
-  // Re-sync draft/editing from the server ONLY when this row is (re)opened —
-  // never continuously while it's open. A month's data lives on the same
-  // Firestore document as the other 11 months, so unrelated changes
-  // elsewhere in the year (someone else saving a different month, a TC
-  // session opening) fire this component's `data` prop with a new object on
-  // every keystroke-adjacent update; re-syncing on every such change used to
-  // wipe in-progress edits and could unexpectedly kick the form back to
-  // "view" mode mid-edit. Re-syncing only on open means you always see the
-  // latest saved data when you open a month, without that risk.
+  // Re-sync draft/editing from the server when the row is opened or when
+  // the opened row receives fresh data. This keeps the UI up to date after
+  // the parent `yearDoc` updates, while still preserving edits if the user
+  // is currently actively editing the month.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+
+    const isDraftEmpty = (
+      !draft.pic && !draft.tc1 && !draft.tc2 && !draft.date && !draft.notes
+    );
+
+    if (!editing) {
       setDraft(data);
       setEditing(!hasSavedValues);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+
+    // If this row opened before the external data arrived, and the draft is
+    // still empty, switch to view mode once saved values are present.
+    if (editing && hasSavedValues && isDraftEmpty) {
+      setDraft(data);
+      setEditing(false);
+    }
+  }, [open, editing, data, hasSavedValues, draft]);
 
   const isDirty = useMemo(() => {
     return (
@@ -834,7 +842,14 @@ export default function DoaWilayahPage() {
     setYearLoading(true);
     const unsub = subscribeDoaWilayahYear(
       year,
-      (data) => { setYearDoc(data); setYearLoading(false); },
+      (data) => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("[DoaWilayah] loaded year data:", year, data);
+          console.log("[DoaWilayah] keys:", Object.keys(data.months ?? {}));
+        }
+        setYearDoc(data);
+        setYearLoading(false);
+      },
       (err)  => { console.error("Doa Wilayah subscription error:", err); setYearLoading(false); }
     );
     return () => unsub();

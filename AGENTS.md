@@ -1,5 +1,9 @@
 # AGENTS
 
+## File Access
+
+Do not attempt to open .env file. You can open .env.template to get the fields that you need.  
+
 ## Package Manager
 
 Use Bun, not npm/yarn/pnpm.

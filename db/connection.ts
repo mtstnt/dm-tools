@@ -5,10 +5,14 @@ import { schemaRelations } from "./schema";
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error("DATABASE_URL is not set");
+  throw new Error("DATABASE_URL is not set!");
 }
 
-console.log("Database URL", databaseUrl);
+const databaseAuthToken = process.env.DATABASE_AUTH_TOKEN;
+
+if (process.env.NODE_ENV === "production" && !databaseAuthToken) {
+  throw new Error("DATABASE_AUTH_TOKEN is not set for production!");
+}
 
 /**
  * Single Drizzle instance for the application.
@@ -20,7 +24,7 @@ console.log("Database URL", databaseUrl);
 export const db = drizzle({
   connection: {
     url: databaseUrl,
-    authToken: process.env.DATABASE_AUTH_TOKEN || undefined,
+    authToken: databaseAuthToken,
   },
   relations: schemaRelations,
 });

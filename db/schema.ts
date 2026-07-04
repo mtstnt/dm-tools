@@ -19,14 +19,12 @@ export const actionsEnum = [
 ] as const;
 
 export type Action = (typeof actionsEnum)[number];
-
 export const eventStatusEnum = ["pending", "incomplete", "completed"] as const;
-
 export type EventStatus = (typeof eventStatusEnum)[number];
-
 export const approvalStatusEnum = ["pending", "approved", "rejected"] as const;
-
 export type ApprovalStatus = (typeof approvalStatusEnum)[number];
+export const roleScopes = ["all", "self", "team", "region"] as const;
+export type RoleScope = (typeof roleScopes)[number];
 
 /* ============================================================================
  * MASTER TABLES
@@ -182,11 +180,13 @@ export const users = sqliteTable(
 
     password: text("password"),
 
-    sourceId: integer("source_id").notNull(),
+    sourceId: integer("source_id"),
 
     teamId: integer("team_id")
-      .notNull()
       .references(() => teams.id),
+
+    is_team_pic: integer("is_team_pic", { mode: "boolean" })
+      .default(false),
 
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -261,6 +261,8 @@ export const rolePermissions = sqliteTable(
     permissionId: integer("permission_id")
       .notNull()
       .references(() => permissions.id),
+
+    scope: text("scope").$type<RoleScope>(),
 
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -890,6 +892,7 @@ export const schemaRelations = defineRelations(
         to: r.events.id,
         optional: false,
       }),
+
       ministry: r.one.ministries({
         from: r.eventVolunteers.ministryId,
         to: r.ministries.id,

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "8445b313-ee6a-4810-bed6-ac330947fde7",
+  "id": "15b0acc9-959e-4f2c-8c42-93c2fa1ef3e9",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -1311,6 +1311,16 @@
       "table": "role_permissions"
     },
     {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scope",
+      "entityType": "columns",
+      "table": "role_permissions"
+    },
+    {
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
@@ -1722,7 +1732,7 @@
     },
     {
       "type": "integer",
-      "notNull": true,
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -1732,11 +1742,21 @@
     },
     {
       "type": "integer",
-      "notNull": true,
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "team_id",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "is_team_pic",
       "entityType": "columns",
       "table": "users"
     },

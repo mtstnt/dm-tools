@@ -130,6 +130,7 @@ Table users {
   source_id int
 
   team_id int [ref: > teams.id]
+  is_team_pic boolean [default: false]
 
   created_at timestamp
   updated_at timestamp
@@ -180,6 +181,7 @@ Table role_permissions {
 
   role_id int [ref: > roles.id]
   permission_id int [ref: > permissions.id]
+  scope varchar [null] // all, self, team, region
 
   created_at timestamp
   updated_at timestamp

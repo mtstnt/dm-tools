@@ -14,6 +14,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { CalendarDays, FileText, History, Home, LayoutGrid, UserCheck } from "lucide-react"
+import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { collection, query as qf, where, getDocs } from "firebase/firestore";
@@ -43,7 +44,7 @@ export function AppSidebar() {
       <SidebarHeader className="pb-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<a href="/tools" />}>
+            <SidebarMenuButton size="lg" render={<Link href="/tools" />}>
               <div className="flex aspect-square size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                 <LayoutGrid className="size-4" />
               </div>
@@ -64,7 +65,7 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools" />}
+                  render={<Link href="/tools" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <Home className="size-4 text-muted-foreground" />
@@ -73,7 +74,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools/reports" />}
+                  render={<Link href="/tools/reports" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <FileText className="size-4 text-muted-foreground" />
@@ -82,7 +83,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools/reports-history" />}
+                  render={<Link href="/tools/reports-history" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <History className="size-4 text-muted-foreground" />
@@ -91,7 +92,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools/assign" />}
+                  render={<Link href="/tools/assign" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <UserCheck className="size-4 text-muted-foreground" />
@@ -100,7 +101,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools/events" />}
+                  render={<Link href="/tools/events" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <CalendarDays className="size-4 text-muted-foreground" />
@@ -113,7 +114,7 @@ export function AppSidebar() {
               {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    render={<a href="/tools/members" />}
+                    render={<Link href="/tools/members" />}
                     className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                   >
                     <UserCheck className="size-4 text-muted-foreground" />
@@ -124,7 +125,7 @@ export function AppSidebar() {
             </SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools/tally" />}
+                  render={<Link href="/tools/tally" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <Hash className="size-4 text-muted-foreground" />
@@ -133,7 +134,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<a href="/tools/doa-wilayah" />}
+                  render={<Link href="/tools/doa-wilayah" />}
                   className="gap-3 rounded-md transition-colors hover:bg-accent/60"
                 >
                   <UserCheck className="size-4 text-muted-foreground" />

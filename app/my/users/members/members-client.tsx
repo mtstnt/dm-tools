@@ -48,6 +48,7 @@ type MembersClientProps = {
 
 const emptyForm = {
   fullName: "",
+  nij: "",
   email: "",
   password: "",
   teamId: "null",
@@ -78,6 +79,7 @@ export function MembersClient({
     setSelectedUser(user)
     setForm({
       fullName: user.fullName,
+      nij: user.nij,
       email: user.email,
       password: "",
       teamId: String(user.teamId ?? "null"),
@@ -170,7 +172,7 @@ export function MembersClient({
               {user.fullName}
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              {user.email}
+              {user.nij}
             </p>
           </div>
         </div>
@@ -217,6 +219,26 @@ export function MembersClient({
               setForm((prev) => ({ ...prev, fullName: e.target.value.trim() }))
             }
             placeholder="Full name"
+            required
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <label htmlFor="nij" className="text-sm font-medium">
+            NIJ
+          </label>
+          <Input
+            id="nij"
+            value={form.nij}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                nij: e.target.value,
+              }))
+            }
+            onBlur={(e) =>
+              setForm((prev) => ({ ...prev, nij: e.target.value.trim() }))
+            }
+            placeholder="NIJ"
             required
           />
         </div>
@@ -355,7 +377,7 @@ export function MembersClient({
                         {user.fullName}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {user.email}
+                        {user.nij}
                       </p>
                     </div>
                   </div>

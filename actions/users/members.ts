@@ -17,6 +17,7 @@ import bcrypt from "bcrypt";
 export type MemberUser = {
   id: number;
   fullName: string;
+  nij: string;
   email: string;
   teamId: number | null;
   isSpv: boolean;
@@ -39,6 +40,7 @@ export type MembersResult = {
 
 const userSchema = z.object({
   fullName: z.string().min(1, "Full name is required").trim(),
+  nij: z.string().min(1, "NIJ is required").trim(),
   email: z.string().min(1, "Email is required").email("Invalid email").trim(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   teamId: z.union([z.literal("null"), z.coerce.number().int().positive()]),
@@ -46,6 +48,7 @@ const userSchema = z.object({
 
 const updateUserSchema = z.object({
   fullName: z.string().min(1, "Full name is required").trim(),
+  nij: z.string().min(1, "NIJ is required").trim(),
   email: z.string().min(1, "Email is required").email("Invalid email").trim(),
   password: z.string().optional(),
   teamId: z.union([z.literal("null"), z.coerce.number().int().positive()]),
@@ -64,6 +67,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
         .select({
           id: users.id,
           fullName: users.fullName,
+          nij: users.nij,
           email: users.email,
           teamId: users.teamId,
           roleName: roles.name,
@@ -79,6 +83,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
       {
         id: number;
         fullName: string;
+        nij: string;
         email: string;
         teamId: number | null;
         roleNames: Set<string>;
@@ -99,6 +104,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
         userMap.set(row.id, {
           id: row.id,
           fullName: row.fullName,
+          nij: row.nij,
           email: row.email,
           teamId: row.teamId,
           roleNames,
@@ -109,12 +115,14 @@ export async function getTeamMembers(): Promise<MembersResult> {
     const toMemberUser = (u: {
       id: number;
       fullName: string;
+      nij: string;
       email: string;
       teamId: number | null;
       roleNames: Set<string>;
     }): MemberUser => ({
       id: u.id,
       fullName: u.fullName,
+      nij: u.nij,
       email: u.email,
       teamId: u.teamId,
       isSpv: u.roleNames.has("SPV"),
@@ -188,8 +196,9 @@ export async function createUser(
     };
   }
 
-  const { fullName, email, password, teamId } = parseResult.data;
+  const { fullName, nij, email, password, teamId } = parseResult.data;
   const normalizedFullName = fullName.trim().toUpperCase();
+  const normalizedNij = nij.trim();
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
@@ -211,6 +220,7 @@ export async function createUser(
       .insert(users)
       .values({
         fullName: normalizedFullName,
+        nij: normalizedNij,
         email: normalizedEmail,
         password: hashedPassword,
         teamId: teamId === "null" ? null : teamId,
@@ -224,6 +234,7 @@ export async function createUser(
     const row = result[0];
     await logAuditTrail("users", row.id, "create", {}, {
       fullName: normalizedFullName,
+      nij: normalizedNij,
       email: normalizedEmail,
       teamId: teamId === "null" ? null : teamId,
     });
@@ -252,8 +263,9 @@ export async function updateUser(
     };
   }
 
-  const { fullName, email, password, teamId } = parseResult.data;
+  const { fullName, nij, email, password, teamId } = parseResult.data;
   const normalizedFullName = fullName.trim().toUpperCase();
+  const normalizedNij = nij.trim();
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
@@ -261,6 +273,7 @@ export async function updateUser(
       .select({
         id: users.id,
         fullName: users.fullName,
+        nij: users.nij,
         email: users.email,
         teamId: users.teamId,
       })
@@ -287,6 +300,7 @@ export async function updateUser(
     const ctx = await getUserContext();
     const updateData: {
       fullName: string;
+      nij: string;
       email: string;
       teamId: number | null;
       updatedAt: Date;
@@ -294,6 +308,7 @@ export async function updateUser(
       password?: string;
     } = {
       fullName: normalizedFullName,
+      nij: normalizedNij,
       email: normalizedEmail,
       teamId: teamId === "null" ? null : teamId,
       updatedAt: new Date(),
@@ -308,6 +323,7 @@ export async function updateUser(
 
     await logAuditTrail("users", id, "update", existing, {
       fullName: normalizedFullName,
+      nij: normalizedNij,
       email: normalizedEmail,
       teamId: teamId === "null" ? null : teamId,
     });
@@ -330,6 +346,7 @@ export async function deleteUser(id: number): Promise<UserMutationResult> {
       .select({
         id: users.id,
         fullName: users.fullName,
+        nij: users.nij,
         email: users.email,
         teamId: users.teamId,
       })

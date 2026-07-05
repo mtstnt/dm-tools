@@ -246,6 +246,7 @@ CREATE TABLE `user_roles` (
 CREATE TABLE `users` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
 	`full_name` text NOT NULL,
+	`nij` text NOT NULL,
 	`email` text NOT NULL,
 	`password` text,
 	`source_id` integer,

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "e8c0e42e-5d99-4966-ac2e-b025511086a6",
+  "id": "571acb65-dcde-4212-ac86-2ed66cb0ac5b",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -1707,6 +1707,16 @@
       "default": null,
       "generated": null,
       "name": "full_name",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "nij",
       "entityType": "columns",
       "table": "users"
     },

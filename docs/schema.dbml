@@ -3,51 +3,55 @@
 Table teams {
   id serial [pk, increment]
 
-  name varchar
-  region_id int [ref: > regions.id]
+  number int [not null]
+  region_id int [ref: > regions.id, not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
+
+  indexes {
+    number [unique]
+  }
 }
 
 Table regions {
   id serial [pk, increment]
 
-  name varchar
+  name varchar [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
-// Stores: AOG_TEEN, AOG_YOUTH, CUSTOM (non-service event).
+// Stores: AOG_TEEN, AOG_YOUTH, DOA_WILAYAH, CT_YOUTH, CT_TEEN, CUSTOM (non-service event).
 Table event_types {
   id serial [pk, increment]
 
-  name varchar
+  name varchar [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 Table ministries {
   id serial [pk, increment]
 
-  name varchar
+  name varchar [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 // Stores what kind of metric is collected on the event.
@@ -60,28 +64,28 @@ Table ministries {
 Table metrics {
   id serial [pk, increment]
 
-  name varchar
+  name varchar [not null]
   notes text
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 // Example:
-// SC, TCIN, TCOUT, FD, etc.
+// Event PIC, SC, TC, FD, AC Left, AC Right, AC Mobile, etc.
 Table tasks {
   id serial [pk, increment]
 
-  name varchar
+  name varchar [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 // ##### END MASTER DATA #####
@@ -93,16 +97,16 @@ Table tasks {
 Table configurations {
   id serial [pk, increment]
 
-  name varchar
-  value varchar
+  name varchar [not null]
+  value varchar [not null]
 
   notes text
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     name [unique]
@@ -118,25 +122,28 @@ Table configurations {
 Table users {
   id serial [pk, increment]
 
-  full_name varchar
+  full_name varchar [not null]
+
+  // NIJ (Nomor Induk Jemaat) — mandatory identifier.
+  nij varchar [not null]
 
   // Used to map against the legacy application.
-  email varchar [unique]
+  email varchar [not null, unique]
 
-  // Reserved for future self-authentication.
-  password varchar [default: null]
+  // Bcrypt-hashed password. Nullable for users imported from the legacy system
+  // before they are activated.
+  password varchar [null]
 
   // Legacy application user id.
-  source_id int
+  source_id int [null]
 
-  team_id int [ref: > teams.id]
-  is_team_pic boolean [default: false]
+  team_id int [ref: > teams.id, null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 Enum actions {
@@ -150,14 +157,14 @@ Enum actions {
 Table permissions {
   id serial [pk, increment]
 
-  resource varchar
-  action actions
+  resource varchar [not null]
+  action actions [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (resource, action) [unique]
@@ -167,27 +174,27 @@ Table permissions {
 Table roles {
   id serial [pk, increment]
 
-  name varchar
+  name varchar [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 Table role_permissions {
   id serial [pk, increment]
 
-  role_id int [ref: > roles.id]
-  permission_id int [ref: > permissions.id]
+  role_id int [ref: > roles.id, not null]
+  permission_id int [ref: > permissions.id, not null]
   scope varchar [null] // all, self, team, region
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (role_id, permission_id) [unique]
@@ -197,14 +204,14 @@ Table role_permissions {
 Table user_permissions {
   id serial [pk, increment]
 
-  user_id int [ref: > users.id]
-  permission_id int [ref: > permissions.id]
+  user_id int [ref: > users.id, not null]
+  permission_id int [ref: > permissions.id, not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (user_id, permission_id) [unique]
@@ -214,14 +221,14 @@ Table user_permissions {
 Table user_roles {
   id serial [pk, increment]
 
-  user_id int [ref: > users.id]
-  role_id int [ref: > roles.id]
+  user_id int [ref: > users.id, not null]
+  role_id int [ref: > roles.id, not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (user_id, role_id) [unique]
@@ -243,36 +250,37 @@ Enum event_status {
 Table events {
   id serial [pk, increment]
 
-  region_id int [ref: > regions.id]
-  event_type_id int [ref: > event_types.id]
+  region_id int [ref: > regions.id, not null]
+  event_type_id int [ref: > event_types.id, not null]
 
-  date date
-  name varchar
+  // Stored as integer timestamp (seconds/milliseconds depending on driver).
+  date int [not null]
+  name varchar [not null]
 
   // Legacy event id.
-  source_id int [default: null]
+  source_id int [null]
 
-  status event_status [default: "pending"]
+  status event_status [not null, default: "pending"]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 }
 
 // Which teams are responsible for an event.
 Table event_teams {
   id serial [pk, increment]
 
-  event_id int [ref: > events.id]
-  team_id int [ref: > teams.id]
+  event_id int [ref: > events.id, not null]
+  team_id int [ref: > teams.id, not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (event_id, team_id) [unique]
@@ -284,26 +292,26 @@ Table event_teams {
 Table event_assignments {
   id serial [pk, increment]
 
-  event_id int [ref: > events.id]
-  user_id int [ref: > users.id]
+  event_id int [ref: > events.id, not null]
+  user_id int [ref: > users.id, not null]
 
-  task_id int [ref: > tasks.id]
-  block_name varchar [default: null]
+  task_id int [ref: > tasks.id, not null]
+  block_name varchar [null]
 
-  rating int [default: null]
+  rating int [null]
 
-  technical_notes text
-  non_technical_notes text
+  technical_notes text [not null]
+  non_technical_notes text [not null]
 
-  rated_by_user_id int [ref: > users.id]
-  rated_by varchar
-  rated_at timestamp
+  rated_by_user_id int [ref: > users.id, not null]
+  rated_by varchar [not null]
+  rated_at timestamp [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (user_id, event_id, task_id, block_name) [unique]
@@ -320,23 +328,23 @@ Enum approval_status {
 Table event_assignment_change_requests {
   id serial [pk, increment]
 
-  event_id int [ref: > events.id]
+  event_id int [ref: > events.id, not null]
 
-  user_from_id int [ref: > users.id]
+  user_from_id int [ref: > users.id, not null]
 
   // Nullable if no replacement yet.
   user_to_id int [ref: > users.id, null]
 
-  status approval_status [default: "pending"]
+  status approval_status [not null, default: "pending"]
 
   approved_by int [ref: > users.id, null]
-  approved_at timestamp
+  approved_at timestamp [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (event_id, user_from_id, user_to_id) [unique]
@@ -347,17 +355,17 @@ Table event_assignment_change_requests {
 Table event_metrics {
   id serial [pk, increment]
 
-  event_id int [ref: > events.id]
-  metric_id int [ref: > metrics.id]
+  event_id int [ref: > events.id, not null]
+  metric_id int [ref: > metrics.id, not null]
 
-  count int
+  count int [not null]
   notes text
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (event_id, metric_id) [unique]
@@ -367,16 +375,16 @@ Table event_metrics {
 Table event_volunteers {
   id serial [pk, increment]
 
-  event_id int [ref: > events.id]
-  ministry_id int [ref: > ministries.id]
+  event_id int [ref: > events.id, not null]
+  ministry_id int [ref: > ministries.id, not null]
 
-  count int
+  count int [not null]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (event_id, ministry_id) [unique]
@@ -386,18 +394,18 @@ Table event_volunteers {
 Table event_altar_calls {
   id serial [pk, increment]
 
-  event_id int [ref: > events.id]
+  event_id int [ref: > events.id, not null]
 
-  description text
-  count int
+  description text [not null]
+  count int [not null]
 
-  sequence int [default: 0]
+  sequence int [not null, default: 0]
 
-  created_at timestamp
-  updated_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
 
-  created_by varchar
-  updated_by varchar
+  created_by varchar [not null]
+  updated_by varchar [not null]
 
   indexes {
     (event_id, sequence) [unique]
@@ -413,18 +421,18 @@ Table event_altar_calls {
 Table audit_trails {
   id serial [pk, increment]
 
-  resource varchar
-  record_id int
+  resource varchar [not null]
+  record_id int [not null]
 
-  action varchar
+  action varchar [not null]
 
   user_id int [ref: > users.id, null]
-  user_name varchar
+  user_name varchar [not null]
 
-  old_data text
-  new_data text
+  old_data text [not null]
+  new_data text [not null]
 
-  changed_at timestamp
+  changed_at timestamp [not null]
 }
 
 // ##### END AUDIT TRAIL #####

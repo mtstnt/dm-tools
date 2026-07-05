@@ -180,6 +180,8 @@ export const users = sqliteTable(
 
     fullName: text("full_name").notNull(),
 
+    nij: text("nij").notNull(),
+
     email: text("email").notNull(),
 
     password: text("password"),

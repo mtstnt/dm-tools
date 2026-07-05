@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentUser, logout, type CurrentUser } from "@/actions/auth/login"
+import { logout } from "@/actions/auth/login"
+import { useSessionUser } from "@/components/user-session-provider"
 import { LogOut, User as UserIcon } from "lucide-react"
 import {
   DropdownMenu,
@@ -14,33 +14,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function AccountInfo() {
-  const [user, setUser] = useState<CurrentUser | null>(null)
-  const [loading, setLoading] = useState(true)
+  const user = useSessionUser()
   const router = useRouter()
-
-  useEffect(() => {
-    getCurrentUser().then((u) => {
-      setUser(u)
-      setLoading(false)
-    })
-  }, [])
 
   async function handleLogout() {
     await logout()
     router.push("/auth/login")
     router.refresh()
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2.5 px-2 py-1.5">
-        <div className="flex flex-col gap-1 items-end">
-          <div className="h-3 w-16 rounded bg-muted animate-pulse" />
-          <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
-        </div>
-        <div className="size-8 rounded-full bg-muted animate-pulse shrink-0" />
-      </div>
-    )
   }
 
   if (!user) return null
@@ -69,6 +49,11 @@ export function AccountInfo() {
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
             </p>
+            {user.roles.length > 0 && (
+              <p className="text-[11px] leading-none text-muted-foreground/70">
+                {user.roles.join(", ")}
+              </p>
+            )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

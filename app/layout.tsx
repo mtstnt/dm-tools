@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next"
 import { Instrument_Serif, DM_Sans, IBM_Plex_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Providers } from "@/components/providers"
+import { UserSessionProvider } from "@/components/user-session-provider"
+import { getUserSession } from "@/actions/auth/session"
 import "./globals.css"
 
 const instrumentSerif = Instrument_Serif({
@@ -52,11 +54,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await getUserSession()
+
   return (
     <html
       lang="en"
@@ -65,7 +69,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <ThemeProvider>
-          <Providers>{children}</Providers>
+          <Providers>
+            <UserSessionProvider initialSession={session}>
+              {children}
+            </UserSessionProvider>
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

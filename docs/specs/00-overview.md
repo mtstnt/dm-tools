@@ -35,7 +35,7 @@ Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is missing from
 
 ```
 app/
-  layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider
+  layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider, UserSessionProvider
   auth/
     login/page.tsx    Email/password login (local users table)
     forget-password/  Disabled — redirects to /auth/login
@@ -54,6 +54,7 @@ app/
     legacy/events/    External SC events scraper + editor
 actions/              Root-level server actions (not under app/)
   auth/login.ts       Local auth actions
+  auth/session.ts     getUserSession() — full session with roles + permissions
   master/             Master data actions
   users/              Member/role/permission actions
   audit-trails.ts     Audit log action
@@ -61,15 +62,16 @@ actions/              Root-level server actions (not under app/)
 components/
   ui/                 Shadcn components
   custom/             master-crud-page.tsx, data-table.tsx
-  app-sidebar.tsx     Sidebar driven by lib/navigation.ts
+  app-sidebar.tsx     Sidebar driven by lib/navigation.ts; filters by permissions
   auth-guard.tsx      Client-side route guard
   web-auth-guard.tsx  Auth gate for external events API
   providers.tsx       React Query provider
   theme-provider.tsx  next-themes wrapper
+  user-session-provider.tsx  React Context for session, roles, permissions
   account-info.tsx    User dropdown (local auth)
 lib/
   firebase.ts         Firebase client init (hardcoded config, "use client")
-  navigation.ts       Sidebar menu groups and route links
+  navigation.ts       Sidebar menu items: groups + root links/dropdowns with optional resource
   queries/            React Query keys + Firestore/legacy action wrappers
   parsers/            Cheerio parsers for external events
 proxy.ts              Middleware function (exported but NOT wired to middleware.ts)

@@ -8,6 +8,7 @@ import {
   Globe,
   Hash,
   History,
+  Home,
   Key,
   ScrollText,
   SquareUser,
@@ -23,6 +24,7 @@ export type NavigationLink = {
   targetLink: string;
   icon?: LucideIcon;
   badge?: string;
+  resource?: string;
 };
 
 export type NavigationDropdown = {
@@ -30,17 +32,28 @@ export type NavigationDropdown = {
   label: string;
   icon?: LucideIcon;
   children: NavigationChild[];
+  resource?: string;
 };
 
 export type NavigationChild = NavigationLink | NavigationDropdown;
 
-export type Group = {
+export type NavigationGroup = {
+  type: "group";
   title: string;
   children: NavigationChild[];
 };
 
-export const sidebarMenus: Group[] = [
+export type NavigationRootItem = NavigationGroup | NavigationChild;
+
+export const sidebarMenus: NavigationRootItem[] = [
   {
+    type: "link",
+    label: "Home",
+    targetLink: "/my/home",
+    icon: Home,
+  },
+  {
+    type: "group",
     title: "Data Entry",
     children: [
       {
@@ -48,6 +61,7 @@ export const sidebarMenus: Group[] = [
         label: "Events",
         targetLink: "/my/events",
         icon: CalendarDays,
+        resource: "events",
       },
       {
         type: "link",
@@ -58,6 +72,7 @@ export const sidebarMenus: Group[] = [
     ],
   },
   {
+    type: "group",
     title: "Master",
     children: [
       {
@@ -65,46 +80,54 @@ export const sidebarMenus: Group[] = [
         label: "Regions",
         targetLink: "/my/master/regions",
         icon: Globe,
+        resource: "regions",
       },
       {
         type: "link",
         label: "Teams",
         targetLink: "/my/master/teams",
         icon: Users,
+        resource: "teams",
       },
       {
         type: "link",
         label: "Event Types",
         targetLink: "/my/master/event-types",
         icon: Calendar1,
+        resource: "event_types",
       },
       {
         type: "link",
         label: "Ministries",
         targetLink: "/my/master/ministries",
         icon: Church,
+        resource: "ministries",
       },
       {
         type: "link",
         label: "Metrics",
         targetLink: "/my/master/metrics",
         icon: Calculator,
+        resource: "metrics",
       },
       {
         type: "link",
         label: "Tasks",
         targetLink: "/my/master/tasks",
         icon: Workflow,
+        resource: "tasks",
       },
       {
         type: "link",
         label: "Audit Trails",
         targetLink: "/my/audit-trails",
         icon: ScrollText,
+        resource: "audit_trails",
       },
     ],
   },
   {
+    type: "group",
     title: "Team Management",
     children: [
       {
@@ -112,22 +135,26 @@ export const sidebarMenus: Group[] = [
         label: "Members",
         targetLink: "/my/users/members",
         icon: User,
+        resource: "users",
       },
       {
         type: "link",
         label: "Permissions",
         targetLink: "/my/users/permissions",
         icon: Key,
+        resource: "permissions",
       },
       {
         type: "link",
         label: "Roles",
         targetLink: "/my/users/roles",
         icon: SquareUser,
+        resource: "roles",
       },
     ],
   },
   {
+    type: "group",
     title: "Utilities",
     children: [
       {
@@ -148,9 +175,10 @@ export const sidebarMenus: Group[] = [
         targetLink: "/tools/utilities/tally",
         icon: Hash,
       },
-    ]
+    ],
   },
   {
+    type: "group",
     title: "Legacy SC Website",
     children: [
       {
@@ -158,6 +186,7 @@ export const sidebarMenus: Group[] = [
         label: "Events (Web SC)",
         targetLink: "/tools/legacy/events",
         icon: CalendarDays,
+        resource: "events",
       },
       {
         type: "link",
@@ -170,7 +199,7 @@ export const sidebarMenus: Group[] = [
         label: "Members (Firebase)",
         targetLink: "/tools/members",
         icon: UserCheck,
-        adminOnly: true,
+        resource: "users",
       },
     ],
   },

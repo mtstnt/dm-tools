@@ -1,11 +1,12 @@
 ### Roles
 
-| Role          |
-|---------------|
-| Head Ministry |
-| Regional PIC  |
-| SPV           |
-| Member        |
+| Role          | Notes |
+|---------------|-------|
+| ADMIN         | Hardcoded bypass role; no permissions needed, grants full access |
+| Head Ministry | Full permissions via `db/seeder.ts` |
+| Regional PIC  | Region-scoped management permissions |
+| SPV           | Team-scoped operational permissions |
+| Member        | Self/region-scoped read/update permissions |
 
 ### Permissions
 

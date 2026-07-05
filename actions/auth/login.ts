@@ -19,6 +19,7 @@ export interface CurrentUser {
   id: number;
   fullName: string;
   email: string;
+  nij: string;
 }
 
 export async function login(
@@ -32,6 +33,7 @@ export async function login(
       id: users.id,
       fullName: users.fullName,
       email: users.email,
+      nij: users.nij,
       password: users.password,
     })
     .from(users)
@@ -87,6 +89,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       id: users.id,
       fullName: users.fullName,
       email: users.email,
+      nij: users.nij,
     })
     .from(users)
     .where(eq(users.id, id))

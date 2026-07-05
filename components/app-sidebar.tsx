@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -22,7 +21,17 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChevronRight, LayoutGrid } from "lucide-react";
-import { sidebarMenus, type NavigationChild } from "@/lib/navigation";
+import {
+  sidebarMenus,
+  type NavigationChild,
+  type NavigationGroup,
+  type NavigationRootItem,
+} from "@/lib/navigation";
+import {
+  useSessionUser,
+  hasPermission,
+} from "@/components/user-session-provider";
+import type { UserSession } from "@/actions/auth/session";
 import Link from "next/link";
 
 function isLink(
@@ -37,6 +46,30 @@ function isDropdown(
   return node.type === "dropdown";
 }
 
+function isNavigationGroup(
+  item: NavigationRootItem,
+): item is NavigationGroup {
+  return item.type === "group";
+}
+
+function isNodeVisible(
+  session: UserSession | null,
+  node: NavigationChild,
+): boolean {
+  if (isDropdown(node)) {
+    if (node.resource && !hasPermission(session, node.resource, "read")) {
+      return false;
+    }
+    return node.children.some((child) => isNodeVisible(session, child));
+  }
+
+  if (isLink(node) && node.resource) {
+    return hasPermission(session, node.resource, "read");
+  }
+
+  return true;
+}
+
 function NavigationNode({
   node,
   nested = false,
@@ -44,6 +77,12 @@ function NavigationNode({
   node: NavigationChild;
   nested?: boolean;
 }) {
+  const session = useSessionUser();
+
+  if (!isNodeVisible(session, node)) {
+    return null;
+  }
+
   if (isLink(node)) {
     if (nested) {
       return (
@@ -82,6 +121,10 @@ function NavigationNode({
   }
 
   if (isDropdown(node)) {
+    const visibleChildren = node.children.filter((child) =>
+      isNodeVisible(session, child),
+    );
+
     return (
       <SidebarMenuItem>
         <Collapsible className="group/collapsible">
@@ -98,7 +141,7 @@ function NavigationNode({
           />
           <CollapsibleContent>
             <SidebarMenuSub>
-              {node.children.map((child, index) => (
+              {visibleChildren.map((child, index) => (
                 <NavigationNode
                   key={index}
                   node={child}
@@ -116,6 +159,12 @@ function NavigationNode({
 }
 
 export function AppSidebar() {
+  const session = useSessionUser();
+
+  function isGroupVisible(group: NavigationGroup): boolean {
+    return group.children.some((child) => isNodeVisible(session, child));
+  }
+
   return (
     <Sidebar className="border-r-0">
       <SidebarHeader className="pb-2">
@@ -138,23 +187,47 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-0">
-        {sidebarMenus.map((group, groupIndex) => (
-          <SidebarGroup key={groupIndex}>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/60 font-medium px-2 mb-1">
-              {group.title}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.children.map((node, nodeIndex) => (
-                  <NavigationNode
-                    key={`${groupIndex}:${nodeIndex}`}
-                    node={node}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {sidebarMenus.map((item, itemIndex) => {
+          if (isNavigationGroup(item)) {
+            if (!isGroupVisible(item)) {
+              return null;
+            }
+
+            return (
+              <SidebarGroup key={itemIndex}>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/60 font-medium px-2 mb-1">
+                  {item.title}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {item.children
+                      .filter((child) => isNodeVisible(session, child))
+                      .map((node, nodeIndex) => (
+                        <NavigationNode
+                          key={`${itemIndex}:${nodeIndex}`}
+                          node={node}
+                        />
+                      ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          }
+
+          if (!isNodeVisible(session, item)) {
+            return null;
+          }
+
+          return (
+            <SidebarGroup key={itemIndex}>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <NavigationNode node={item} />
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
       <SidebarRail />
     </Sidebar>

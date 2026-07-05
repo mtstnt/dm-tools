@@ -12,9 +12,11 @@ Email/password authentication against the local SQLite `users` table. Session st
 | `app/auth/forget-password/page.tsx` | Disabled — redirects to `/auth/login` |
 | `app/auth/page.tsx` | Redirects to `/auth/login` |
 | `actions/auth/login.ts` | Server actions: `login()`, `logout()`, `getCurrentUser()`, `checkAuth()` |
-| `components/account-info.tsx` | Displays logged-in user, handles logout |
+| `actions/auth/session.ts` | Server action: `getUserSession()` returns id, email, fullName, nij, roles, permissions |
+| `components/account-info.tsx` | Displays logged-in user and roles, handles logout |
 | `components/logout-button.tsx` | Sidebar logout button |
 | `components/auth-guard.tsx` | Client-side route guard for `/my/*` and `/tools/*` |
+| `components/user-session-provider.tsx` | React Context + hooks: `useSessionUser()`, `hasPermission()` |
 | `proxy.ts` | Route protection logic (exported but NOT used as middleware) |
 
 ## Flow
@@ -35,6 +37,11 @@ Email/password authentication against the local SQLite `users` table. Session st
 3. Server action deletes the `authenticated` cookie
 4. Client redirects to `/auth/login`
 
+### Session Context
+- `app/layout.tsx` fetches `getUserSession()` server-side and hydrates `UserSessionProvider`
+- Components anywhere in the app can call `useSessionUser()` to read id, email, fullName, nij, roles, and permissions without extra fetches
+- `hasPermission(session, resource, action)` checks the session; the hardcoded `ADMIN` role bypasses all checks
+
 ### Route Protection
 - `AuthGuard` (`components/auth-guard.tsx`) calls `checkAuth()` to verify the session cookie before rendering `/my/*` and `/tools/*` routes
 - `proxy.ts` exports a `proxy()` function and `config.matcher`, but there is no `middleware.ts` file — the proxy function is orphaned
@@ -53,11 +60,15 @@ path: "/"
 
 ## User Passwords
 
-Passwords are stored as bcrypt hashes in `users.password`. The seeder creates a default admin user (`admin@email.com` / `123456`) with the `Head Ministry` role.
+Passwords are stored as bcrypt hashes in `users.password`. The seeder creates a default admin user (`admin@email.com` / `123456`) with the `ADMIN` role.
 
 ## Permission Bypass
 
-`actions/master/_shared.ts` grants full access to any user whose role name is exactly `ADMIN`. The seeded `Head Ministry` role also receives full permissions via `db/seeder.ts`.
+The hardcoded `ADMIN` role name bypasses all permission checks:
+- `checkPermission(resource, action)` in `actions/master/_shared.ts` returns `true` for any user with role name `ADMIN`
+- `hasPermission(session, resource, action)` in `components/user-session-provider.tsx` returns `true` for any session whose `roles` array includes `ADMIN`
+
+The seeded `Head Ministry` role receives full permissions via `db/seeder.ts`, but it does **not** bypass checks — it is evaluated through the normal permission matrix.
 
 ## Gotchas
 

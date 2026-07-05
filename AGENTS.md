@@ -54,7 +54,7 @@ Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4 + Shadcn UI
 
 ```
 app/
-  layout.tsx                Root: fonts, ThemeProvider, QueryClient
+  layout.tsx                Root: fonts, ThemeProvider, QueryClient, UserSessionProvider
   auth/
     page.tsx                Redirects to /auth/login
     login/page.tsx          Email/password login (local users table)
@@ -84,6 +84,7 @@ app/
 
 actions/                    Root-level server actions (NOT under app/)
   auth/login.ts             login(), logout(), getCurrentUser(), checkAuth()
+  auth/session.ts           getUserSession() — full user session with roles + permissions
   master/_shared.ts         getUserContext(), checkPermission(), logAuditTrail()
   master/{regions,teams,event-types,ministries,metrics,tasks}.ts
   users/{members,roles,permissions}.ts
@@ -101,16 +102,17 @@ db/
 components/
   ui/                       Shadcn components (base-nova, lucide icons)
   custom/                   master-crud-page.tsx, data-table.tsx
-  app-sidebar.tsx           Navigation driven by lib/navigation.ts
+  app-sidebar.tsx           Navigation driven by lib/navigation.ts; filters by permissions
   auth-guard.tsx            Client-side route guard (cookie check)
   web-auth-guard.tsx        Auth gate for external SC events API
   providers.tsx             React Query (staleTime 5m, gcTime 30m, no refetch on focus)
   theme-provider.tsx        next-themes wrapper
+  user-session-provider.tsx React Context for user session, roles, and permissions
   account-info.tsx          Logged-in user dropdown (local auth)
 
 lib/
   firebase.ts               Hardcoded Firebase client config ("use client")
-  navigation.ts             Sidebar menu groups and route links
+  navigation.ts             Sidebar menu items: groups + root links/dropdowns with optional resource
   utils.ts                  cn() helper
   queries/
     reports.ts              Firestore reports fetch + reportKeys
@@ -136,8 +138,8 @@ proxy.ts                    Exported middleware function + matcher; NOT wired to
 - **Shadcn UI**: Prefer Shadcn components. Config in `components.json` (style: `base-nova`, icon library: `lucide`).
 - **Auth**: Local `users` table with bcrypt. Sets httpOnly `authenticated` cookie containing the numeric user ID. Firebase Auth is **not** used for app authentication; Firebase is only used for Firestore.
 - **No middleware.ts**: `proxy.ts` exports middleware logic but is not wired up. Route protection is client-side via `AuthGuard` on `/my/*` and `/tools/*` layouts.
-- **Default admin**: `db/seeder.ts` creates `admin@email.com` / `123456` with the `Head Ministry` role.
-- **Permission model**: Resources (`users`, `events`, `regions`, ...) × actions (`create`, `read`, `update`, `delete`, `execute`). The `ADMIN` role name and `Head Ministry` role both bypass checks; `checkPermission()` in `actions/master/_shared.ts` grants full access to any user with role name `ADMIN`.
+- **Default admin**: `db/seeder.ts` creates `admin@email.com` / `123456` with the `ADMIN` role.
+- **Permission model**: Resources (`users`, `events`, `regions`, ...) × actions (`create`, `read`, `update`, `delete`, `execute`). The hardcoded `ADMIN` role name bypasses all permission checks in both `checkPermission()` (`actions/master/_shared.ts`) and `hasPermission()` (`components/user-session-provider.tsx`). Other roles receive explicit permissions via `db/seeder.ts`.
 - **Route redirects**: `/` → `/my` via `proxy.ts`; `/my` → `/my/home`; `/auth` → `/auth/login`. These redirects only work if `middleware.ts` is created from `proxy.ts`.
 - **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and report pages use them.
 - **Members page**: Renders team cards ordered numerically, SPVs first, plus a "Not Assigned" card. Full names stored uppercase, emails lowercase, both trimmed.

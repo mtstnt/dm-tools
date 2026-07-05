@@ -200,7 +200,7 @@ async function seed() {
 
   console.log("Seeding roles and permissions...");
 
-  const roleNames = ["Head Ministry", "Regional PIC", "SPV", "Member"];
+  const roleNames = ["ADMIN", "Head Ministry", "Regional PIC", "SPV", "Member"];
   const roleMap = new Map<string, number>();
 
   for (const name of roleNames) {
@@ -493,17 +493,17 @@ async function seed() {
     console.log("User already exists: ADMIN");
   }
 
-  // Ensure admin user has the Head Ministry role
+  // Ensure admin user has the ADMIN role
   if (adminUser) {
-    const headMinistryRoleId = roleMap.get("Head Ministry");
-    if (headMinistryRoleId) {
+    const adminRoleId = roleMap.get("ADMIN");
+    if (adminRoleId) {
       const existingAdminRole = await db
         .select()
         .from(userRoles)
         .where(
           and(
             eq(userRoles.userId, adminUser.id),
-            eq(userRoles.roleId, headMinistryRoleId),
+            eq(userRoles.roleId, adminRoleId),
           ),
         )
         .limit(1);
@@ -511,13 +511,13 @@ async function seed() {
       if (existingAdminRole.length === 0) {
         await db.insert(userRoles).values({
           userId: adminUser.id,
-          roleId: headMinistryRoleId,
+          roleId: adminRoleId,
           createdBy: SEEDER_USER,
           updatedBy: SEEDER_USER,
         });
-        console.log("Assigned Head Ministry role to admin user");
+        console.log("Assigned ADMIN role to admin user");
       } else {
-        console.log("Admin user already has Head Ministry role");
+        console.log("Admin user already has ADMIN role");
       }
     }
   }

@@ -2,7 +2,7 @@
 
 ## File Access
 
-Do not attempt to open .env file. You can open .env.template to get the fields that you need.  
+Do not attempt to open `.env`. Use `.env.template` for required fields.
 
 ## Package Manager
 
@@ -14,15 +14,18 @@ Use Bun, not npm/yarn/pnpm.
 bun dev                   # Start dev server (localhost:3000)
 bun run build             # Production build
 bun run lint              # ESLint (flat config, eslint-config-next)
-npx tsc --noEmit          # Type check (no script configured)
-bunx drizzle-kit generate # Generate migration from schema.ts
-bunx drizzle-kit migrate  # Apply pending migrations
+bunx tsc --noEmit         # Type check (no script configured; npx may resolve a global wrapper)
+bun run db:generate       # Generate migration from schema.ts
+bun run db:migrate        # Apply pending migrations
+bun run db:seed           # Seed master data + default admin user
+bun run db:reset          # Delete db/local.sqlite3 (Unix rm; fails on Windows)
 bunx drizzle-kit check    # Validate schema and migration state
 bunx drizzle-kit studio   # Open Drizzle Studio
 ```
 
-No typecheck script exists. Run `npx tsc --noEmit` manually if needed.
-No test framework is configured.
+- No typecheck script exists. Run `bunx tsc --noEmit` manually.
+- No test framework is configured.
+- `db:reset` uses `rm` and will not work on Windows without WSL/Git Bash.
 
 ## Environment Variables
 
@@ -35,101 +38,126 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=    # Firebase project ID
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
-DATABASE_URL=                       # libsql://... (Turso) or file:./<name>.db (local SQLite)
+NEXT_PUBLIC_SC_BASE_URL=            # Client-exposed base URL for legacy event links
+DATABASE_URL=db/local.sqlite3       # libsql://... (Turso) or file:./<name>.db (local SQLite)
 DATABASE_AUTH_TOKEN=                # Turso auth token; omit for local SQLite
-SC_BASE_URL=                        # Server-only. Base URL for external events API (used by server actions)
-NEXT_PUBLIC_SC_BASE_URL=            # Client-exposed. Same value, used for link generation in event cards
+NODE_ENV=development
 ```
 
-`DATABASE_URL` and `DATABASE_AUTH_TOKEN` are consumed by `db/connection.ts`. Use `file:./<name>.db` for local development; for Turso, use the `libsql://` URL and auth token.
-`SC_BASE_URL` is server-only (used in `app/actions.ts` for web auth and event fetching).
-`NEXT_PUBLIC_SC_BASE_URL` is client-side (used in `app/tools/events/` card links).
-Firebase config is hardcoded in `lib/firebase.ts` but env vars are available for future migration.
+- `SC_BASE_URL` is referenced by server actions under `actions/legacy-web/` but is **not** in `.env.template`; add it manually for legacy events scraping.
+- `DATABASE_URL` and `DATABASE_AUTH_TOKEN` are consumed by `db/connection.ts`.
+- Firebase config is hardcoded in `lib/firebase.ts`; env vars are available for future migration.
 
 ## Architecture
 
-Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4.
+Next.js 16 App Router + React 19 + TypeScript (strict) + Tailwind v4 + Shadcn UI (`base-nova`).
 
 ```
-db/
-  schema.ts           Drizzle ORM schema (libsql/Turso/SQLite) — tables, enums, indexes, relations
-  connection.ts       Drizzle client initialized from DATABASE_URL + DATABASE_AUTH_TOKEN
-
 app/
-  layout.tsx          Root: fonts (Instrument Serif, DM Sans, IBM Plex Mono), ThemeProvider, QueryClient
-  actions/
-    _shared.ts        Shared webFetch() + LegacyWebContext type for all external-API actions
-    auth/web-login.ts webAuthLogin() server action
-    my/users/members.ts  getTeamMembers, createUser, updateUser, deleteUser
-    master/_shared.ts checkPermission, getUserContext, logAuditTrail for master CRUD
-    master/regions.ts getRegions, createRegion, updateRegion, deleteRegion
-    master/teams.ts   getTeams, createTeam, updateTeam, deleteTeam
-    master/event-types.ts getEventTypes, createEventType, updateEventType, deleteEventType
-    master/ministries.ts  getMinistries, createMinistry, updateMinistry, deleteMinistry
-    master/metrics.ts     getMetrics, createMetric, updateMetric, deleteMetric
-    master/tasks.ts       getTasks, createTask, updateTask, deleteTask
-    events/
-      list.ts         getEvents() — paginated fetch + cheerio parse → EventInfo[]
-      detail.ts       getEventDetail() — fetch + cheerio parse → EventDetail
-      update.ts       updateEventUsers() — replace event's user list
-      blocks/update.ts    updateBlock() — update a block's chairs/rows/cols/users
-      user-blocks/update.ts updateUserBlocks() — assign users to blocks
-      user-blocks/delete.ts removeUserBlock() — remove a single user from a block
+  layout.tsx                Root: fonts, ThemeProvider, QueryClient
   auth/
-    login/page.tsx    Firebase email/password login
-    forget-password/  Firebase password reset email
-  my/                 Protected area (sidebar layout)
-    users/members/    Team member browser: cards per team, create/edit/delete users
-    users/members/members-client.tsx  Interactive client UI for member cards and forms
-    master/regions/   Region CRUD (uses MasterCrudPage)
-    master/teams/     Team CRUD (uses MasterCrudPage)
-    master/event-types/   Event type CRUD (uses MasterCrudPage)
-    master/ministries/    Ministry CRUD (uses MasterCrudPage)
-    master/metrics/       Metric CRUD (uses MasterCrudPage)
-    master/tasks/         Task CRUD (uses MasterCrudPage)
-  tools/              Legacy protected tools area
-    reports/          Report text generator (client-only, no Firestore write)
-    reports-history/  Firestore report browser
-    assign/           Service assignment tool (SVG-based block allocation)
-    events/           External events browser + event edit viewer (web auth guard)
-    test-firebase/    Firebase debug page
+    page.tsx                Redirects to /auth/login
+    login/page.tsx          Email/password login (local users table)
+    forget-password/        Disabled — redirects to /auth/login
+  my/                       Protected area (AuthGuard + sidebar)
+    page.tsx                Redirects to /my/home
+    home/page.tsx           Placeholder home
+    layout.tsx              Sidebar shell shared with /tools
+    audit-trails/page.tsx   Paginated audit log
+    events/page.tsx         Placeholder
+    schedules/page.tsx      Placeholder
+    master/                 CRUD for regions, teams, event-types, ministries, metrics, tasks
+    users/
+      members/              Team member browser + dialogs
+      permissions/page.tsx  Permission list
+      roles/                Role list + role permission matrix
+  tools/                    Protected area (AuthGuard + sidebar)
+    page.tsx                Missing — /tools redirects via proxy.ts (but middleware is not wired)
+    utilities/
+      reports/page.tsx      Service report text generator
+      assign/page.tsx       SVG-based volunteer block allocation
+      tally/page.tsx        Full-screen tap counter synced to Firestore
+    doa-wilayah/page.tsx    Monthly prayer schedule + linked TC tally
+    reports-history/page.tsx Firestore report browser
+    members/page.tsx        Firebase members browser
+    legacy/events/          External SC events scraper + event editor
+
+actions/                    Root-level server actions (NOT under app/)
+  auth/login.ts             login(), logout(), getCurrentUser(), checkAuth()
+  master/_shared.ts         getUserContext(), checkPermission(), logAuditTrail()
+  master/{regions,teams,event-types,ministries,metrics,tasks}.ts
+  users/{members,roles,permissions}.ts
+  audit-trails.ts
+  legacy-web/_shared.ts     webFetch(), LegacyWebContext type
+  legacy-web/auth/web-login.ts
+  legacy-web/events/{list,detail,update,blocks/update,user-blocks/update,user-blocks/delete}.ts
+
+db/
+  schema.ts                 Drizzle ORM schema (SQLite/Turso)
+  connection.ts             Drizzle client initialized from DATABASE_URL
+  seeder.ts                 Master data + admin@email.com / 123456
+  migrations/               Drizzle Kit output
+
 components/
-  ui/                 18 Shadcn components (base-nova style) + multi-select (react-select wrapper)
-  custom/             Project-specific composite components
-    master-crud-page.tsx  Generic CRUD page for master data tables
-    data-table.tsx        Sortable/searchable table used by MasterCrudPage
-  providers.tsx       React Query (staleTime 5m, gcTime 30m, no refetch on focus)
-  web-auth-guard.tsx  Auth gate for external events API (localStorage-based session)
+  ui/                       Shadcn components (base-nova, lucide icons)
+  custom/                   master-crud-page.tsx, data-table.tsx
+  app-sidebar.tsx           Navigation driven by lib/navigation.ts
+  auth-guard.tsx            Client-side route guard (cookie check)
+  web-auth-guard.tsx        Auth gate for external SC events API
+  providers.tsx             React Query (staleTime 5m, gcTime 30m, no refetch on focus)
+  theme-provider.tsx        next-themes wrapper
+  account-info.tsx          Logged-in user dropdown (local auth)
+
 lib/
-  firebase.ts         Firebase client init — hardcoded config, "use client"
+  firebase.ts               Hardcoded Firebase client config ("use client")
+  navigation.ts             Sidebar menu groups and route links
+  utils.ts                  cn() helper
   queries/
-    reports.ts        Firestore fetch for reports collection
-    events.ts         Re-exports all event server actions + eventKeys query key factory
+    reports.ts              Firestore reports fetch + reportKeys
+    events.ts               Re-exports legacy event actions + eventKeys
+    members.ts              Firestore members fetch
+    tally-session.ts        Firestore tally session read/write/subscribe
+    doa-wilayah.ts          Firestore doa-wilayah read/write/subscribe
   parsers/
-    events.ts         Cheerio parser for event list HTML → EventInfo[]
-    event-details.ts  Cheerio parser for event edit page HTML → EventDetail
+    events.ts               Cheerio parser for event list HTML
+    event-details.ts        Cheerio parser for event edit HTML
+    blocks.ts               Seat-layout block parser
+    seat-layout.ts          Seat layout parser
+
 types/
-  event.ts            EventDetail, EventArea, EventBlock, EventUser, EventAssignedUser interfaces
+  event.ts                  EventDetail, EventArea, EventBlock, EventUser, EventAssignedUser
+  firebase.d.ts             Window.__FIREBASE_APP__ augmentation
+
+proxy.ts                    Exported middleware function + matcher; NOT wired to middleware.ts
 ```
 
 ## Key Facts
 
-- **Shadcn UI**: Always prefer Shadcn components. Config in `components.json` (style: `base-nova`, icon library: `lucide`).
-- **Mobile-responsive**: All pages must work on mobile. Reports page has a fixed bottom preview bar on small screens.
-- **Auth**: Email/password login against the local `users` table via `actions/auth/login.ts`. Sets an httpOnly `authenticated` cookie containing the user ID. Firebase Auth is no longer used for app authentication.
-- **No middleware.ts**: `proxy.ts` exports middleware logic but is NOT wired up. Route protection is inactive by default.
-- **Firebase config**: Hardcoded in `lib/firebase.ts`, not reading from `process.env`. Env vars in `.env` are unused by the client code.
-- **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and `formatDateDisplay()` in reports page.
-- **Reports page**: Client-only form that generates text for clipboard. Does NOT save to Firestore.
-- **Reports history**: Reads from Firestore `reports` collection. Fields include `divisions` (map of ministry→count), `type` (AOG_YOUTH, AOG_TEEN, EVENT).
-- **Members page**: Team member browser at `app/my/users/members/`. Renders a 3-column grid of team cards ordered numerically by team number, with SPVs listed first in each card. A separate "Not Assigned" card shows users with `teamId` null. Users can be created, edited, and deleted via dialogs. Full names are stored uppercase, emails lowercase, and both are trimmed. The team dropdown sorts numerically by team number and prefixes each item with "Team ".
-- **Master data CRUD**: Generic CRUD pages under `app/my/master/` for regions, teams, event types, ministries, metrics, and tasks. All use `MasterCrudPage` + `DataTable` with server actions in `actions/master/`.
-- **Events page**: Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. List page shows `EventInfo` cards (filterable by location/name/date). Event edit page parses HTML into `EventDetail` via `getEventDetail()`. Assignment tab allows SPV/PIC users to assign blocks to users (`updateUserBlocks`), remove a block from a user (`removeUserBlock`), and remove a user from the event (`updateEventUsers` with remaining IDs). Blocks tab edits a block's chairs grid (`updateBlock`). All mutations refresh data via a `refetch` callback (re-calls `getEventDetail`) instead of `window.location.reload`.
-- **Assign page**: SVG-based service block allocation tool. Generates Teen/Youth assignments. Client-only, no persistence.
-- **Theme**: Light mode default, class-based dark mode via `next-themes`.
-- **Fonts**: CSS variables `--font-display` (Instrument Serif), `--font-sans` (DM Sans), `--font-mono` (IBM Plex Mono).
-- **Query keys**: Defined in `lib/queries/reports.ts` as `reportKeys` object and `lib/queries/events.ts` as `eventKeys`.
+- **Shadcn UI**: Prefer Shadcn components. Config in `components.json` (style: `base-nova`, icon library: `lucide`).
+- **Auth**: Local `users` table with bcrypt. Sets httpOnly `authenticated` cookie containing the numeric user ID. Firebase Auth is **not** used for app authentication; Firebase is only used for Firestore.
+- **No middleware.ts**: `proxy.ts` exports middleware logic but is not wired up. Route protection is client-side via `AuthGuard` on `/my/*` and `/tools/*` layouts.
+- **Default admin**: `db/seeder.ts` creates `admin@email.com` / `123456` with the `Head Ministry` role.
+- **Permission model**: Resources (`users`, `events`, `regions`, ...) × actions (`create`, `read`, `update`, `delete`, `execute`). The `ADMIN` role name and `Head Ministry` role both bypass checks; `checkPermission()` in `actions/master/_shared.ts` grants full access to any user with role name `ADMIN`.
+- **Route redirects**: `/` → `/my` via `proxy.ts`; `/my` → `/my/home`; `/auth` → `/auth/login`. These redirects only work if `middleware.ts` is created from `proxy.ts`.
+- **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and report pages use them.
+- **Members page**: Renders team cards ordered numerically, SPVs first, plus a "Not Assigned" card. Full names stored uppercase, emails lowercase, both trimmed.
+- **Master data CRUD**: All use `MasterCrudPage` + `DataTable` with server actions in `actions/master/`.
+- **Legacy events**: Moved to `/tools/legacy/events`. Server actions are in `actions/legacy-web/events/` and use `SC_BASE_URL`. Event edit tabs: Assignment, Blocks, Dashboard. Mutations refresh via a `refetch` callback, not `window.location.reload`.
+- **Reports generator**: Now at `/tools/utilities/reports`. Client-only, generates clipboard text, does NOT save to Firestore.
+- **Tally counter**: `/tools/utilities/tally`. Full-screen tap counter. Reads/writes to Firestore `tallySession` collection; sessions are created from the Reports page or Doa Wilayah page.
+- **Doa Wilayah**: `/tools/doa-wilayah`. Monthly prayer schedule (PIC, TC1, TC2, date, notes) stored in Firestore `doaWilayah/{year}/bulan/{month}`. Each month can open exactly one linked TC tally session.
+- **Reports history / Members / Tally / Doa Wilayah** all require working Firebase config.
+- **Query keys**: `reportKeys` in `lib/queries/reports.ts`, `eventKeys` in `lib/queries/events.ts`, `memberKeys` in `lib/queries/members.ts`.
 - **Path alias**: `@/*` maps to project root.
+- **ESLint overrides**: `@typescript-eslint/no-explicit-any` and `react-hooks/set-state-in-effect` are disabled.
+
+## Drizzle / Database Notes
+
+- Local dev uses `DATABASE_URL=db/local.sqlite3` (or any `file:./<name>.db`).
+- `drizzle.config.ts` switches dialect to `turso` in production; local uses `sqlite`.
+- Run `bun run db:generate` then `bun run db:migrate` after schema changes.
+- `bun run db:seed` is idempotent and safe to run multiple times.
+- Schema includes users/roles/permissions, events, event assignments/metrics/volunteers/altar-calls, audit trails, and master tables.
 
 ## Docs
 
@@ -140,10 +168,8 @@ Feature specs in `docs/specs/`:
 - `03-reports-history.md` — Firestore query, table columns, detail sheet
 - `04-events.md` — External events browser, web auth guard, cheerio parsing, assignment feature
 - `05-assign.md` — Service assignment tool, SVG blocks, member management
-
-Reference samples in `docs/sample/`:
-- `service-assignment.tsx.example` — Complex SVG-based assignment tool (not integrated)
-- `service-assignment.html.example` — Standalone HTML version of same
+- `06-doa-wilayah.md` — Monthly prayer schedule and linked tally
+- `07-tally.md` — Full-screen tap counter synced to Firestore
 
 <!-- BEGIN:nextjs-agent-rules -->
 ## This is NOT the Next.js you know

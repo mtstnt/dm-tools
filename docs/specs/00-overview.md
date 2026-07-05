@@ -8,9 +8,9 @@
 | React | 19.2.4 |
 | Language | TypeScript 5 (strict) |
 | Styling | Tailwind CSS v4 + tw-animate-css |
-| UI Kit | Shadcn UI (base-nova style, 17 components) |
+| UI Kit | Shadcn UI (base-nova style, lucide icons) |
 | State/Data | TanStack React Query 5 |
-| Auth/DB | Drizzle ORM + SQLite (`users` table); Firebase 12 only for Firestore (reports history) |
+| Auth/DB | Drizzle ORM + SQLite (`users` table); Firebase 12 only for Firestore |
 | Theming | next-themes (class strategy, light default) |
 | Package Manager | Bun |
 
@@ -26,8 +26,10 @@
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Client | Firebase app ID |
 | `SC_BASE_URL` | Server | Base URL for external events API (used by server actions) |
 | `NEXT_PUBLIC_SC_BASE_URL` | Client | Same value, used for link generation in event cards |
+| `DATABASE_URL` | Server | `libsql://...` (Turso) or `file:./<name>.db` (local SQLite) |
+| `DATABASE_AUTH_TOKEN` | Server | Turso auth token; omit for local SQLite |
 
-Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is server-only (used in `app/actions.ts`). `NEXT_PUBLIC_SC_BASE_URL` is client-side (used in event card links).
+Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is missing from `.env.template`; add it manually when using legacy event scraping. `DATABASE_URL` defaults to `db/local.sqlite3` for local development.
 
 ## Directory Layout
 
@@ -35,62 +37,67 @@ Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is server-only 
 app/
   layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider
   auth/
-    login/page.tsx    Login page (users table email/password)
+    login/page.tsx    Email/password login (local users table)
     forget-password/  Disabled — redirects to /auth/login
-  (protected)/
-    master/           Master data management pages (event-types, metrics, ministries, regions, tasks, teams)
-  tools/
-    layout.tsx        Sidebar shell — AppSidebar, ThemeToggle, AccountInfo
-    page.tsx          Tools dashboard (card grid linking to features)
-    reports/          Service report generator
-    reports-history/  Browse saved Firestore reports
-    assign/           Service assignment tool (SVG-based block allocation)
-    events/           External events browser (web auth guard)
-    test-firebase/    Firebase debug page
+  my/                 Protected sidebar area (AuthGuard)
+    home/page.tsx     Placeholder home
+    audit-trails/     Paginated audit log
+    events/page.tsx   Placeholder
+    schedules/page.tsx Placeholder
+    master/           Master data CRUD pages
+    users/            Members, permissions, roles
+  tools/              Protected sidebar area (AuthGuard)
+    utilities/        Reports, Assign, Tally
+    doa-wilayah/      Monthly prayer schedule
+    reports-history/  Firestore report browser
+    members/          Firebase members browser
+    legacy/events/    External SC events scraper + editor
+actions/              Root-level server actions (not under app/)
+  auth/login.ts       Local auth actions
+  master/             Master data actions
+  users/              Member/role/permission actions
+  audit-trails.ts     Audit log action
+  legacy-web/         External SC API actions
 components/
-  ui/                 17 Shadcn components (badge, button, calendar, card, etc.)
-  app-sidebar.tsx     Navigation sidebar with tool links
-  providers.tsx       React Query provider (staleTime 5m, gcTime 30m)
+  ui/                 Shadcn components
+  custom/             master-crud-page.tsx, data-table.tsx
+  app-sidebar.tsx     Sidebar driven by lib/navigation.ts
+  auth-guard.tsx      Client-side route guard
+  web-auth-guard.tsx  Auth gate for external events API
+  providers.tsx       React Query provider
   theme-provider.tsx  next-themes wrapper
-  theme-toggle.tsx    Light/dark toggle button
-  account-info.tsx    User dropdown with Firebase auth state
-  logout-button.tsx   Sidebar logout form action
-  web-auth-guard.tsx  Auth gate for external events API (localStorage-based session)
+  account-info.tsx    User dropdown (local auth)
 lib/
   firebase.ts         Firebase client init (hardcoded config, "use client")
-  queries/
-    reports.ts        Firestore fetch + sort for reports collection
-    events.ts         Re-exports fetchEvents, fetchEventEditPage + types from app/actions
-  parsers/
-    events.ts         Cheerio parser for external event HTML
-    event-details.ts  Cheerio parser for event edit page HTML → ParsedResult
-  utils.ts            cn() — clsx + tailwind-merge
-hooks/
-  use-mobile.ts       768px breakpoint hook
-types/
-  firebase.d.ts       Window.__FIREBASE_APP__ augmentation
+  navigation.ts       Sidebar menu groups and route links
+  queries/            React Query keys + Firestore/legacy action wrappers
+  parsers/            Cheerio parsers for external events
 proxy.ts              Middleware function (exported but NOT wired to middleware.ts)
 ```
 
 ## Auth Flow
 
-Two separate auth systems:
-
 ### App Auth (main app)
-1. User visits `/` → redirected to `/tools` (via proxy.ts logic, but middleware.ts is missing)
+1. User visits `/` → intended redirect to `/my` via `proxy.ts` (only if middleware.ts is created)
 2. `AuthGuard` checks for a valid `authenticated` cookie via `checkAuth()`
 3. If no valid session → redirect to `/auth/login`
 4. `/auth/login` page: calls `login(email, password)` server action → queries `users` table and verifies bcrypt password
 5. `/auth/forget-password` page: disabled — redirects to `/auth/login`
 6. Cookie: `authenticated={userId}`, httpOnly, 7-day expiry
 
-### Web Auth (events page only)
+### Web Auth (legacy events page only)
 1. `WebAuthGuard` checks localStorage for external API credentials
 2. If missing → modal dialog for email + password
 3. Server action: GET `/login` → CSRF token → POST `/login` → `sails.sid` cookie
 4. Credentials + cookie stored in localStorage
 
 ## Data Model
+
+### Local SQLite (Drizzle)
+- **Master**: regions, teams, event_types, ministries, metrics, tasks
+- **Users & permissions**: users, roles, permissions, user_roles, role_permissions, user_permissions
+- **Events**: events, event_teams, event_assignments, event_metrics, event_volunteers, event_altar_calls, event_assignment_change_requests
+- **Audit**: audit_trails
 
 ### Firestore `reports` collection
 - `title`, `type` (AOG_YOUTH, AOG_TEEN, EVENT), `date` (Indonesian format "DD Month YYYY")
@@ -99,9 +106,23 @@ Two separate auth systems:
 - `altarcallText`, `altarcallNumber`, `baptisan`, `whl`, `bersediaJoinCg`
 - `prayerStation`, `oneMinutePrayer`, `reportText`, `lastUpdated`
 
+### Firestore `members` collection
+- `name`, `nickname`, `team`, `role` (Member/SPV/PIC), `email`
+- Used by Doa Wilayah person picker
+
+### Firestore `tallySession` collection
+- `serviceType`, `date`, `altarCallCount`, `kind` (`altarcall` | `tc`)
+- `counts` — map of label → running total
+- Created from Reports page or Doa Wilayah "Buka TC"
+
+### Firestore `doaWilayah/{year}/bulan/{month}` documents
+- `pic`, `tc1`, `tc2` — `{ id, name }`
+- `date` (YYYY-MM-DD), `notes`, `tallySessionId`
+- One document per month; each month can open exactly one linked TC tally session
+
 ### External events
 - Scraped via Cheerio from HTML `.card` elements
-- Fields: `id`, `date`, `time`, `eventName`, `location`, `seatCountUrl`, `editUrl`, `locked`
+- Fields: `eventId`, `name`, `date`, `time`, `location`, `showUrl`, `editUrl`, `locked`
 
 ## Features
 
@@ -109,12 +130,19 @@ Two separate auth systems:
 |---------|-------|--------|
 | Authentication | `/auth/login` | Working |
 | Forget Password | `/auth/forget-password` | Disabled |
-| Reports Generator | `/tools/reports` | Working |
-| Reports History | `/tools/reports-history` | Working |
-| Events Browser | `/tools/events` | Working |
-| Event Edit | `/tools/events/[eventId]/edit` | Working |
-| Firebase Debug | `/tools/test-firebase` | Working |
-| Service Assignment | `docs/sample/` | Reference only (not integrated) |
+| Reports Generator | `/tools/utilities/reports` | Working |
+| Reports History | `/tools/reports-history` | Working (requires Firebase) |
+| Service Assignment | `/tools/utilities/assign` | Working |
+| Tally Counter | `/tools/utilities/tally` | Working (requires Firebase) |
+| Doa Wilayah | `/tools/doa-wilayah` | Working (requires Firebase) |
+| Events Browser | `/tools/legacy/events` | Working (requires SC_BASE_URL) |
+| Event Edit | `/tools/legacy/events/[eventId]/edit` | Working |
+| Members | `/my/users/members` | Working |
+| Permissions | `/my/users/permissions` | Working |
+| Roles | `/my/users/roles` | Working |
+| Master Data | `/my/master/*` | Working |
+| Audit Trails | `/my/audit-trails` | Working |
+| Firebase Members | `/tools/members` | Working (requires Firebase) |
 
 ## Fonts
 

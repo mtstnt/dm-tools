@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "15b0acc9-959e-4f2c-8c42-93c2fa1ef3e9",
+  "id": "e8c0e42e-5d99-4966-ac2e-b025511086a6",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -1491,12 +1491,12 @@
       "table": "teams"
     },
     {
-      "type": "text",
+      "type": "integer",
       "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "name",
+      "name": "number",
       "entityType": "columns",
       "table": "teams"
     },
@@ -1747,16 +1747,6 @@
       "default": null,
       "generated": null,
       "name": "team_id",
-      "entityType": "columns",
-      "table": "users"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "false",
-      "generated": null,
-      "name": "is_team_pic",
       "entityType": "columns",
       "table": "users"
     },
@@ -2548,6 +2538,20 @@
       "name": "role_permissions_role_permission_unique",
       "entityType": "indexes",
       "table": "role_permissions"
+    },
+    {
+      "columns": [
+        {
+          "value": "number",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "teams_number_unique",
+      "entityType": "indexes",
+      "table": "teams"
     },
     {
       "columns": [

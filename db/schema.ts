@@ -47,26 +47,30 @@ export const regions = sqliteTable("regions", {
   updatedBy: text("updated_by").notNull(),
 });
 
-export const teams = sqliteTable("teams", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const teams = sqliteTable(
+  "teams",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
 
-  name: text("name").notNull(),
+    number: integer("number").notNull(),
 
-  regionId: integer("region_id")
-    .notNull()
-    .references(() => regions.id),
+    regionId: integer("region_id")
+      .notNull()
+      .references(() => regions.id),
 
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
 
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
 
-  createdBy: text("created_by").notNull(),
-  updatedBy: text("updated_by").notNull(),
-});
+    createdBy: text("created_by").notNull(),
+    updatedBy: text("updated_by").notNull(),
+  },
+  (table) => [uniqueIndex("teams_number_unique").on(table.number)],
+);
 
 export const eventTypes = sqliteTable("event_types", {
   id: integer("id").primaryKey({ autoIncrement: true }),

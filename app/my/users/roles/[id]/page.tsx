@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { getRolePermissions } from "@/actions/users/roles";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -51,7 +51,12 @@ export default async function RoleDetailPage({
           <h1 className="font-display text-3xl tracking-tight">{role.name}</h1>
           <p className="text-muted-foreground mt-2">Role permissions.</p>
         </div>
-        <Button variant="outline" render={<Link href="/my/users/roles">Back to roles</Link>} />
+        <Link
+          href="/my/users/roles"
+          className={buttonVariants({ variant: "outline" })}
+        >
+          Back to roles
+        </Link>
       </div>
 
       <div className="rounded-lg border">
@@ -87,7 +92,7 @@ export default async function RoleDetailPage({
                   key={row.resource}
                   className={
                     index % 2 === 1
-                      ? "bg-muted/[0.12] hover:bg-primary/5"
+                      ? "bg-muted/12 hover:bg-primary/5"
                       : "hover:bg-primary/5"
                   }
                 >

@@ -37,7 +37,7 @@ import {
 
 type TeamOption = {
   id: number
-  name: string
+  number: number
 }
 
 type MembersClientProps = {
@@ -268,7 +268,7 @@ export function MembersClient({
             items={{
               null: "Not assigned",
               ...Object.fromEntries(
-                teamOptions.map((team) => [String(team.id), team.name])
+                teamOptions.map((team) => [String(team.id), `Team ${team.number}`])
               ),
             }}
           >
@@ -279,7 +279,7 @@ export function MembersClient({
               <SelectItem value="null">Not assigned</SelectItem>
               {teamOptions.map((team) => (
                 <SelectItem key={team.id} value={String(team.id)}>
-                  {team.name}
+                  Team {team.number}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -307,7 +307,7 @@ export function MembersClient({
         {teams.map((team) => (
           <Card key={team.id} className="flex flex-col">
             <CardHeader>
-              <CardTitle>Team {team.name}</CardTitle>
+              <CardTitle>Team {team.number}</CardTitle>
               <CardDescription>
                 {team.users.length}{" "}
                 {team.users.length === 1 ? "member" : "members"}

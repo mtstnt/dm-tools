@@ -21,22 +21,14 @@ export default async function MembersPage() {
   }
 
   const rawTeams = await db
-    .select({ id: teams.id, name: teams.name })
+    .select({ id: teams.id, number: teams.number })
     .from(teams)
+    .orderBy(teams.number)
 
-  const teamOptions = rawTeams
-    .map((team) => ({
-      ...team,
-      number: Number(team.name.match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER),
-    }))
-    .sort((a, b) => {
-      if (a.number !== b.number) return a.number - b.number
-      return a.name.localeCompare(b.name)
-    })
-    .map((team) => ({
-      id: team.id,
-      name: `Team ${team.name}`,
-    }))
+  const teamOptions = rawTeams.map((team) => ({
+    id: team.id,
+    number: team.number,
+  }))
 
   return (
     <MembersClient

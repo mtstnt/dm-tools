@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { PencilIcon, TrashIcon, PlusIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -54,6 +54,7 @@ type MasterCrudPageProps<T extends { id: number }> = {
   onCreateAction: (values: Record<string, string>) => Promise<MutationResult<T>>
   onUpdateAction: (id: number, values: Record<string, string>) => Promise<MutationResult<T>>
   onDeleteAction?: (id: number) => Promise<{ success: boolean; error?: string }>
+  loading?: boolean
 }
 
 export function MasterCrudPage<T extends { id: number }>({
@@ -69,6 +70,7 @@ export function MasterCrudPage<T extends { id: number }>({
   onCreateAction: onCreate,
   onUpdateAction: onUpdate,
   onDeleteAction: onDelete,
+  loading = false,
 }: MasterCrudPageProps<T>) {
   const [items, setItems] = useState<T[]>(data)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -79,6 +81,10 @@ export function MasterCrudPage<T extends { id: number }>({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    setItems(data)
+  }, [data])
 
   function resetForm() {
     setFormValues({})
@@ -357,6 +363,7 @@ export function MasterCrudPage<T extends { id: number }>({
         enableRowSelection={!!onDelete}
         rowSelection={rowSelection}
         onRowSelectionChangeAction={setRowSelection}
+        loading={loading}
         toolbar={
           onDelete && Object.keys(rowSelection).length > 0 ? (
             <Button

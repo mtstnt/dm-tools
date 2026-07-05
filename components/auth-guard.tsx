@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { checkAuth } from "@/actions/auth/login"
+import { Loader } from "lucide-react"
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
@@ -22,8 +23,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex min-h-full flex-1 items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
       </div>
     )
   }

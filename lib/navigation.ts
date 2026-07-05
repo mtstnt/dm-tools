@@ -5,11 +5,9 @@ import {
   CalendarDays,
   Church,
   Cog,
-  FileText,
   Globe,
   Hash,
   History,
-  Home,
   Key,
   ScrollText,
   SquareUser,
@@ -25,7 +23,6 @@ export type NavigationLink = {
   targetLink: string;
   icon?: LucideIcon;
   badge?: string;
-  adminOnly?: boolean;
 };
 
 export type NavigationDropdown = {
@@ -33,7 +30,6 @@ export type NavigationDropdown = {
   label: string;
   icon?: LucideIcon;
   children: NavigationChild[];
-  adminOnly?: boolean;
 };
 
 export type NavigationChild = NavigationLink | NavigationDropdown;

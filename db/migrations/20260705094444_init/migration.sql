@@ -210,7 +210,7 @@ CREATE TABLE `tasks` (
 --> statement-breakpoint
 CREATE TABLE `teams` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
-	`name` text NOT NULL,
+	`number` integer NOT NULL,
 	`region_id` integer NOT NULL,
 	`created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -250,7 +250,6 @@ CREATE TABLE `users` (
 	`password` text,
 	`source_id` integer,
 	`team_id` integer,
-	`is_team_pic` integer DEFAULT false,
 	`created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
@@ -267,6 +266,7 @@ CREATE UNIQUE INDEX `event_teams_event_team_unique` ON `event_teams` (`event_id`
 CREATE UNIQUE INDEX `event_volunteers_event_ministry_unique` ON `event_volunteers` (`event_id`,`ministry_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `permissions_resource_action_unique` ON `permissions` (`resource`,`action`);--> statement-breakpoint
 CREATE UNIQUE INDEX `role_permissions_role_permission_unique` ON `role_permissions` (`role_id`,`permission_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `teams_number_unique` ON `teams` (`number`);--> statement-breakpoint
 CREATE UNIQUE INDEX `user_permissions_user_permission_unique` ON `user_permissions` (`user_id`,`permission_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `user_roles_user_role_unique` ON `user_roles` (`user_id`,`role_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);

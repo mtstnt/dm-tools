@@ -44,27 +44,27 @@ async function seed() {
   }
 
   console.log("Seeding teams...");
-  const teamNames = Array.from({ length: 6 }, (_, i) => String(i + 7));
-  for (const name of teamNames) {
+  const teamNumbers = Array.from({ length: 6 }, (_, i) => i + 7);
+  for (const number of teamNumbers) {
     const existing = await db
       .select()
       .from(teams)
-      .where(and(eq(teams.name, name), eq(teams.regionId, region.id)))
+      .where(and(eq(teams.number, number), eq(teams.regionId, region.id)))
       .limit(1);
 
     if (existing.length === 0) {
       const [team] = await db
         .insert(teams)
         .values({
-          name,
+          number,
           regionId: region.id,
           createdBy: SEEDER_USER,
           updatedBy: SEEDER_USER,
         })
         .returning();
-      console.log(`Created team: ${team.name}`);
+      console.log(`Created team: ${team.number}`);
     } else {
-      console.log(`Team already exists: ${name}`);
+      console.log(`Team already exists: ${number}`);
     }
   }
 
@@ -406,7 +406,7 @@ async function seed() {
     { roleName: "Regional PIC", resource: "event_metrics", actions: ["create", "read", "update", "delete"], scope: "region" },
     { roleName: "Regional PIC", resource: "event_altar_calls", actions: ["create", "read", "update", "delete"], scope: "region" },
     { roleName: "Regional PIC", resource: "event_assignment_change_requests", actions: ["create", "read", "update", "delete"], scope: "region" },
-    { roleName: "Regional PIC", resource: "audit_trails", actions: ["read"], scope: "region" },
+    { roleName: "Regional PIC", resource: "audit_trails", actions: ["read"], scope: "all" },
     { roleName: "Regional PIC", resource: "gen_monthly_report", actions: ["execute"], scope: "region" },
     { roleName: "Regional PIC", resource: "gen_weekly_report", actions: ["execute"], scope: "region" },
     // SPV

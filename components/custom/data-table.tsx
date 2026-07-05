@@ -13,7 +13,12 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDownIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react";
+import {
+  ArrowUpDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  Loader2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +56,7 @@ export type DataTableProps<TData, TValue> = {
       | ((prev: Record<string, boolean>) => Record<string, boolean>),
   ) => void;
   toolbar?: React.ReactNode;
+  loading?: boolean;
 };
 
 function applySortMethod<TData, TValue>(
@@ -84,6 +90,7 @@ export function DataTable<TData, TValue>({
   rowSelection: controlledRowSelection,
   onRowSelectionChangeAction: onRowSelectionChange,
   toolbar,
+  loading = false,
 }: DataTableProps<TData, TValue>) {
   const initialSorting = React.useMemo<SortingState>(() => {
     if (!defaultSortColumn) return [];
@@ -244,7 +251,19 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {loading ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan={processedColumns.length}
+                  className="h-48 text-center"
+                >
+                  <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+                  <span className="mt-2 block text-sm text-muted-foreground">
+                    Loading...
+                  </span>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -264,7 +283,7 @@ export function DataTable<TData, TValue>({
             ) : (
               <TableRow className="hover:bg-transparent">
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={processedColumns.length}
                   className="h-24 text-center"
                 >
                   No results.

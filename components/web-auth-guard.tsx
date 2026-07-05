@@ -4,6 +4,7 @@ import { useState } from "react"
 import { webLogin } from "@/actions/legacy-web/auth/web-login"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Loader } from "lucide-react"
 
 const STORAGE_KEYS = {
   email: "web-auth-email",
@@ -62,8 +63,8 @@ export function WebAuthGuard({ children }: { children: React.ReactNode }) {
 
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex min-h-full flex-1 items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
       </div>
     )
   }

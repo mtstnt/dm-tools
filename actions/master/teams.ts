@@ -7,13 +7,13 @@ import { teams, regions } from "@/db/schema";
 import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
 
 const teamSchema = z.object({
-  name: z.string().min(1, "Name is required").trim(),
+  number: z.coerce.number().int().positive("Team number is required"),
   regionId: z.coerce.number().int().positive("Region is required"),
 });
 
 export type Team = {
   id: number;
-  name: string;
+  number: number;
   regionId: number;
   regionName?: string;
 };
@@ -46,13 +46,13 @@ export async function getTeams(): Promise<TeamListResult> {
     const rows = await db
       .select({
         id: teams.id,
-        name: teams.name,
+        number: teams.number,
         regionId: teams.regionId,
         regionName: regions.name,
       })
       .from(teams)
       .innerJoin(regions, eq(teams.regionId, regions.id))
-      .orderBy(teams.name);
+      .orderBy(teams.number);
 
     return { success: true, data: rows };
   } catch (err) {
@@ -73,7 +73,7 @@ export async function getTeamById(
     const rows = await db
       .select({
         id: teams.id,
-        name: teams.name,
+        number: teams.number,
         regionId: teams.regionId,
       })
       .from(teams)
@@ -107,7 +107,7 @@ export async function createTeam(
     };
   }
 
-  const { name, regionId } = parseResult.data;
+  const { number, regionId } = parseResult.data;
 
   try {
     const ctx = await getUserContext();
@@ -116,7 +116,7 @@ export async function createTeam(
     const result = await db
       .insert(teams)
       .values({
-        name,
+        number,
         regionId,
         createdAt: now,
         updatedAt: now,
@@ -125,7 +125,7 @@ export async function createTeam(
       })
       .returning({
         id: teams.id,
-        name: teams.name,
+        number: teams.number,
         regionId: teams.regionId,
       });
 
@@ -156,7 +156,7 @@ export async function updateTeam(
     };
   }
 
-  const { name, regionId } = parseResult.data;
+  const { number, regionId } = parseResult.data;
 
   try {
     const ctx = await getUserContext();
@@ -168,7 +168,7 @@ export async function updateTeam(
     const result = await db
       .update(teams)
       .set({
-        name,
+        number,
         regionId,
         updatedAt: new Date(),
         updatedBy: ctx.userId,
@@ -176,7 +176,7 @@ export async function updateTeam(
       .where(eq(teams.id, id))
       .returning({
         id: teams.id,
-        name: teams.name,
+        number: teams.number,
         regionId: teams.regionId,
       });
 

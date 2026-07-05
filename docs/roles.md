@@ -113,7 +113,7 @@
 | event_metrics                    | [x]    | [x]  | [x]    | [x]    | [ ]     | region |
 | event_altar_calls                | [x]    | [x]  | [x]    | [x]    | [ ]     | region |
 | event_assignment_change_requests | [x]    | [x]  | [x]    | [x]    | [ ]     | region |
-| audit_trails                     | [ ]    | [x]  | [ ]    | [ ]    | [ ]     | region |
+| audit_trails                     | [ ]    | [x]  | [ ]    | [ ]    | [ ]     | all    |
 | gen_monthly_report               | [ ]    | [ ]  | [ ]    | [ ]    | [x]     | region |
 | gen_weekly_report                | [ ]    | [ ]  | [ ]    | [ ]    | [x]     | region |
 

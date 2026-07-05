@@ -24,7 +24,7 @@ export type MemberUser = {
 
 export type TeamWithMembers = {
   id: number;
-  name: string;
+  number: number;
   users: MemberUser[];
 };
 
@@ -134,19 +134,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
       }
     }
 
-    const sortByNumber = (
-      a: { name: string },
-      b: { name: string },
-    ) => {
-      const numA = Number(a.name.match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER);
-      const numB = Number(b.name.match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER);
-      if (numA !== numB) {
-        return numA - numB;
-      }
-      return a.name.localeCompare(b.name);
-    };
-
-    teamRows.sort(sortByNumber);
+    teamRows.sort((a, b) => a.number - b.number);
 
     const sortMembers = (a: MemberUser, b: MemberUser) => {
       if (a.isSpv !== b.isSpv) {
@@ -162,7 +150,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
 
     const teamsWithMembers: TeamWithMembers[] = teamRows.map((team) => ({
       id: team.id,
-      name: team.name,
+      number: team.number,
       users: usersByTeam.get(team.id) ?? [],
     }));
 

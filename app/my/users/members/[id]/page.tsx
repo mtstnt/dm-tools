@@ -148,9 +148,15 @@ export default function MemberDetailPage() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full gap-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="w-full flex flex-row">
           <TabsTrigger value="dashboard" className="w-full">
             Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="schedules" className="w-full">
+            Schedules
+          </TabsTrigger>
+          <TabsTrigger value="review" className="w-full">
+            Review
           </TabsTrigger>
           <TabsTrigger value="roles" className="w-full">
             Roles
@@ -177,6 +183,28 @@ export default function MemberDetailPage() {
               <DetailField label="Updated at" value={formatDate(user.updatedAt)} />
               <DetailField label="Created by" value={user.createdBy} />
               <DetailField label="Updated by" value={user.updatedBy} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="schedules">
+          <Card>
+            <CardHeader>
+              <CardTitle>Schedules</CardTitle>
+            </CardHeader>
+            <CardContent>
+              Coming soon...
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="review">
+          <Card>
+            <CardHeader>
+              <CardTitle>Review</CardTitle>
+            </CardHeader>
+            <CardContent>
+              Coming soon...
             </CardContent>
           </Card>
         </TabsContent>

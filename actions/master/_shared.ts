@@ -11,7 +11,7 @@ import {
   rolePermissions,
   type Action,
 } from "@/db/schema";
-import { getCurrentUser } from "@/actions/auth/login";
+import { getCurrentUser } from "@/actions/auth/current-user";
 
 export async function getUserContext(): Promise<{
   userId: string;

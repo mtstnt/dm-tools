@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { login } from "@/actions/auth/login"
-import { getUserSession } from "@/actions/auth/session"
 import { useSetSessionUser } from "@/components/user-session-provider"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -24,9 +23,8 @@ export default function LoginPage() {
 
     const result = await login(email, password)
     if (result.success) {
-      const session = await getUserSession()
-      setSession(session)
-      router.push("/")
+      setSession(result.session ?? null)
+      router.push("/my/home")
       router.refresh()
     } else {
       setError(result.error ?? "Authentication failed")

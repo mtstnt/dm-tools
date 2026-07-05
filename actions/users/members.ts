@@ -8,7 +8,7 @@ import {
   userRoles,
   users,
 } from "@/db/schema";
-import { getCurrentUser } from "@/actions/auth/login";
+import { getCurrentUser } from "@/actions/auth/current-user";
 import { checkPermission, getUserContext, logAuditTrail } from "@/actions/master/_shared";
 import { eq, asc, and, ne } from "drizzle-orm";
 import { z } from "zod";

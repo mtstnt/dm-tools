@@ -10,7 +10,7 @@ import {
   userRoles,
   type Action,
 } from "@/db/schema";
-import { getCurrentUser } from "@/actions/auth/login";
+import { getCurrentUser } from "@/actions/auth/current-user";
 
 export type UserPermission = {
   resource: string;

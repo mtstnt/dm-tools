@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   Crown,
   Eye,
-  ListFilter,
   Loader,
   Pencil,
   Trash2,
@@ -211,7 +210,7 @@ export default function MembersPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-3xl tracking-tight">Members</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Members</h1>
           <p className="text-muted-foreground mt-2">View members by team.</p>
         </div>
         <p className="text-destructive">{dataError}</p>
@@ -343,7 +342,7 @@ export default function MembersPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-semibold tracking-tight">
             Teams Directory
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -493,7 +492,7 @@ function DirectoryCard({
     <Card className="overflow-hidden rounded-xl border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md">
       <CardHeader className="flex flex-row items-start justify-between space-y-0 px-6 pb-3 pt-6">
         <div>
-          <CardTitle className="text-lg font-semibold tracking-tight">
+          <CardTitle className="text-lg font-medium tracking-normal">
             {title}
           </CardTitle>
           <CardDescription className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -547,15 +546,15 @@ function UserRow({ user, openEdit, openDelete }: Readonly<UserRowProps>) {
       <div className="flex min-w-0 items-center gap-3">
         <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-semibold text-muted-foreground shadow-sm">
           {user.fullName.slice(0, 1)}
-          <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-emerald-500" />
+          <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-primary" />
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-1.5">
-            <p className="truncate text-sm font-semibold leading-tight text-foreground">
+            <p className="truncate text-sm font-medium leading-tight text-foreground">
               {user.fullName}
             </p>
             {user.isSpv && (
-              <Crown className="size-3.5 shrink-0 text-amber-500" />
+              <Crown className="size-3.5 shrink-0 text-primary" />
             )}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">

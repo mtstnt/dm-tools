@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { login } from "@/actions/auth/login"
+import { getUserSession } from "@/actions/auth/session"
+import { useSetSessionUser } from "@/components/user-session-provider"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -13,6 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
   const router = useRouter()
+  const setSession = useSetSessionUser()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -21,6 +24,8 @@ export default function LoginPage() {
 
     const result = await login(email, password)
     if (result.success) {
+      const session = await getUserSession()
+      setSession(session)
       router.push("/")
       router.refresh()
     } else {

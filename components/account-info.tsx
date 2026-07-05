@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { logout } from "@/actions/auth/login"
-import { useSessionUser } from "@/components/user-session-provider"
+import { useSessionUser, useSetSessionUser } from "@/components/user-session-provider"
 import { LogOut, User as UserIcon } from "lucide-react"
 import {
   DropdownMenu,
@@ -15,10 +15,12 @@ import {
 
 export function AccountInfo() {
   const user = useSessionUser()
+  const setSession = useSetSessionUser()
   const router = useRouter()
 
   async function handleLogout() {
     await logout()
+    setSession(null)
     router.push("/auth/login")
     router.refresh()
   }

@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crown, Loader, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Crown,
+  Eye,
+  ListFilter,
+  Loader,
+  Pencil,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 
 import type { MemberUser, TeamWithMembers } from "@/actions/users/members";
 import {
@@ -11,7 +20,7 @@ import {
   deleteUser,
   getTeamMembers,
 } from "@/actions/users/members";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -331,77 +340,45 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl tracking-tight">Members</h1>
-          <p className="text-muted-foreground mt-2">
-            View members grouped by team.
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            Teams Directory
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Overview of all active teams and unassigned members.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="size-4" />
-          Create user
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={openCreate} className="h-10 rounded-lg px-5">
+            <UserPlus className="size-4" />
+            Add Member
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {teams.map((team) => (
-          <Card key={team.id} className="flex flex-col">
-            <CardHeader>
-              <CardTitle className="font-bold text-xl">Team {team.number}</CardTitle>
-              <CardDescription>
-                {team.users.length}{" "}
-                {team.users.length === 1 ? "member" : "members"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1">
-              {team.users.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">
-                  No members assigned.
-                </p>
-              ) : (
-                <div className="divide-y">
-                  {team.users.map((user) => (
-                    <UserRow
-                      key={user.id}
-                      user={user}
-                      openEdit={openEdit}
-                      openDelete={openDelete}
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <DirectoryCard
+            key={team.id}
+            title={`Team ${team.number}`}
+            count={team.users.length}
+            emptyMessage="No members assigned."
+            users={team.users}
+            openEdit={openEdit}
+            openDelete={openDelete}
+          />
         ))}
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-bold text-xl">Not Assigned</CardTitle>
-            <CardDescription>
-              {unassigned.length}{" "}
-              {unassigned.length === 1 ? "member" : "members"} without a team
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {unassigned.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">
-                All members are assigned to a team.
-              </p>
-            ) : (
-              <div className="divide-y">
-                {unassigned.map((user) => (
-                  <UserRow
-                    key={user.id}
-                    user={user}
-                    openEdit={openEdit}
-                    openDelete={openDelete}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <DirectoryCard
+          title="Not Assigned"
+          count={unassigned.length}
+          emptyMessage="All members are assigned to a team."
+          muted
+          users={unassigned}
+          openEdit={openEdit}
+          openDelete={openDelete}
+        />
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -493,6 +470,68 @@ export default function MembersPage() {
   );
 }
 
+type DirectoryCardProps = {
+  title: string;
+  count: number;
+  emptyMessage: string;
+  users: MemberUser[];
+  muted?: boolean;
+  openEdit: (user: MemberUser) => void;
+  openDelete: (user: MemberUser) => void;
+};
+
+function DirectoryCard({
+  title,
+  count,
+  emptyMessage,
+  users,
+  muted = false,
+  openEdit,
+  openDelete,
+}: Readonly<DirectoryCardProps>) {
+  return (
+    <Card className="overflow-hidden rounded-xl border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 px-6 pb-3 pt-6">
+        <div>
+          <CardTitle className="text-lg font-semibold tracking-tight">
+            {title}
+          </CardTitle>
+          <CardDescription className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span
+              className={`size-2 rounded-full ${muted ? "bg-muted-foreground" : "bg-primary"}`}
+            />
+            {count} {count === 1 ? "Member" : "Members"}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="px-6 pb-5">
+        {users.length === 0 ? (
+          <EmptyRoster message={emptyMessage} />
+        ) : (
+          <div>
+            {users.map((user) => (
+              <UserRow
+                key={user.id}
+                user={user}
+                openEdit={openEdit}
+                openDelete={openDelete}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyRoster({ message }: Readonly<{ message: string }>) {
+  return (
+    <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed bg-muted/30 px-6 text-center">
+      <p className="text-sm italic text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
 type UserRowProps = {
   user: MemberUser;
   openEdit: (user: MemberUser) => void;
@@ -503,20 +542,35 @@ function UserRow({ user, openEdit, openDelete }: Readonly<UserRowProps>) {
   return (
     <div
       key={user.id}
-      className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+      className="group/row flex items-center justify-between gap-3 border-b py-3 last:border-b-0"
     >
-      <div className="flex items-center gap-2 min-w-0">
-        {user.isSpv && <Crown className="size-4 shrink-0 text-amber-500" />}
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-semibold text-muted-foreground shadow-sm">
+          {user.fullName.slice(0, 1)}
+          <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-emerald-500" />
+        </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium leading-tight truncate">
-            {user.fullName}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">
-            {user.email} | {user.nij}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="truncate text-sm font-semibold leading-tight text-foreground">
+              {user.fullName}
+            </p>
+            {user.isSpv && (
+              <Crown className="size-3.5 shrink-0 text-amber-500" />
+            )}
+          </div>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {user.isSpv ? "SPV" : "Member"} | {user.nij}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+        <Link
+          href={`/my/users/members/${user.id}`}
+          className={buttonVariants({ variant: "ghost", size: "icon-xs" })}
+          aria-label={`View ${user.fullName}`}
+        >
+          <Eye className="size-3.5" />
+        </Link>
         <Button
           variant="ghost"
           size="icon-xs"

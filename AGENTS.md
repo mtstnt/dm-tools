@@ -136,6 +136,7 @@ proxy.ts                    Exported middleware function + matcher; NOT wired to
 ## Key Facts
 
 - **Shadcn UI**: Prefer Shadcn components. Config in `components.json` (style: `base-nova`, icon library: `lucide`).
+- **Pages are client components**: All `page.tsx` files should be client components. Load page data by calling actions from the page component to avoid RSC -> Client runtime errors in the frontend.
 - **Auth**: Local `users` table with bcrypt. Sets httpOnly `authenticated` cookie containing the numeric user ID. Firebase Auth is **not** used for app authentication; Firebase is only used for Firestore.
 - **No middleware.ts**: `proxy.ts` exports middleware logic but is not wired up. Route protection is client-side via `AuthGuard` on `/my/*` and `/tools/*` layouts.
 - **Default admin**: `db/seeder.ts` creates `admin@email.com` / `123456` with the `ADMIN` role.
@@ -152,6 +153,12 @@ proxy.ts                    Exported middleware function + matcher; NOT wired to
 - **Query keys**: `reportKeys` in `lib/queries/reports.ts`, `eventKeys` in `lib/queries/events.ts`, `memberKeys` in `lib/queries/members.ts`.
 - **Path alias**: `@/*` maps to project root.
 - **ESLint overrides**: `@typescript-eslint/no-explicit-any` and `react-hooks/set-state-in-effect` are disabled.
+
+## Frontend Conventions
+
+- Use Shadcn components whenever possible.
+- Do not stack interactive elements: avoid `<Button><Link /></Button>`, `<Button><button>...</button></Button>`, or adding a nested `button` when the parent element is already a button.
+- When a link should look like a button, use `buttonVariants` with `Link` instead of wrapping `Link` in `Button`.
 
 ## Drizzle / Database Notes
 

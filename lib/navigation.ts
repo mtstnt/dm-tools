@@ -11,6 +11,7 @@ import {
   Home,
   Key,
   ScrollText,
+  Settings,
   SquareUser,
   User,
   UserCheck,
@@ -116,6 +117,13 @@ export const sidebarMenus: NavigationRootItem[] = [
         targetLink: "/my/master/tasks",
         icon: Workflow,
         resource: "tasks",
+      },
+      {
+        type: "link",
+        label: "Configurations",
+        targetLink: "/my/master/configurations",
+        icon: Settings,
+        resource: "configurations",
       },
       {
         type: "link",

@@ -2,6 +2,7 @@
 
 import { db } from "@/db/connection";
 import {
+  permissions,
   roles,
   teams,
   userPermissions,
@@ -10,7 +11,7 @@ import {
 } from "@/db/schema";
 import { getCurrentUser } from "@/actions/auth/current-user";
 import { checkPermission, getUserContext, logAuditTrail } from "@/actions/master/_shared";
-import { eq, asc, and, ne } from "drizzle-orm";
+import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 
@@ -35,6 +36,35 @@ export type MembersResult = {
     teams: TeamWithMembers[];
     unassigned: MemberUser[];
   };
+  error?: string;
+};
+
+export type UserDetail = {
+  id: number;
+  fullName: string;
+  nij: string;
+  email: string;
+  sourceId: number | null;
+  teamId: number | null;
+  teamNumber: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+  roles: {
+    id: number;
+    name: string;
+  }[];
+  additionalPermissions: {
+    id: number;
+    resource: string;
+    action: string;
+  }[];
+};
+
+export type UserDetailResult = {
+  success: boolean;
+  data?: UserDetail;
   error?: string;
 };
 
@@ -172,6 +202,94 @@ export async function getTeamMembers(): Promise<MembersResult> {
   } catch (err) {
     console.error("[getTeamMembers] error:", err);
     return { success: false, error: "Failed to load members" };
+  }
+}
+
+export async function getUserDetail(id: number): Promise<UserDetailResult> {
+  const allowed = await checkPermission("users", "read");
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  try {
+    const userRows = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        nij: users.nij,
+        email: users.email,
+        sourceId: users.sourceId,
+        teamId: users.teamId,
+        teamNumber: teams.number,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        createdBy: users.createdBy,
+        updatedBy: users.updatedBy,
+      })
+      .from(users)
+      .leftJoin(teams, eq(users.teamId, teams.id))
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (userRows.length === 0) {
+      return { success: false, error: "User not found" };
+    }
+
+    const user = userRows[0];
+    const auditUserIds = Array.from(
+      new Set(
+        [Number(user.createdBy), Number(user.updatedBy)].filter(Number.isFinite),
+      ),
+    );
+
+    const [roleRows, additionalPermissionRows, auditUserRows] = await Promise.all([
+      db
+        .select({
+          id: roles.id,
+          name: roles.name,
+        })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(eq(userRoles.userId, id))
+        .orderBy(asc(roles.name)),
+      db
+        .select({
+          id: permissions.id,
+          resource: permissions.resource,
+          action: permissions.action,
+        })
+        .from(userPermissions)
+        .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
+        .where(eq(userPermissions.userId, id))
+        .orderBy(asc(permissions.resource), asc(permissions.action)),
+      auditUserIds.length > 0
+        ? db
+            .select({
+              id: users.id,
+              fullName: users.fullName,
+            })
+            .from(users)
+            .where(inArray(users.id, auditUserIds))
+        : Promise.resolve([]),
+    ]);
+
+    const auditUsers = new Map(
+      auditUserRows.map((row) => [String(row.id), row.fullName]),
+    );
+
+    return {
+      success: true,
+      data: {
+        ...user,
+        createdBy: auditUsers.get(user.createdBy) ?? null,
+        updatedBy: auditUsers.get(user.updatedBy) ?? null,
+        roles: roleRows,
+        additionalPermissions: additionalPermissionRows,
+      },
+    };
+  } catch (err) {
+    console.error("[getUserDetail] error:", err);
+    return { success: false, error: "Failed to load user" };
   }
 }
 

@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthStateChanged } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { checkAuth } from "@/actions/auth/login"
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
@@ -11,16 +10,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
+    checkAuth().then((ok) => {
+      if (!ok) {
         router.push("/auth/login")
         return
       }
       setAuthenticated(true)
       setLoading(false)
     })
-
-    return () => unsubscribe()
   }, [router])
 
   if (loading) {

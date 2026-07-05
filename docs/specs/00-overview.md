@@ -10,7 +10,7 @@
 | Styling | Tailwind CSS v4 + tw-animate-css |
 | UI Kit | Shadcn UI (base-nova style, 17 components) |
 | State/Data | TanStack React Query 5 |
-| Auth/DB | Firebase 12 (Auth + Firestore) |
+| Auth/DB | Drizzle ORM + SQLite (`users` table); Firebase 12 only for Firestore (reports history) |
 | Theming | next-themes (class strategy, light default) |
 | Package Manager | Bun |
 
@@ -34,10 +34,11 @@ Copy `.env.template` to `.env` and fill in values. `SC_BASE_URL` is server-only 
 ```
 app/
   layout.tsx          Root layout — fonts, ThemeProvider, QueryClientProvider
-  actions.ts          Server actions: setAuthCookie(), logout(), webAuthLogin(), fetchEvents(), fetchEventEditPage()
   auth/
-    login/page.tsx    Login page (Firebase email/password)
-    forget-password/  Password reset page (sendPasswordResetEmail)
+    login/page.tsx    Login page (users table email/password)
+    forget-password/  Disabled — redirects to /auth/login
+  (protected)/
+    master/           Master data management pages (event-types, metrics, ministries, regions, tasks, teams)
   tools/
     layout.tsx        Sidebar shell — AppSidebar, ThemeToggle, AccountInfo
     page.tsx          Tools dashboard (card grid linking to features)
@@ -75,13 +76,13 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 
 Two separate auth systems:
 
-### Firebase Auth (main app)
+### App Auth (main app)
 1. User visits `/` → redirected to `/tools` (via proxy.ts logic, but middleware.ts is missing)
-2. `/tools/*` routes check for `authenticated` cookie
-3. If no cookie → redirect to `/auth/login`
-4. `/auth/login` page: Firebase `signInWithEmailAndPassword` → on success, server action sets cookie
-5. `/auth/forget-password` page: Firebase `sendPasswordResetEmail` → shows success state
-6. Cookie: `authenticated=true`, httpOnly, 7-day expiry
+2. `AuthGuard` checks for a valid `authenticated` cookie via `checkAuth()`
+3. If no valid session → redirect to `/auth/login`
+4. `/auth/login` page: calls `login(email, password)` server action → queries `users` table and verifies bcrypt password
+5. `/auth/forget-password` page: disabled — redirects to `/auth/login`
+6. Cookie: `authenticated={userId}`, httpOnly, 7-day expiry
 
 ### Web Auth (events page only)
 1. `WebAuthGuard` checks localStorage for external API credentials
@@ -107,7 +108,7 @@ Two separate auth systems:
 | Feature | Route | Status |
 |---------|-------|--------|
 | Authentication | `/auth/login` | Working |
-| Forget Password | `/auth/forget-password` | Working |
+| Forget Password | `/auth/forget-password` | Disabled |
 | Reports Generator | `/tools/reports` | Working |
 | Reports History | `/tools/reports-history` | Working |
 | Events Browser | `/tools/events` | Working |

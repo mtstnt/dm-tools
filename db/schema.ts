@@ -185,9 +185,6 @@ export const users = sqliteTable(
     teamId: integer("team_id")
       .references(() => teams.id),
 
-    is_team_pic: integer("is_team_pic", { mode: "boolean" })
-      .default(false),
-
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),

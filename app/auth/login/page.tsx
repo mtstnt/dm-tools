@@ -1,10 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { signInWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { login } from "@/actions/auth/login"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -21,13 +19,12 @@ export default function LoginPage() {
     setError("")
     setPending(true)
 
-    try {
-      await signInWithEmailAndPassword(auth, email, password)
+    const result = await login(email, password)
+    if (result.success) {
       router.push("/")
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Authentication failed"
-      setError(message)
+      router.refresh()
+    } else {
+      setError(result.error ?? "Authentication failed")
       setPending(false)
     }
   }
@@ -106,17 +103,9 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium text-foreground">
-                  Password
-                </label>
-                <Link
-                  href="/auth/forget-password"
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+              <label htmlFor="password" className="text-sm font-medium text-foreground">
+                Password
+              </label>
               <Input
                 id="password"
                 name="password"

@@ -1,8 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { signOut } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { logout } from "@/actions/auth/login"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 import { LogOut } from "lucide-react"
 
@@ -10,8 +9,9 @@ export function LogoutButton() {
   const router = useRouter()
 
   async function handleLogout() {
-    await signOut(auth)
+    await logout()
     router.push("/auth/login")
+    router.refresh()
   }
 
   return (

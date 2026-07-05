@@ -1,13 +1,21 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Calculator,
+  Calendar1,
   CalendarDays,
+  Church,
   Cog,
   FileText,
+  Globe,
   Hash,
   History,
   Home,
+  Key,
+  SquareUser,
+  User,
   UserCheck,
   Users,
+  Workflow,
 } from "lucide-react";
 
 export type NavigationLink = {
@@ -41,27 +49,8 @@ export const sidebarMenus: Group[] = [
       {
         type: "link",
         label: "Events",
-        targetLink: "/tools/events",
+        targetLink: "/my/events",
         icon: CalendarDays,
-      },
-      {
-        type: "link",
-        label: "Team Members",
-        targetLink: "/tools/events",
-        icon: Users,
-      },
-      {
-        type: "dropdown",
-        label: "Reports",
-        icon: FileText,
-        children: [
-          {
-            type: "link",
-            label: "History",
-            targetLink: "/tools/reports-history",
-            icon: History,
-          },
-        ],
       },
       {
         type: "link",
@@ -72,24 +61,88 @@ export const sidebarMenus: Group[] = [
     ],
   },
   {
+    title: "Master",
+    children: [
+      {
+        type: "link",
+        label: "Regions",
+        targetLink: "/my/master/regions",
+        icon: Globe,
+      },
+      {
+        type: "link",
+        label: "Teams",
+        targetLink: "/my/master/teams",
+        icon: Users,
+      },
+      {
+        type: "link",
+        label: "Event Types",
+        targetLink: "/my/master/event-types",
+        icon: Calendar1,
+      },
+      {
+        type: "link",
+        label: "Ministries",
+        targetLink: "/my/master/ministries",
+        icon: Church,
+      },
+      {
+        type: "link",
+        label: "Metrics",
+        targetLink: "/my/master/metrics",
+        icon: Calculator,
+      },
+      {
+        type: "link",
+        label: "Tasks",
+        targetLink: "/my/master/tasks",
+        icon: Workflow,
+      },
+    ],
+  },
+  {
+    title: "Team Management",
+    children: [
+      {
+        type: "link",
+        label: "Members",
+        targetLink: "/my/users/members",
+        icon: User,
+      },
+      {
+        type: "link",
+        label: "Permissions",
+        targetLink: "/my/users/permissions",
+        icon: Key,
+      },
+      {
+        type: "link",
+        label: "Roles",
+        targetLink: "/my/users/roles",
+        icon: SquareUser,
+      },
+    ],
+  },
+  {
     title: "Utilities",
     children: [
       {
         type: "link",
         label: "Report Generator",
-        targetLink: "/tools/reports",
+        targetLink: "/tools/utilities/reports",
         icon: Cog,
       },
       {
         type: "link",
         label: "Assign",
-        targetLink: "/tools/assign",
+        targetLink: "/tools/utilities/assign",
         icon: UserCheck,
       },
       {
         type: "link",
         label: "Tally Counter",
-        targetLink: "/tools/tally",
+        targetLink: "/tools/utilities/tally",
         icon: Hash,
       },
     ]
@@ -99,20 +152,19 @@ export const sidebarMenus: Group[] = [
     children: [
       {
         type: "link",
-        label: "Home",
-        targetLink: "/tools",
-        icon: Home,
-      },
-      {
-        type: "link",
-        label: "Events",
-        targetLink: "/tools/events",
+        label: "Events (Web SC)",
+        targetLink: "/tools/legacy/events",
         icon: CalendarDays,
-        badge: "Exp",
       },
       {
         type: "link",
-        label: "Members",
+        label: "Report History (Firebase)",
+        targetLink: "/tools/reports-history",
+        icon: History,
+      },
+      {
+        type: "link",
+        label: "Members (Firebase)",
         targetLink: "/tools/members",
         icon: UserCheck,
         adminOnly: true,

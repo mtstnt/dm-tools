@@ -60,6 +60,14 @@ app/
   actions/
     _shared.ts        Shared webFetch() + LegacyWebContext type for all external-API actions
     auth/web-login.ts webAuthLogin() server action
+    my/users/members.ts  getTeamMembers, createUser, updateUser, deleteUser
+    master/_shared.ts checkPermission, getUserContext, logAuditTrail for master CRUD
+    master/regions.ts getRegions, createRegion, updateRegion, deleteRegion
+    master/teams.ts   getTeams, createTeam, updateTeam, deleteTeam
+    master/event-types.ts getEventTypes, createEventType, updateEventType, deleteEventType
+    master/ministries.ts  getMinistries, createMinistry, updateMinistry, deleteMinistry
+    master/metrics.ts     getMetrics, createMetric, updateMetric, deleteMetric
+    master/tasks.ts       getTasks, createTask, updateTask, deleteTask
     events/
       list.ts         getEvents() — paginated fetch + cheerio parse → EventInfo[]
       detail.ts       getEventDetail() — fetch + cheerio parse → EventDetail
@@ -70,7 +78,16 @@ app/
   auth/
     login/page.tsx    Firebase email/password login
     forget-password/  Firebase password reset email
-  tools/              Protected area (sidebar layout)
+  my/                 Protected area (sidebar layout)
+    users/members/    Team member browser: cards per team, create/edit/delete users
+    users/members/members-client.tsx  Interactive client UI for member cards and forms
+    master/regions/   Region CRUD (uses MasterCrudPage)
+    master/teams/     Team CRUD (uses MasterCrudPage)
+    master/event-types/   Event type CRUD (uses MasterCrudPage)
+    master/ministries/    Ministry CRUD (uses MasterCrudPage)
+    master/metrics/       Metric CRUD (uses MasterCrudPage)
+    master/tasks/         Task CRUD (uses MasterCrudPage)
+  tools/              Legacy protected tools area
     reports/          Report text generator (client-only, no Firestore write)
     reports-history/  Firestore report browser
     assign/           Service assignment tool (SVG-based block allocation)
@@ -78,6 +95,9 @@ app/
     test-firebase/    Firebase debug page
 components/
   ui/                 18 Shadcn components (base-nova style) + multi-select (react-select wrapper)
+  custom/             Project-specific composite components
+    master-crud-page.tsx  Generic CRUD page for master data tables
+    data-table.tsx        Sortable/searchable table used by MasterCrudPage
   providers.tsx       React Query (staleTime 5m, gcTime 30m, no refetch on focus)
   web-auth-guard.tsx  Auth gate for external events API (localStorage-based session)
 lib/
@@ -96,12 +116,14 @@ types/
 
 - **Shadcn UI**: Always prefer Shadcn components. Config in `components.json` (style: `base-nova`, icon library: `lucide`).
 - **Mobile-responsive**: All pages must work on mobile. Reports page has a fixed bottom preview bar on small screens.
-- **Auth**: Firebase email/password → sets `authenticated` cookie via server action. Cookie is a simple boolean, not a Firebase token.
+- **Auth**: Email/password login against the local `users` table via `actions/auth/login.ts`. Sets an httpOnly `authenticated` cookie containing the user ID. Firebase Auth is no longer used for app authentication.
 - **No middleware.ts**: `proxy.ts` exports middleware logic but is NOT wired up. Route protection is inactive by default.
 - **Firebase config**: Hardcoded in `lib/firebase.ts`, not reading from `process.env`. Env vars in `.env` are unused by the client code.
 - **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and `formatDateDisplay()` in reports page.
 - **Reports page**: Client-only form that generates text for clipboard. Does NOT save to Firestore.
 - **Reports history**: Reads from Firestore `reports` collection. Fields include `divisions` (map of ministry→count), `type` (AOG_YOUTH, AOG_TEEN, EVENT).
+- **Members page**: Team member browser at `app/my/users/members/`. Renders a 3-column grid of team cards ordered numerically by team number, with SPVs listed first in each card. A separate "Not Assigned" card shows users with `teamId` null. Users can be created, edited, and deleted via dialogs. Full names are stored uppercase, emails lowercase, and both are trimmed. The team dropdown sorts numerically by team number and prefixes each item with "Team ".
+- **Master data CRUD**: Generic CRUD pages under `app/my/master/` for regions, teams, event types, ministries, metrics, and tasks. All use `MasterCrudPage` + `DataTable` with server actions in `actions/master/`.
 - **Events page**: Scrapes external events API via server action (cheerio). Uses `WebAuthGuard` with localStorage-based session (not Firebase). Requires `SC_BASE_URL` + `NEXT_PUBLIC_SC_BASE_URL` env vars. List page shows `EventInfo` cards (filterable by location/name/date). Event edit page parses HTML into `EventDetail` via `getEventDetail()`. Assignment tab allows SPV/PIC users to assign blocks to users (`updateUserBlocks`), remove a block from a user (`removeUserBlock`), and remove a user from the event (`updateEventUsers` with remaining IDs). Blocks tab edits a block's chairs grid (`updateBlock`). All mutations refresh data via a `refetch` callback (re-calls `getEventDetail`) instead of `window.location.reload`.
 - **Assign page**: SVG-based service block allocation tool. Generates Teen/Youth assignments. Client-only, no persistence.
 - **Theme**: Light mode default, class-based dark mode via `next-themes`.

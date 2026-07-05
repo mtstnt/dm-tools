@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthStateChanged, signOut, type User } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { getCurrentUser, logout, type CurrentUser } from "@/actions/auth/login"
 import { LogOut, User as UserIcon } from "lucide-react"
 import {
   DropdownMenu,
@@ -15,21 +14,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function AccountInfo() {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    getCurrentUser().then((u) => {
       setUser(u)
       setLoading(false)
     })
-    return () => unsubscribe()
   }, [])
 
   async function handleLogout() {
-    await signOut(auth)
+    await logout()
     router.push("/auth/login")
+    router.refresh()
   }
 
   if (loading) {
@@ -51,29 +50,21 @@ export function AccountInfo() {
       <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent transition-colors outline-none">
         <div className="text-right min-w-0">
           <p className="text-xs font-medium text-foreground leading-tight truncate max-w-[140px]">
-            {user.displayName || user.email?.split("@")[0]}
+            {user.fullName}
           </p>
           <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">
             {user.email}
           </p>
         </div>
         <div className="flex size-8 items-center justify-center rounded-full bg-accent text-accent-foreground shrink-0">
-          {user.photoURL ? (
-            <img
-              src={user.photoURL}
-              alt=""
-              className="size-8 rounded-full object-cover"
-            />
-          ) : (
-            <UserIcon className="size-3.5" />
-          )}
+          <UserIcon className="size-3.5" />
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium leading-none">
-              {user.displayName || user.email?.split("@")[0]}
+              {user.fullName}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}

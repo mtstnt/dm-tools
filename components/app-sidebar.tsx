@@ -121,7 +121,7 @@ export function AppSidebar() {
       <SidebarHeader className="pb-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<a href="/tools" />}>
+            <SidebarMenuButton size="lg" render={<Link href="/tools" />}>
               <div className="flex aspect-square size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                 <LayoutGrid className="size-4" />
               </div>

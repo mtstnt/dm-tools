@@ -326,33 +326,25 @@ function DateGroupEvents({
   isExpanded: boolean;
   onToggle: (key: string) => void;
 }) {
-  const mobileEvents = isExpanded ? events : events.slice(0, 3);
+  const visibleEvents = isExpanded ? events : events.slice(0, 3);
   const hiddenCount = events.length - 3;
 
   return (
-    <>
-      <div className="space-y-2.5 md:hidden">
-        {mobileEvents.map((event) => (
-          <EventCard key={event.id} event={event} />
-        ))}
+    <div className="space-y-2.5">
+      {visibleEvents.map((event) => (
+        <EventCard key={event.id} event={event} />
+      ))}
 
-        {hiddenCount > 0 ? (
-          <Button
-            variant="outline"
-            className="mt-1 w-full"
-            onClick={() => onToggle(groupKey)}
-          >
-            {isExpanded ? "Show fewer events" : `Show all events (${events.length})`}
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="hidden space-y-2.5 md:block">
-        {events.map((event) => (
-          <EventCard key={event.id} event={event} />
-        ))}
-      </div>
-    </>
+      {hiddenCount > 0 ? (
+        <Button
+          variant="outline"
+          className="mt-1 w-full"
+          onClick={() => onToggle(groupKey)}
+        >
+          {isExpanded ? "Show fewer events" : `Show all events (${events.length})`}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

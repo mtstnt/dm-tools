@@ -86,6 +86,7 @@ export default function EventsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     let mounted = true;
@@ -152,6 +153,31 @@ export default function EventsPage() {
     const nextDate = new Date(selectedYear, selectedMonth + direction, 1);
     setSelectedMonth(nextDate.getMonth());
     setSelectedYear(nextDate.getFullYear());
+    setExpandedDateKeys(new Set());
+  }
+
+  function changeMonth(month: number) {
+    setSelectedMonth(month);
+    setExpandedDateKeys(new Set());
+  }
+
+  function changeYear(year: number) {
+    setSelectedYear(year);
+    setExpandedDateKeys(new Set());
+  }
+
+  function toggleDateGroup(key: string) {
+    setExpandedDateKeys((current) => {
+      const next = new Set(current);
+
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+
+      return next;
+    });
   }
 
   return (
@@ -199,7 +225,7 @@ export default function EventsPage() {
 
           <Select
             value={String(selectedMonth)}
-            onValueChange={(value) => setSelectedMonth(Number(value))}
+            onValueChange={(value) => changeMonth(Number(value))}
             items={Object.fromEntries(
               FULL_MONTHS.map((month, index) => [String(index), month]),
             )}
@@ -218,7 +244,7 @@ export default function EventsPage() {
 
           <Select
             value={String(selectedYear)}
-            onValueChange={(value) => setSelectedYear(Number(value))}
+            onValueChange={(value) => changeYear(Number(value))}
             items={Object.fromEntries(yearOptions.map((year) => [String(year), String(year)]))}
           >
             <SelectTrigger className="w-28">
@@ -273,16 +299,60 @@ export default function EventsPage() {
                 </div>
               </CardHeader>
 
-              <CardContent className="h-[31rem] space-y-2.5 overflow-y-auto px-3 pt-3 pb-3 pr-2">
-                {group.events.map((event) => (
-                  <EventCard key={event.id} event={event} />
-                ))}
+              <CardContent className="space-y-2.5 px-3 pt-3 pb-3">
+                <DateGroupEvents
+                  groupKey={dateKey(group.date)}
+                  events={group.events}
+                  isExpanded={expandedDateKeys.has(dateKey(group.date))}
+                  onToggle={toggleDateGroup}
+                />
               </CardContent>
             </Card>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function DateGroupEvents({
+  groupKey,
+  events,
+  isExpanded,
+  onToggle,
+}: {
+  groupKey: string;
+  events: EventScheduleItem[];
+  isExpanded: boolean;
+  onToggle: (key: string) => void;
+}) {
+  const mobileEvents = isExpanded ? events : events.slice(0, 3);
+  const hiddenCount = events.length - 3;
+
+  return (
+    <>
+      <div className="space-y-2.5 md:hidden">
+        {mobileEvents.map((event) => (
+          <EventCard key={event.id} event={event} />
+        ))}
+
+        {hiddenCount > 0 ? (
+          <Button
+            variant="outline"
+            className="mt-1 w-full"
+            onClick={() => onToggle(groupKey)}
+          >
+            {isExpanded ? "Show fewer events" : `Show all events (${events.length})`}
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="hidden space-y-2.5 md:block">
+        {events.map((event) => (
+          <EventCard key={event.id} event={event} />
+        ))}
+      </div>
+    </>
   );
 }
 

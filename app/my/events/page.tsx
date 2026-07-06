@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
   Filter,
 } from "lucide-react";
 import { getEventSchedule, type EventScheduleItem } from "@/actions/events";
@@ -16,6 +18,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +84,8 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
   useEffect(() => {
     let mounted = true;
@@ -105,11 +116,23 @@ export default function EventsPage() {
     };
   }, []);
 
+  const yearOptions = useMemo(() => {
+    const years = new Set(events.map((event) => new Date(event.date).getFullYear()));
+    years.add(selectedYear);
+
+    return Array.from(years).sort((a, b) => a - b);
+  }, [events, selectedYear]);
+
   const groupedEvents = useMemo(() => {
     const groups = new Map<string, { date: Date; events: EventScheduleItem[] }>();
 
     for (const event of events) {
       const date = new Date(event.date);
+
+      if (date.getMonth() !== selectedMonth || date.getFullYear() !== selectedYear) {
+        continue;
+      }
+
       const key = dateKey(date);
       const group = groups.get(key);
 
@@ -123,7 +146,13 @@ export default function EventsPage() {
     return Array.from(groups.values()).sort(
       (a, b) => a.date.getTime() - b.date.getTime(),
     );
-  }, [events]);
+  }, [events, selectedMonth, selectedYear]);
+
+  function moveMonth(direction: -1 | 1) {
+    const nextDate = new Date(selectedYear, selectedMonth + direction, 1);
+    setSelectedMonth(nextDate.getMonth());
+    setSelectedYear(nextDate.getFullYear());
+  }
 
   return (
     <div className="min-h-full rounded-[28px] bg-background p-4 text-foreground md:p-6">
@@ -151,6 +180,70 @@ export default function EventsPage() {
         </div>
       </div>
 
+      <div className="mb-7 flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium">Periode Event</p>
+          <p className="text-xs text-muted-foreground">
+            {FULL_MONTHS[selectedMonth]} {selectedYear}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => moveMonth(-1)}
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+
+          <Select
+            value={String(selectedMonth)}
+            onValueChange={(value) => setSelectedMonth(Number(value))}
+            items={Object.fromEntries(
+              FULL_MONTHS.map((month, index) => [String(index), month]),
+            )}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Month" />
+            </SelectTrigger>
+            <SelectContent>
+              {FULL_MONTHS.map((month, index) => (
+                <SelectItem key={month} value={String(index)}>
+                  {month}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(value) => setSelectedYear(Number(value))}
+            items={Object.fromEntries(yearOptions.map((year) => [String(year), String(year)]))}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {yearOptions.map((year) => (
+                <SelectItem key={year} value={String(year)}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => moveMonth(1)}
+            aria-label="Next month"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      </div>
+
       {isLoading ? (
         <EventsSkeleton />
       ) : error ? (
@@ -170,14 +263,17 @@ export default function EventsPage() {
             >
               <CardHeader className="px-3 pt-3 pb-0">
                 <div className="flex items-center gap-3">
-                <Badge className="h-7 rounded-md bg-primary px-3 text-[11px] font-bold tracking-wide text-primary-foreground hover:bg-primary">
-                  {formatDatePill(group.date)}
-                </Badge>
-                <div className="h-px flex-1 bg-border" />
+                  <Badge className="h-7 rounded-md bg-primary px-3 text-[11px] font-bold tracking-wide text-primary-foreground hover:bg-primary">
+                    {formatDatePill(group.date)}
+                  </Badge>
+                  <div className="h-px flex-1 bg-border" />
+                  <Badge className="h-6 min-w-6 rounded-full bg-primary px-2 text-[11px] font-semibold text-primary-foreground hover:bg-primary">
+                    {group.events.length}
+                  </Badge>
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-2.5 px-3 pt-3 pb-3">
+              <CardContent className="h-[31rem] space-y-2.5 overflow-y-auto px-3 pt-3 pb-3 pr-2">
                 {group.events.map((event) => (
                   <EventCard key={event.id} event={event} />
                 ))}
@@ -226,27 +322,6 @@ function EventCard({
               </Badge>
             ))
           )}
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <Link
-            href={`/my/events/${event.id}/edit`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Edit
-          </Link>
-          <Link
-            href={`/my/events/${event.id}/assign`}
-            className={buttonVariants({ variant: "secondary", size: "sm" })}
-          >
-            Assign
-          </Link>
-          <Link
-            href={`/my/events/${event.id}/reports`}
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
-          >
-            Reports
-          </Link>
         </div>
       </CardContent>
     </Card>
@@ -305,6 +380,27 @@ const DUMMY_EVENTS: EventScheduleItem[] = [
     ],
   },
   {
+    id: 1021,
+    name: "Sunday Afternoon",
+    date: new Date(2026, 6, 5, 13, 0),
+    regionName: "GMS Surabaya Pusat",
+    eventTypeName: "Sunday Service",
+    requiresApplication: false,
+    teams: [{ id: 25, number: 25 }],
+  },
+  {
+    id: 1022,
+    name: "Sunday Night",
+    date: new Date(2026, 6, 5, 19, 0),
+    regionName: "GMS Surabaya Pusat",
+    eventTypeName: "Sunday Service",
+    requiresApplication: false,
+    teams: [
+      { id: 26, number: 26 },
+      { id: 27, number: 27 },
+    ],
+  },
+  {
     id: 1004,
     name: "Youth Service",
     date: new Date(2026, 6, 5, 17, 0),
@@ -353,6 +449,33 @@ const DUMMY_EVENTS: EventScheduleItem[] = [
     teams: [],
   },
   {
+    id: 1023,
+    name: "Hospitality Training",
+    date: new Date(2026, 6, 11, 13, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "Training",
+    requiresApplication: false,
+    teams: [{ id: 28, number: 28 }],
+  },
+  {
+    id: 1024,
+    name: "Production Training",
+    date: new Date(2026, 6, 11, 15, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "Training",
+    requiresApplication: false,
+    teams: [{ id: 29, number: 29 }],
+  },
+  {
+    id: 1025,
+    name: "Usher Training",
+    date: new Date(2026, 6, 11, 17, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "Training",
+    requiresApplication: true,
+    teams: [],
+  },
+  {
     id: 1009,
     name: "Sunday Celebration",
     date: new Date(2026, 6, 12, 9, 0),
@@ -374,6 +497,27 @@ const DUMMY_EVENTS: EventScheduleItem[] = [
     teams: [{ id: 9, number: 9 }],
   },
   {
+    id: 1026,
+    name: "Preteen Service",
+    date: new Date(2026, 6, 12, 13, 0),
+    regionName: "GMS Surabaya Barat",
+    eventTypeName: "Kids Service",
+    requiresApplication: false,
+    teams: [{ id: 30, number: 30 }],
+  },
+  {
+    id: 1027,
+    name: "Sunday Night Revival",
+    date: new Date(2026, 6, 12, 18, 0),
+    regionName: "GMS Surabaya Barat",
+    eventTypeName: "Sunday Service",
+    requiresApplication: false,
+    teams: [
+      { id: 31, number: 31 },
+      { id: 32, number: 32 },
+    ],
+  },
+  {
     id: 1011,
     name: "Creative Night",
     date: new Date(2026, 6, 15, 18, 30),
@@ -390,6 +534,42 @@ const DUMMY_EVENTS: EventScheduleItem[] = [
     eventTypeName: "Class",
     requiresApplication: true,
     teams: [],
+  },
+  {
+    id: 1028,
+    name: "Creative Workshop",
+    date: new Date(2026, 6, 15, 10, 0),
+    regionName: "GMS Surabaya Pusat",
+    eventTypeName: "Creative",
+    requiresApplication: false,
+    teams: [{ id: 33, number: 33 }],
+  },
+  {
+    id: 1029,
+    name: "Media Lab",
+    date: new Date(2026, 6, 15, 14, 0),
+    regionName: "GMS Surabaya Pusat",
+    eventTypeName: "Creative",
+    requiresApplication: false,
+    teams: [{ id: 34, number: 34 }],
+  },
+  {
+    id: 1030,
+    name: "Worship Lab",
+    date: new Date(2026, 6, 15, 16, 0),
+    regionName: "GMS Surabaya Pusat",
+    eventTypeName: "Creative",
+    requiresApplication: false,
+    teams: [{ id: 35, number: 35 }],
+  },
+  {
+    id: 1031,
+    name: "Creative Debrief",
+    date: new Date(2026, 6, 15, 21, 0),
+    regionName: "GMS Surabaya Pusat",
+    eventTypeName: "Creative",
+    requiresApplication: false,
+    teams: [{ id: 36, number: 36 }],
   },
   {
     id: 1013,

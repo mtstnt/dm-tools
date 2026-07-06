@@ -256,6 +256,7 @@ Table events {
   // Stored as integer timestamp (seconds/milliseconds depending on driver).
   date int [not null]
   name varchar [not null]
+  mode varchar [not null, default: "teams"] // teams, members, manual_apply
 
   // Legacy event id.
   source_id int [null]
@@ -295,17 +296,17 @@ Table event_assignments {
   event_id int [ref: > events.id, not null]
   user_id int [ref: > users.id, not null]
 
-  task_id int [ref: > tasks.id, not null]
+  task_id int [ref: > tasks.id, null]
   block_name varchar [null]
 
   rating int [null]
 
-  technical_notes text [not null]
-  non_technical_notes text [not null]
+  technical_notes text [null]
+  non_technical_notes text [null]
 
-  rated_by_user_id int [ref: > users.id, not null]
-  rated_by varchar [not null]
-  rated_at timestamp [not null]
+  rated_by_user_id int [ref: > users.id, null]
+  rated_by varchar [null]
+  rated_at timestamp [null]
 
   created_at timestamp [not null]
   updated_at timestamp [not null]

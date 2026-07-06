@@ -25,7 +25,7 @@ export default function ProtectedLayout({
                 <AccountInfo />
               </div>
             </header>
-            <div className="flex-1 p-6 md:p-8 lg:p-10 animate-page-enter">
+            <div className="flex-1 p-6 animate-page-enter">
               {children}
             </div>
           </main>

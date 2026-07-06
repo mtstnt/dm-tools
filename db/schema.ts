@@ -21,6 +21,8 @@ export const actionsEnum = [
 export type Action = (typeof actionsEnum)[number];
 export const eventStatusEnum = ["pending", "incomplete", "completed"] as const;
 export type EventStatus = (typeof eventStatusEnum)[number];
+export const eventModes = ["teams", "members", "manual_apply"] as const;
+export type EventMode = (typeof eventModes)[number];
 export const approvalStatusEnum = ["pending", "approved", "rejected"] as const;
 export type ApprovalStatus = (typeof approvalStatusEnum)[number];
 export const roleScopes = ["all", "self", "team", "region"] as const;
@@ -366,6 +368,12 @@ export const events = sqliteTable("events", {
 
   name: text("name").notNull(),
 
+  mode: text("mode", {
+    enum: eventModes,
+  })
+    .notNull()
+    .default("teams"),
+
   sourceId: integer("source_id"),
 
   status: text("status", {
@@ -431,26 +439,22 @@ export const eventAssignments = sqliteTable(
       .notNull()
       .references(() => users.id),
 
-    taskId: integer("task_id")
-      .notNull()
-      .references(() => tasks.id),
+    taskId: integer("task_id").references(() => tasks.id),
 
     blockName: text("block_name"),
 
     rating: integer("rating"),
 
-    technicalNotes: text("technical_notes").notNull(),
-    nonTechnicalNotes: text("non_technical_notes").notNull(),
+    technicalNotes: text("technical_notes"),
+    nonTechnicalNotes: text("non_technical_notes"),
 
-    ratedByUserId: integer("rated_by_user_id")
-      .notNull()
-      .references(() => users.id),
+    ratedByUserId: integer("rated_by_user_id").references(() => users.id),
 
-    ratedBy: text("rated_by").notNull(),
+    ratedBy: text("rated_by"),
 
     ratedAt: integer("rated_at", {
       mode: "timestamp",
-    }).notNull(),
+    }),
 
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -846,12 +850,10 @@ export const schemaRelations = defineRelations(
       task: r.one.tasks({
         from: r.eventAssignments.taskId,
         to: r.tasks.id,
-        optional: false,
       }),
       ratedByUser: r.one.users({
         from: r.eventAssignments.ratedByUserId,
         to: r.users.id,
-        optional: false,
       }),
     },
 

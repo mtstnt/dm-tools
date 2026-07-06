@@ -157,6 +157,7 @@ proxy.ts                    Exported middleware function + matcher; NOT wired to
 ## Frontend Conventions
 
 - Use Shadcn components whenever possible.
+- Controlled dropdowns must always provide the selected label map/value display (for Base UI `Select`, pass `items`) so the trigger shows the human-readable label, not a blank value.
 - Do not stack interactive elements: avoid `<Button><Link /></Button>`, `<Button><button>...</button></Button>`, or adding a nested `button` when the parent element is already a button.
 - When a link should look like a button, use `buttonVariants` with `Link` instead of wrapping `Link` in `Button`.
 

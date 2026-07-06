@@ -490,9 +490,9 @@ function DirectoryCard({
 }: Readonly<DirectoryCardProps>) {
   return (
     <Card className="overflow-hidden rounded-xl border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 px-6 pb-3 pt-6">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 px-6 pb-3 pt-3">
         <div>
-          <CardTitle className="text-lg font-medium tracking-normal">
+          <CardTitle className="text-xl font-medium tracking-normal">
             {title}
           </CardTitle>
           <CardDescription className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">

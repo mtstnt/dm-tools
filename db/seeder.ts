@@ -75,6 +75,7 @@ async function seed() {
     "DOA WILAYAH",
     "CT YOUTH",
     "CT TEEN",
+    "CUSTOM",
   ];
   for (const name of eventTypeNames) {
     const existing = await db

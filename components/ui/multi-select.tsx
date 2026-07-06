@@ -87,6 +87,10 @@ const getStyles = (hasError?: boolean): StylesConfig<MultiSelectOption, true> =>
     overflow: "hidden",
     zIndex: 50,
   }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 100,
+  }),
   menuList: (base) => ({
     ...base,
     padding: "0.25rem",
@@ -146,6 +150,12 @@ export function MultiSelect({
   disabled = false,
   className,
 }: MultiSelectProps) {
+  const [menuPortalTarget, setMenuPortalTarget] = React.useState<HTMLElement | null>(null)
+
+  React.useEffect(() => {
+    setMenuPortalTarget(document.body)
+  }, [])
+
   const handleChange = (newValue: MultiValue<MultiSelectOption>) => {
     onChange([...newValue])
   }
@@ -159,6 +169,8 @@ export function MultiSelect({
       placeholder={placeholder}
       isDisabled={disabled}
       styles={getStyles()}
+      menuPortalTarget={menuPortalTarget ?? undefined}
+      menuPosition="fixed"
       className={cn("w-full", className)}
       classNamePrefix="react-select"
       closeMenuOnSelect={false}

@@ -3,18 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  BriefcaseBusiness,
   CalendarPlus,
-  CirclePlus,
   Filter,
-  GraduationCap,
-  MapPin,
-  Moon,
-  Sparkles,
 } from "lucide-react";
 import { getEventSchedule, type EventScheduleItem } from "@/actions/events";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -35,23 +36,19 @@ const MONTHS = [
 
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
-const iconStyles = [
-  {
-    icon: GraduationCap,
-    className: "bg-primary text-primary-foreground",
-  },
-  {
-    icon: BriefcaseBusiness,
-    className: "bg-secondary text-secondary-foreground",
-  },
-  {
-    icon: Sparkles,
-    className: "bg-accent text-accent-foreground",
-  },
-  {
-    icon: Moon,
-    className: "bg-muted text-muted-foreground",
-  },
+const FULL_MONTHS = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
 ];
 
 function dateKey(date: Date) {
@@ -68,6 +65,10 @@ function formatTime(date: Date) {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function formatEventDateTime(date: Date) {
+  return `${DAYS[date.getDay()]}, ${date.getDate()} ${FULL_MONTHS[date.getMonth()]} ${date.getFullYear()} ${formatTime(date)}`;
 }
 
 export default function EventsPage() {
@@ -163,23 +164,25 @@ export default function EventsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {groupedEvents.map((group) => (
-            <section
+            <Card
               key={dateKey(group.date)}
-              className="min-h-[17rem] space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm"
+              className="min-h-[17rem] gap-0 rounded-xl bg-card py-0 shadow-sm"
             >
-              <div className="flex items-center gap-3">
+              <CardHeader className="px-3 pt-3 pb-0">
+                <div className="flex items-center gap-3">
                 <Badge className="h-7 rounded-md bg-primary px-3 text-[11px] font-bold tracking-wide text-primary-foreground hover:bg-primary">
                   {formatDatePill(group.date)}
                 </Badge>
                 <div className="h-px flex-1 bg-border" />
-              </div>
+                </div>
+              </CardHeader>
 
-              <div className="space-y-2.5">
-                {group.events.map((event, index) => (
-                  <EventCard key={event.id} event={event} toneIndex={index} />
+              <CardContent className="space-y-2.5 px-3 pt-3 pb-3">
+                {group.events.map((event) => (
+                  <EventCard key={event.id} event={event} />
                 ))}
-              </div>
-            </section>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
@@ -189,71 +192,66 @@ export default function EventsPage() {
 
 function EventCard({
   event,
-  toneIndex,
 }: {
   event: EventScheduleItem;
-  toneIndex: number;
 }) {
-  const tone = iconStyles[toneIndex % iconStyles.length];
-  const Icon = tone.icon;
   const date = new Date(event.date);
 
   return (
-    <article className="group flex flex-col gap-4 rounded-lg border border-border bg-background p-4 text-foreground shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex items-center gap-4">
-        <div
-          className={cn(
-            "flex size-12 shrink-0 items-center justify-center rounded-lg shadow-sm",
-            tone.className,
-          )}
-        >
-          <Icon className="size-5" />
-        </div>
-
-        <div>
-          <Link
-            href={`/my/events/${event.id}`}
-            className="text-base font-semibold tracking-normal hover:text-primary"
-          >
-            {event.name} / {formatTime(date)}
+    <Card className="group gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <CardHeader className="px-4 pt-4 pb-0">
+        <CardTitle className="text-base font-semibold tracking-normal">
+          <Link href={`/my/events/${event.id}`} className="hover:text-primary">
+            {event.eventTypeName}
           </Link>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <MapPin className="size-3.5" />
-              {event.regionName}
-            </span>
-            <span>{event.eventTypeName}</span>
-          </div>
-        </div>
-      </div>
+        </CardTitle>
+        <CardDescription className="text-xs font-medium">
+          {event.regionName} | {formatEventDateTime(date)}
+        </CardDescription>
+      </CardHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {event.requiresApplication ? (
-          <Badge className="h-7 rounded-full bg-destructive/10 px-4 text-[11px] font-medium text-destructive hover:bg-destructive/10">
-            ! Requires Application
-          </Badge>
-        ) : (
-          event.teams.map((team) => (
-            <Badge
-              key={team.id}
-              className="h-7 rounded-full bg-accent px-4 text-[11px] font-medium text-accent-foreground hover:bg-accent"
-            >
-              Team {team.number}
+      <CardContent className="space-y-4 px-4 pt-2 pb-4">
+        <div className="flex min-h-7 flex-wrap items-center gap-2">
+          {event.requiresApplication ? (
+            <Badge className="h-7 rounded-full bg-destructive/10 px-4 text-[11px] font-medium text-destructive hover:bg-destructive/10">
+              ! Requires Application
             </Badge>
-          ))
-        )}
-        <Link
-          href={`/my/events/${event.id}`}
-          className="flex size-7 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground transition hover:border-primary hover:text-primary"
-          aria-label={`Open ${event.name}`}
-        >
-          <CirclePlus className="size-4" />
-        </Link>
-      </div>
-    </article>
+          ) : (
+            event.teams.map((team) => (
+              <Badge
+                key={team.id}
+                className="h-7 rounded-full bg-accent px-4 text-[11px] font-medium text-accent-foreground hover:bg-accent"
+              >
+                Team {team.number}
+              </Badge>
+            ))
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Link
+            href={`/my/events/${event.id}/edit`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Edit
+          </Link>
+          <Link
+            href={`/my/events/${event.id}/assign`}
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
+            Assign
+          </Link>
+          <Link
+            href={`/my/events/${event.id}/reports`}
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            Reports
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
-
 function EventsSkeleton() {
   return (
     <div className="space-y-8">

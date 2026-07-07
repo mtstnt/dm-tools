@@ -7,6 +7,7 @@ import bcrypt from "bcrypt";
 import { db } from "@/db/connection";
 import { users } from "@/db/schema";
 import { getUserSession, type UserSession } from "@/actions/auth/session";
+import { encryptFirebaseCredentials } from "@/lib/crypto";
 
 const AUTH_COOKIE = "authenticated";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -15,6 +16,7 @@ export interface LoginResult {
   success: boolean;
   error?: string;
   session?: UserSession | null;
+  firebaseCredentials?: string | null;
 }
 
 export async function login(
@@ -60,7 +62,21 @@ export async function login(
 
   const session = await getUserSession();
 
-  return { success: true, session };
+  let firebaseCredentials: string | null = null;
+  const firebaseEmail = process.env.FIREBASE_AUTH_EMAIL;
+  const firebasePassword = process.env.FIREBASE_AUTH_PASSWORD;
+  if (firebaseEmail && firebasePassword) {
+    try {
+      firebaseCredentials = await encryptFirebaseCredentials(
+        firebaseEmail,
+        firebasePassword,
+      );
+    } catch (err) {
+      console.error("[login] Firebase credentials encryption failed:", err);
+    }
+  }
+
+  return { success: true, session, firebaseCredentials };
 }
 
 export async function logout(): Promise<void> {

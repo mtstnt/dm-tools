@@ -3,6 +3,7 @@ import { Instrument_Serif, DM_Sans, IBM_Plex_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Providers } from "@/components/providers"
 import { UserSessionProvider } from "@/components/user-session-provider"
+import { FirebaseAuthInitializer } from "@/components/firebase-auth-initializer"
 import { getUserSession } from "@/actions/auth/session"
 import "./globals.css"
 
@@ -71,6 +72,7 @@ export default async function RootLayout({
         <ThemeProvider>
           <Providers>
             <UserSessionProvider initialSession={session}>
+              <FirebaseAuthInitializer />
               {children}
             </UserSessionProvider>
           </Providers>

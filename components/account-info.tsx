@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation"
 import { logout } from "@/actions/auth/login"
 import { useSessionUser, useSetSessionUser } from "@/components/user-session-provider"
+import { auth } from "@/lib/firebase"
+import { signOut } from "firebase/auth"
 import { LogOut, User as UserIcon } from "lucide-react"
 import {
   DropdownMenu,
@@ -19,6 +21,7 @@ export function AccountInfo() {
   const router = useRouter()
 
   async function handleLogout() {
+    await signOut(auth).catch(() => {})
     await logout()
     setSession(null)
     router.push("/auth/login")

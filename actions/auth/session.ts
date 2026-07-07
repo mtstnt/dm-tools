@@ -11,6 +11,7 @@ import {
   type Action,
 } from "@/db/schema";
 import { getCurrentUser } from "@/actions/auth/current-user";
+import { getFirebaseCredentials } from "@/actions/auth/firebase-auth";
 
 export type UserPermission = {
   resource: string;
@@ -24,6 +25,7 @@ export type UserSession = {
   nij: string;
   roles: string[];
   permissions: UserPermission[];
+  firebaseCredentials?: string | null;
 };
 
 export async function getUserSession(): Promise<UserSession | null> {
@@ -79,6 +81,8 @@ export async function getUserSession(): Promise<UserSession | null> {
     permissionMap.set(key, permission);
   }
 
+  const firebaseCredentials = await getFirebaseCredentials();
+
   return {
     id: user.id,
     email: user.email,
@@ -86,5 +90,6 @@ export async function getUserSession(): Promise<UserSession | null> {
     nij: user.nij,
     roles: roleNames,
     permissions: Array.from(permissionMap.values()),
+    firebaseCredentials,
   };
 }

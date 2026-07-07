@@ -4,6 +4,13 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { login } from "@/actions/auth/login"
 import { useSetSessionUser } from "@/components/user-session-provider"
+import { decryptFirebaseCredentials } from "@/lib/crypto-client"
+import { auth } from "@/lib/firebase"
+import {
+  signInWithEmailAndPassword,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -23,6 +30,20 @@ export default function LoginPage() {
 
     const result = await login(email, password)
     if (result.success) {
+      if (result.firebaseCredentials) {
+        try {
+          const decrypted = await decryptFirebaseCredentials(
+            result.firebaseCredentials,
+          )
+          const [fbEmail, fbPassword] = decrypted.split("%")
+          if (fbEmail && fbPassword) {
+            await setPersistence(auth, browserLocalPersistence)
+            await signInWithEmailAndPassword(auth, fbEmail, fbPassword)
+          }
+        } catch (err) {
+          console.error("[LoginPage] Firebase Auth sign-in failed:", err)
+        }
+      }
       setSession(result.session ?? null)
       router.push("/my/home")
       router.refresh()

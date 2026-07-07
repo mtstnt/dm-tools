@@ -4,7 +4,7 @@ Ministry management toolkit — service reports, volunteer assignment, and event
 
 ## Stack
 
-Next.js 16 App Router · React 19 · TypeScript · Tailwind v4 · Shadcn UI · Firebase (Auth + Firestore) · TanStack React Query
+Next.js 16 App Router · React 19 · TypeScript · Tailwind v4 · Shadcn UI · Firebase (Auth + Firestore) · TanStack React Query · Drizzle ORM (libsql/Turso/SQLite)
 
 ## Getting Started
 
@@ -30,10 +30,36 @@ Fill in the values in `.env`:
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID |
+| `DATABASE_URL` | Database URL (`libsql://...` for Turso, `file:./<name>.db` for local SQLite) |
+| `DATABASE_AUTH_TOKEN` | Turso database auth token (omit for local SQLite) |
 | `SC_BASE_URL` | Server-only. Base URL for external events API |
 | `NEXT_PUBLIC_SC_BASE_URL` | Client-exposed. Same value, used for event card links |
 
-### 3. Run dev server
+### 3. Set up the database
+
+Local SQLite (default for development):
+
+```bash
+# .env
+DATABASE_URL=file:./dm-tools.db
+```
+
+Turso:
+
+```bash
+# .env
+DATABASE_URL=libsql://<db-name>-<org>.turso.io
+DATABASE_AUTH_TOKEN=<your-token>
+```
+
+Generate and run migrations:
+
+```bash
+bunx drizzle-kit generate
+bunx drizzle-kit migrate
+```
+
+### 4. Run dev server
 
 ```bash
 bun dev

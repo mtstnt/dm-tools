@@ -8,7 +8,7 @@ SVG-based tool for allocating volunteers to service blocks (A1–A4, B1–B3, S1
 
 | File | Role |
 |------|------|
-| `app/tools/assign/page.tsx` | Full assignment tool (1152 lines, client component) |
+| `app/tools/utilities/assign/page.tsx` | Full assignment tool (client component) |
 
 ## Concepts
 

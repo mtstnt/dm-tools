@@ -1,37 +1,39 @@
-# Feature: Events Browser
+# Feature: Events Browser (Legacy SC Website)
 
 ## Overview
 
-Page that scrapes event data from an external API using Cheerio. Uses a separate web auth flow (not Firebase) with credentials stored in localStorage.
+Page that scrapes event data from an external API using Cheerio. Uses a separate web auth flow (not Firebase) with credentials stored in localStorage. This feature lives under `/tools/legacy/events`.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `app/tools/events/page.tsx` | Events grid with filters (client component) |
-| `app/tools/events/[eventId]/edit/page.tsx` | Event edit page — fetches `EventDetail`, renders tabs |
-| `app/tools/events/[eventId]/edit/assignment-tab.tsx` | Assignment tab — assign/remove blocks, remove users |
-| `app/tools/events/[eventId]/edit/blocks-tab.tsx` | Blocks tab — edit chair grid per block |
-| `app/actions/events/list.ts` | `getEvents()` server action |
-| `app/actions/events/detail.ts` | `getEventDetail()` server action |
-| `app/actions/events/update.ts` | `updateEventUsers()` server action |
-| `app/actions/events/user-blocks/update.ts` | `updateUserBlocks()` server action |
-| `app/actions/events/user-blocks/delete.ts` | `removeUserBlock()` server action |
-| `app/actions/events/blocks/update.ts` | `updateBlock()` server action |
-| `app/actions/_shared.ts` | Shared `webFetch()` + `LegacyWebContext` type |
+| `app/tools/legacy/events/page.tsx` | Events grid with filters (client component) |
+| `app/tools/legacy/events/[eventId]/edit/page.tsx` | Event edit page — fetches `EventDetail`, renders tabs |
+| `app/tools/legacy/events/[eventId]/edit/assignment-tab.tsx` | Assignment tab — assign/remove blocks, remove users |
+| `app/tools/legacy/events/[eventId]/edit/blocks-tab.tsx` | Blocks tab — edit chair grid per block |
+| `actions/legacy-web/events/list.ts` | `getEvents()` server action |
+| `actions/legacy-web/events/detail.ts` | `getEventDetail()` server action |
+| `actions/legacy-web/events/update.ts` | `updateEventUsers()` server action |
+| `actions/legacy-web/events/user-blocks/update.ts` | `updateUserBlocks()` server action |
+| `actions/legacy-web/events/user-blocks/delete.ts` | `removeUserBlock()` server action |
+| `actions/legacy-web/events/blocks/update.ts` | `updateBlock()` server action |
+| `actions/legacy-web/_shared.ts` | Shared `webFetch()` + `LegacyWebContext` type |
 | `components/web-auth-guard.tsx` | Auth gate dialog for external API credentials |
 | `components/ui/multi-select.tsx` | Shadcn-compatible react-select wrapper for multi-select dropdowns |
 | `lib/parsers/events.ts` | Cheerio HTML parser → `EventInfo[]` (event list) |
 | `lib/parsers/event-details.ts` | Cheerio parser for event edit page HTML → `EventDetail` |
+| `lib/parsers/blocks.ts` | Seat-layout block parser |
+| `lib/parsers/seat-layout.ts` | Seat layout parser |
 | `lib/queries/events.ts` | Re-exports all event server actions + `eventKeys` query key factory + `EventInfo` type |
 | `types/event.ts` | `EventDetail`, `EventArea`, `EventBlock`, `EventUser`, `EventAssignedUser` interfaces |
 
 ## Auth Flow (Web Auth)
 
-1. User navigates to `/tools/events`
+1. User navigates to `/tools/legacy/events`
 2. `WebAuthGuard` checks localStorage for stored credentials + cookie
 3. If missing → shows modal dialog (email + password)
-4. On submit → calls `webAuthLogin()` server action
+4. On submit → calls `webAuthLogin()` server action from `actions/legacy-web/auth/web-login.ts`
 5. Server action: GET `/login` → extract CSRF token → POST `/login` → extract `sails.sid` cookie
 6. On success → stores email, base64-encoded password, and cookie in localStorage
 7. Subsequent visits → restores session from localStorage
@@ -58,7 +60,7 @@ Click "Sign out" button → `clearWebAuth()` removes all three localStorage keys
 
 ## Event Edit Page
 
-- Route: `/tools/events/[eventId]/edit`
+- Route: `/tools/legacy/events/[eventId]/edit`
 - Calls `getEventDetail(ctx, eventId)` which GETs `SC_BASE_URL/event/edit/{eventId}`
 - Parses the edit form HTML via `parseEventPage()` into `EventDetail`
 - Contains three tabs: **Assignment**, **Blocks**, **Dashboard** (placeholder)
@@ -194,18 +196,18 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Ret
 - **Filters**: Location, event name, date — all via Select dropdowns
 - **Card layout**: Responsive grid (1→6 columns based on breakpoint)
 - **Card content**: Event name, date badge, time, location, lock/unlock icon
-- **Card footer**: "Seats" and "Edit" links using `NEXT_PUBLIC_SC_BASE_URL` + relative URL
+- **Card footer**: "Seats", "Presence", and "Edit" links using `NEXT_PUBLIC_SC_BASE_URL` + relative URL
 - **States**: Loading (12 skeleton cards), error (retry button), empty, filtered-empty
 - **Multi-select**: react-select wrapper with Shadcn styling for users and blocks dropdowns
 
 ## Environment Requirements
 
-- `SC_BASE_URL` — Server-only, used in `app/actions/events/` for fetch requests
-- `NEXT_PUBLIC_SC_BASE_URL` — Client-side, used for link generation in event cards
+- `SC_BASE_URL` — Server-only, used in `actions/legacy-web/events/` for fetch requests. Not present in `.env.template`; add manually.
+- `NEXT_PUBLIC_SC_BASE_URL` — Client-side, used for link generation in event cards.
 
 ## Gotchas
 
-- Web auth is completely separate from Firebase auth — different credentials
+- Web auth is completely separate from app auth — different credentials
 - Password stored as base64 in localStorage (not encrypted)
 - `getEvents` scrapes 10 pages in parallel — if site structure changes, parser breaks
 - Cheerio parser assumes specific HTML structure (`.card`, `b` tag header, `.container > div`)
@@ -213,5 +215,4 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Ret
 - Assignment feature requires SPV/PIC role in Firebase `members` collection
 - CSRF token is extracted from event edit page HTML; `removeUserBlock` additionally fetches a fresh token from `/csrfToken`
 - `allUsers` is pre-filtered to `ALLOWED_USER_IDS` in the parser (`lib/parsers/event-details.ts`), not in the client component
-- `getEventDetail` returns `Promise<EventDetail>` (typed via `detail.ts`); `page.tsx` still casts `as EventDetail` because the re-export in `lib/queries/events.ts` goes through the action
 - Mutations refresh via `refetch` callback (re-calls `getEventDetail`), not `window.location.reload`

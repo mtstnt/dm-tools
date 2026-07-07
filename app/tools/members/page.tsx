@@ -19,13 +19,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
 import { collection, getDocs, setDoc, addDoc, doc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { WebAuthGuard, getWebAuthCookie } from "@/components/web-auth-guard";
-import { fetchAllUsers } from "@/app/actions/users/fetch-all";
+import { fetchAllUsers } from "@/actions/legacy-web/users/fetch-all";
 import type { EventUser } from "@/types/event";
 
 interface SelectOption {

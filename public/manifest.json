@@ -2,7 +2,7 @@
   "name": "DM Tools",
   "short_name": "DM Tools",
   "description": "Data Ministry Tools",
-  "start_url": "/tools",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#7c3aed",

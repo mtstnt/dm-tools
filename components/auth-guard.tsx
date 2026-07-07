@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthStateChanged } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { checkAuth } from "@/actions/auth/current-user"
+import { Loader } from "lucide-react"
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
@@ -11,22 +11,20 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
+    checkAuth().then((ok) => {
+      if (!ok) {
         router.push("/auth/login")
         return
       }
       setAuthenticated(true)
       setLoading(false)
     })
-
-    return () => unsubscribe()
   }, [router])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex min-h-full flex-1 items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
       </div>
     )
   }

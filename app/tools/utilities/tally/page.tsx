@@ -23,14 +23,9 @@ import {
 
 const COMBO_TIMEOUT_MS = 750;
 const MAX_LOG_ENTRIES = 200;
-// How long to trust a just-written local value over an incoming Firestore
-// snapshot for the SAME altar call, so an in-flight combo never visually
-// "rewinds" while the write round-trips to the server.
 const RECENT_WRITE_GRACE_MS = 2500;
 
 // ── Vibration patterns ────────────────────────────────────────────────────────
-// iOS Safari does NOT support navigator.vibrate — only works on Android Chrome.
-// Patterns: [waitMs, vibrateMs, waitMs, vibrateMs, ...]
 const VIBRATE_PLUS  = [0, 80];          // single strong buzz
 const VIBRATE_MINUS = [0, 30, 50, 30];  // double short buzz — clearly different from +
 
@@ -45,11 +40,6 @@ function buildAltarCallLabels(count: number): string[] {
   return Array.from({ length: n }, (_, i) => `Altar Call ${i + 1}`);
 }
 
-// ── Per-counter log persistence (localStorage) ────────────────────────────────
-// Each (session, label) pair — e.g. (session-abc, "TC Out") — gets its OWN
-// log array in localStorage, so switching the selected counter never mixes
-// one counter's history into another's, and the history survives refreshes
-// even though the counters themselves are local-only (never in Firestore).
 const LOG_STORAGE_PREFIX = "tally:log";
 
 function logStorageKey(sessionId: string, label: string) {
@@ -100,10 +90,6 @@ function TallyPageInner() {
   const [sessionList, setSessionList] = useState<TallySessionSummary[]>([]);
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  // Mirrors selectedSessionId for reads inside async callbacks (e.g. a
-  // pushTallyDelta().then() that resolves after the user has already
-  // switched sessions) — a plain closure over the state would still see the
-  // OLD value, but this ref always reflects the current one.
   const selectedSessionIdRef = useRef(selectedSessionId);
   useEffect(() => { selectedSessionIdRef.current = selectedSessionId; }, [selectedSessionId]);
 
@@ -117,9 +103,6 @@ function TallyPageInner() {
   // Local UI state
   const [selectedIdx, setSelectedIdx]     = useState(0);
   const [counts, setCounts]               = useState<Record<string, number>>({});
-  // Logs are local-only (never written to or read from Firestore) and kept
-  // PER LABEL, so "TC In" and "TC Out" (or each altar call) each have their
-  // own independent history instead of one combined list.
   const [logsByLabel, setLogsByLabel]             = useState<Record<string, TallyLogEntry[]>>({});
   const [pendingLogsByLabel, setPendingLogsByLabel] = useState<Record<string, TallyLogEntry[]>>({});
 
@@ -155,16 +138,8 @@ function TallyPageInner() {
   const currentLabel = altarCalls[selectedIdx] ?? altarCalls[0];
   const isOutLabel    = kind === "tc" && currentLabel === TC_OUT_LABEL;
   const rawCount      = counts[currentLabel] ?? 0;
-  // OUT is stored negative (0, -1, -2, …) and shown exactly as stored so the
-  // number visibly counts DOWN. `displayValueFor` below is the hard
-  // guarantee that it can never render as a positive number — this line is
-  // just the value for the currently-selected label.
   const currentCount  = isOutLabel ? Math.min(0, rawCount) : rawCount;
 
-  // Ceiling-guard: for TC Out, 0 is the highest possible value, always.
-  // Any label's displayed value goes through this, so no matter where a
-  // number came from (a local tap, a Firestore snapshot, a stale merge),
-  // it is clamped before it ever reaches the screen.
   const displayValueFor = useCallback(
     (label: string) => {
       const raw = counts[label] ?? 0;
@@ -201,12 +176,6 @@ function TallyPageInner() {
       setHasSession(false);
       return;
     }
-
-    // Clear the previous session's data immediately so there's no flash of
-    // stale counts from the old session while the new one loads. The
-    // per-label log maps reset to {} too — each label lazy-loads its own
-    // history back in from localStorage (see the effect below) as soon as
-    // it's viewed, so nothing is lost, it's just not fetched yet.
     setCounts({});
     setLogsByLabel({});
     setPendingLogsByLabel({});
@@ -258,12 +227,6 @@ function TallyPageInner() {
     setSelectedIdx((i) => Math.min(i, Math.max(altarCalls.length - 1, 0)));
   }, [altarCalls.length]);
 
-  // ── Lazy-load a counter's own log the first time it's viewed ──────────────
-  // Runs whenever the selected session OR the selected counter (currentLabel)
-  // changes. If that label's log for THIS session hasn't been pulled into
-  // memory yet, read it from localStorage. Already-loaded labels (even ones
-  // whose stored log is an empty array) are left alone — this is what makes
-  // switching counters show that counter's own history instead of a mix.
   useEffect(() => {
     if (!selectedSessionId || !currentLabel) return;
     const sessionId = selectedSessionId;
@@ -285,7 +248,7 @@ function TallyPageInner() {
 
   const commitDelta = useCallback((label: string, delta: number, isCombo: boolean) => {
     if (!selectedSessionId) return;
-    const sessionId = selectedSessionId; // snapshot: stays correct even if the user switches sessions before this resolves
+    const sessionId = selectedSessionId; 
     recentWritesRef.current[label] = Date.now();
     const optimisticEntry: TallyLogEntry = {
       id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -300,17 +263,8 @@ function TallyPageInner() {
     }));
     pushTallyDelta(sessionId, label, delta, isCombo)
       .then((confirmedEntry) => {
-        // Persist to THIS label's own localStorage bucket — never touches
-        // Firestore, and never mixes with any other counter's log. We read
-        // straight from storage rather than from React state so this stays
-        // correct even if logsByLabel was reset by a session switch since
-        // this write started.
         const nextForLabel = [confirmedEntry, ...readStoredLog(sessionId, label)].slice(0, MAX_LOG_ENTRIES);
         writeStoredLog(sessionId, label, nextForLabel);
-
-        // Only touch on-screen state if we're still looking at that same
-        // session — otherwise this session's maps were already reset and
-        // this update would incorrectly resurrect stale data into them.
         if (selectedSessionIdRef.current !== sessionId) return;
         setPendingLogsByLabel((prev) => ({
           ...prev,
@@ -474,8 +428,6 @@ function TallyPageInner() {
   };
 
   // ── Derived: THIS counter's own log (optimistic pending + confirmed) ──────
-  // Scoped to currentLabel, so switching between TC In / TC Out / altar
-  // calls always shows that counter's own history, never a blend of them.
 
   const displayLogs = useMemo(() => {
     const confirmed = logsByLabel[currentLabel] ?? [];
@@ -752,11 +704,6 @@ function TallyPageInner() {
 
         {/* ══════════════════════ BOTTOM 65% ══════════════════ */}
         <div className="relative" style={{ height: "65%" }}>
-
-          {/* Big button — for TC Out this is the primary "tally out" action,
-              so it's shown as a red minus even though it still calls
-              handlePlus() under the hood (that's what pushes the count
-              further negative). */}
           <button
             className={cn(
               "absolute inset-0 flex items-center justify-center transition-colors duration-75",

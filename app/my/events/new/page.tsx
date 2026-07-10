@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatISO, isValid, parse } from "date-fns";
 import {
   ArrowLeft,
   CalendarPlus,
@@ -73,6 +74,15 @@ function createEmptyCard(id: string, options?: EventCreationOptions): EventFormC
     members: [],
     pics: [],
   };
+}
+
+function toLocalDateTimeWithOffset(value: string) {
+  if (!value) {
+    return value;
+  }
+
+  const date = parse(value, "yyyy-MM-dd'T'HH:mm", new Date());
+  return isValid(date) ? formatISO(date) : value;
 }
 
 export default function NewEventPage() {
@@ -189,7 +199,7 @@ export default function NewEventPage() {
           regionId: card.regionId,
           eventTypeId: card.eventTypeId,
           customName: card.customName,
-          date: card.date,
+          date: toLocalDateTimeWithOffset(card.date),
           mode: card.mode,
           teamIds: card.teams.map((team) => Number(team.value)),
           memberIds: card.members.map((member) => Number(member.value)),

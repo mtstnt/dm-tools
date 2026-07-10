@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { id } from "date-fns/locale";
 import {
   CalendarPlus,
   ChevronLeft,
@@ -29,23 +31,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-const MONTHS = [
-  "JAN",
-  "FEB",
-  "MAR",
-  "APR",
-  "MEI",
-  "JUN",
-  "JUL",
-  "AGU",
-  "SEP",
-  "OKT",
-  "NOV",
-  "DES",
-];
-
-const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
 const FULL_MONTHS = [
   "Januari",
   "Februari",
@@ -66,19 +51,11 @@ function dateKey(date: Date) {
 }
 
 function formatDatePill(date: Date) {
-  return `${DAYS[date.getDay()].toLocaleUpperCase()}, ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-function formatTime(date: Date) {
-  return date.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return format(date, "EEEE, d MMM yyyy", { locale: id }).toLocaleUpperCase();
 }
 
 function formatEventDateTime(date: Date) {
-  return `${DAYS[date.getDay()]}, ${date.getDate()} ${FULL_MONTHS[date.getMonth()]} ${date.getFullYear()} ${formatTime(date)}`;
+  return format(date, "EEEE, d MMMM yyyy HH:mm zzz", { locale: id });
 }
 
 export default function EventsPage() {

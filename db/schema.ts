@@ -193,6 +193,8 @@ export const users = sqliteTable(
     teamId: integer("team_id")
       .references(() => teams.id),
 
+    roleId: integer("role_id").references(() => roles.id),
+
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -320,35 +322,6 @@ export const userPermissions = sqliteTable(
   ],
 );
 
-export const userRoles = sqliteTable(
-  "user_roles",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-
-    userId: integer("user_id")
-      .notNull()
-      .references(() => users.id),
-
-    roleId: integer("role_id")
-      .notNull()
-      .references(() => roles.id),
-
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    createdBy: text("created_by").notNull(),
-    updatedBy: text("updated_by").notNull(),
-  },
-  (table) => [
-    uniqueIndex("user_roles_user_role_unique").on(table.userId, table.roleId),
-  ],
-);
-
 /* ============================================================================
  * EVENT DATA COLLECTION
  * ========================================================================== */
@@ -373,6 +346,11 @@ export const events = sqliteTable("events", {
   })
     .notNull()
     .default("teams"),
+
+  configuration: text("configuration", { mode: "json" })
+    .$type<{ field: string; value: string }[]>()
+    .notNull()
+    .default([]),
 
   sourceId: integer("source_id"),
 
@@ -401,7 +379,7 @@ export const eventTeams = sqliteTable(
 
     eventId: integer("event_id")
       .notNull()
-      .references(() => events.id),
+      .references(() => events.id, { onDelete: "cascade" }),
 
     teamId: integer("team_id")
       .notNull()
@@ -433,7 +411,7 @@ export const eventAssignments = sqliteTable(
 
     eventId: integer("event_id")
       .notNull()
-      .references(() => events.id),
+      .references(() => events.id, { onDelete: "cascade" }),
 
     userId: integer("user_id")
       .notNull()
@@ -484,7 +462,7 @@ export const eventAssignmentChangeRequests = sqliteTable(
 
     eventId: integer("event_id")
       .notNull()
-      .references(() => events.id),
+      .references(() => events.id, { onDelete: "cascade" }),
 
     userFromId: integer("user_from_id")
       .notNull()
@@ -531,7 +509,7 @@ export const eventMetrics = sqliteTable(
 
     eventId: integer("event_id")
       .notNull()
-      .references(() => events.id),
+      .references(() => events.id, { onDelete: "cascade" }),
 
     metricId: integer("metric_id")
       .notNull()
@@ -567,7 +545,7 @@ export const eventVolunteers = sqliteTable(
 
     eventId: integer("event_id")
       .notNull()
-      .references(() => events.id),
+      .references(() => events.id, { onDelete: "cascade" }),
 
     ministryId: integer("ministry_id")
       .notNull()
@@ -601,7 +579,7 @@ export const eventAltarCalls = sqliteTable(
 
     eventId: integer("event_id")
       .notNull()
-      .references(() => events.id),
+      .references(() => events.id, { onDelete: "cascade" }),
 
     description: text("description").notNull(),
 
@@ -667,7 +645,6 @@ export const schemaRelations = defineRelations(
     roles,
     rolePermissions,
     userPermissions,
-    userRoles,
     events,
     eventTeams,
     eventAssignments,
@@ -697,9 +674,9 @@ export const schemaRelations = defineRelations(
         to: r.teams.id,
         optional: false,
       }),
-      roles: r.many.roles({
-        from: r.users.id.through(r.userRoles.userId),
-        to: r.roles.id.through(r.userRoles.roleId),
+      role: r.one.roles({
+        from: r.users.roleId,
+        to: r.roles.id,
       }),
       permissions: r.many.permissions({
         from: r.users.id.through(r.userPermissions.userId),
@@ -736,10 +713,7 @@ export const schemaRelations = defineRelations(
         from: r.roles.id.through(r.rolePermissions.roleId),
         to: r.permissions.id.through(r.rolePermissions.permissionId),
       }),
-      users: r.many.users({
-        from: r.roles.id.through(r.userRoles.roleId),
-        to: r.users.id.through(r.userRoles.userId),
-      }),
+      users: r.many.users(),
     },
 
     permissions: {
@@ -775,19 +749,6 @@ export const schemaRelations = defineRelations(
       permission: r.one.permissions({
         from: r.userPermissions.permissionId,
         to: r.permissions.id,
-        optional: false,
-      }),
-    },
-
-    userRoles: {
-      user: r.one.users({
-        from: r.userRoles.userId,
-        to: r.users.id,
-        optional: false,
-      }),
-      role: r.one.roles({
-        from: r.userRoles.roleId,
-        to: r.roles.id,
         optional: false,
       }),
     },

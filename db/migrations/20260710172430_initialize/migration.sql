@@ -32,7 +32,7 @@ CREATE TABLE `event_altar_calls` (
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_event_altar_calls_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`)
+	CONSTRAINT `fk_event_altar_calls_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE
 );
 --> statement-breakpoint
 CREATE TABLE `event_assignment_change_requests` (
@@ -47,7 +47,7 @@ CREATE TABLE `event_assignment_change_requests` (
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_event_assignment_change_requests_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),
+	CONSTRAINT `fk_event_assignment_change_requests_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_event_assignment_change_requests_user_from_id_users_id_fk` FOREIGN KEY (`user_from_id`) REFERENCES `users`(`id`),
 	CONSTRAINT `fk_event_assignment_change_requests_user_to_id_users_id_fk` FOREIGN KEY (`user_to_id`) REFERENCES `users`(`id`),
 	CONSTRAINT `fk_event_assignment_change_requests_approved_by_users_id_fk` FOREIGN KEY (`approved_by`) REFERENCES `users`(`id`)
@@ -57,19 +57,19 @@ CREATE TABLE `event_assignments` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
 	`event_id` integer NOT NULL,
 	`user_id` integer NOT NULL,
-	`task_id` integer NOT NULL,
+	`task_id` integer,
 	`block_name` text,
 	`rating` integer,
-	`technical_notes` text NOT NULL,
-	`non_technical_notes` text NOT NULL,
-	`rated_by_user_id` integer NOT NULL,
-	`rated_by` text NOT NULL,
-	`rated_at` integer NOT NULL,
+	`technical_notes` text,
+	`non_technical_notes` text,
+	`rated_by_user_id` integer,
+	`rated_by` text,
+	`rated_at` integer,
 	`created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_event_assignments_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),
+	CONSTRAINT `fk_event_assignments_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_event_assignments_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`),
 	CONSTRAINT `fk_event_assignments_task_id_tasks_id_fk` FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`),
 	CONSTRAINT `fk_event_assignments_rated_by_user_id_users_id_fk` FOREIGN KEY (`rated_by_user_id`) REFERENCES `users`(`id`)
@@ -85,7 +85,7 @@ CREATE TABLE `event_metrics` (
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_event_metrics_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),
+	CONSTRAINT `fk_event_metrics_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_event_metrics_metric_id_metrics_id_fk` FOREIGN KEY (`metric_id`) REFERENCES `metrics`(`id`)
 );
 --> statement-breakpoint
@@ -97,7 +97,7 @@ CREATE TABLE `event_teams` (
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_event_teams_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),
+	CONSTRAINT `fk_event_teams_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_event_teams_team_id_teams_id_fk` FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`)
 );
 --> statement-breakpoint
@@ -119,7 +119,7 @@ CREATE TABLE `event_volunteers` (
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_event_volunteers_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`),
+	CONSTRAINT `fk_event_volunteers_event_id_events_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON DELETE CASCADE,
 	CONSTRAINT `fk_event_volunteers_ministry_id_ministries_id_fk` FOREIGN KEY (`ministry_id`) REFERENCES `ministries`(`id`)
 );
 --> statement-breakpoint
@@ -129,6 +129,8 @@ CREATE TABLE `events` (
 	`event_type_id` integer NOT NULL,
 	`date` integer NOT NULL,
 	`name` text NOT NULL,
+	`mode` text DEFAULT 'teams' NOT NULL,
+	`configuration` text DEFAULT '[]' NOT NULL,
 	`source_id` integer,
 	`status` text DEFAULT 'pending' NOT NULL,
 	`created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -231,18 +233,6 @@ CREATE TABLE `user_permissions` (
 	CONSTRAINT `fk_user_permissions_permission_id_permissions_id_fk` FOREIGN KEY (`permission_id`) REFERENCES `permissions`(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `user_roles` (
-	`id` integer PRIMARY KEY AUTOINCREMENT,
-	`user_id` integer NOT NULL,
-	`role_id` integer NOT NULL,
-	`created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	`created_by` text NOT NULL,
-	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_user_roles_user_id_users_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`),
-	CONSTRAINT `fk_user_roles_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`)
-);
---> statement-breakpoint
 CREATE TABLE `users` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
 	`full_name` text NOT NULL,
@@ -251,11 +241,13 @@ CREATE TABLE `users` (
 	`password` text,
 	`source_id` integer,
 	`team_id` integer,
+	`role_id` integer,
 	`created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
-	CONSTRAINT `fk_users_team_id_teams_id_fk` FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`)
+	CONSTRAINT `fk_users_team_id_teams_id_fk` FOREIGN KEY (`team_id`) REFERENCES `teams`(`id`),
+	CONSTRAINT `fk_users_role_id_roles_id_fk` FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `configurations_name_unique` ON `configurations` (`name`);--> statement-breakpoint
@@ -269,5 +261,4 @@ CREATE UNIQUE INDEX `permissions_resource_action_unique` ON `permissions` (`reso
 CREATE UNIQUE INDEX `role_permissions_role_permission_unique` ON `role_permissions` (`role_id`,`permission_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `teams_number_unique` ON `teams` (`number`);--> statement-breakpoint
 CREATE UNIQUE INDEX `user_permissions_user_permission_unique` ON `user_permissions` (`user_id`,`permission_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `user_roles_user_role_unique` ON `user_roles` (`user_id`,`role_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);

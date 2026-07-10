@@ -13,6 +13,7 @@ import {
   teams,
   users,
   type EventMode,
+  type EventStatus,
 } from "@/db/schema";
 import {
   checkPermission,
@@ -32,6 +33,45 @@ export type EventScheduleItem = {
     id: number;
     number: number;
   }[];
+};
+
+export type EventConfiguration = {
+  field: string;
+  value: string;
+};
+
+export type EventDetailData = {
+  id: number;
+  name: string;
+  date: Date;
+  status: EventStatus;
+  regionName: string;
+  eventTypeName: string;
+  mode: EventMode;
+  allUsers: {
+    id: number;
+    fullName: string;
+    email: string;
+  }[];
+  assignments: {
+    id: number;
+    fullName: string;
+    email: string;
+    assignedBlockIds: number[];
+    taskIds: number[];
+  }[];
+};
+
+export type EventDetailResult = {
+  success: boolean;
+  data?: EventDetailData;
+  error?: string;
+};
+
+export type EventConfigurationResult = {
+  success: boolean;
+  data?: EventConfiguration[];
+  error?: string;
 };
 
 export type EventCreationOptions = {
@@ -82,6 +122,13 @@ const createEventsSchema = z.object({
     .array(createEventItemSchema)
     .min(1, "Add at least one event to create"),
 });
+
+const eventConfigurationSchema = z.array(
+  z.object({
+    field: z.string().trim().min(1, "Configuration field is required"),
+    value: z.string(),
+  }),
+);
 
 export type CreateEventsInput = z.input<typeof createEventsSchema>;
 
@@ -154,6 +201,174 @@ export async function getEventSchedule(): Promise<EventScheduleResult> {
   } catch (err) {
     console.error("[getEventSchedule] error:", err);
     return { success: false, error: "Failed to load events" };
+  }
+}
+
+export async function getEventDetail(eventId: number): Promise<EventDetailResult> {
+  const allowed = await checkPermission("events", "read");
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  if (!Number.isInteger(eventId) || eventId <= 0) {
+    return { success: false, error: "Event not found" };
+  }
+
+  try {
+    const [eventRows, userRows, assignmentRows] = await Promise.all([
+      db
+        .select({
+          id: events.id,
+          name: events.name,
+          date: events.date,
+          status: events.status,
+          regionName: regions.name,
+          eventTypeName: eventTypes.name,
+          mode: events.mode,
+        })
+        .from(events)
+        .innerJoin(regions, eq(events.regionId, regions.id))
+        .innerJoin(eventTypes, eq(events.eventTypeId, eventTypes.id))
+        .where(eq(events.id, eventId))
+        .limit(1),
+      db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+        })
+        .from(users)
+        .orderBy(asc(users.fullName)),
+      db
+        .select({
+          userId: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          taskId: eventAssignments.taskId,
+          blockId: eventAssignments.blockName,
+        })
+        .from(eventAssignments)
+        .innerJoin(users, eq(eventAssignments.userId, users.id))
+        .where(eq(eventAssignments.eventId, eventId))
+        .orderBy(asc(users.fullName)),
+    ]);
+
+    const event = eventRows[0];
+    if (!event) {
+      return { success: false, error: "Event not found" };
+    }
+
+    const assignmentMap = new Map<number, EventDetailData["assignments"][number]>();
+    for (const row of assignmentRows) {
+      const assignment = assignmentMap.get(row.userId) ?? {
+        id: row.userId,
+        fullName: row.fullName,
+        email: row.email,
+        assignedBlockIds: [],
+        taskIds: [],
+      };
+
+      const blockId = Number(row.blockId);
+      if (Number.isInteger(blockId) && !assignment.assignedBlockIds.includes(blockId)) {
+        assignment.assignedBlockIds.push(blockId);
+      }
+      if (row.taskId !== null && !assignment.taskIds.includes(row.taskId)) {
+        assignment.taskIds.push(row.taskId);
+      }
+      assignmentMap.set(row.userId, assignment);
+    }
+
+    return {
+      success: true,
+      data: {
+        ...event,
+        allUsers: userRows,
+        assignments: Array.from(assignmentMap.values()),
+      },
+    };
+  } catch (err) {
+    console.error("[getEventDetail] error:", err);
+    return { success: false, error: "Failed to load event" };
+  }
+}
+
+export async function getEventConfiguration(
+  eventId: number,
+): Promise<EventConfigurationResult> {
+  const allowed = await checkPermission("events", "read");
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  try {
+    const rows = await db
+      .select({ configuration: events.configuration })
+      .from(events)
+      .where(eq(events.id, eventId))
+      .limit(1);
+
+    if (rows.length === 0) {
+      return { success: false, error: "Event not found" };
+    }
+
+    return { success: true, data: rows[0].configuration };
+  } catch (err) {
+    console.error("[getEventConfiguration] error:", err);
+    return { success: false, error: "Failed to load event configuration" };
+  }
+}
+
+export async function updateEventConfiguration(
+  eventId: number,
+  input: EventConfiguration[],
+): Promise<EventConfigurationResult> {
+  const allowed = await checkPermission("events", "update");
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  const parseResult = eventConfigurationSchema.safeParse(input);
+  if (!parseResult.success) {
+    return {
+      success: false,
+      error: parseResult.error.issues.map((issue) => issue.message).join(", "),
+    };
+  }
+
+  try {
+    const ctx = await getUserContext();
+    const existing = await db
+      .select({ configuration: events.configuration })
+      .from(events)
+      .where(eq(events.id, eventId))
+      .limit(1);
+
+    if (existing.length === 0) {
+      return { success: false, error: "Event not found" };
+    }
+
+    const [updated] = await db
+      .update(events)
+      .set({
+        configuration: parseResult.data,
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(eq(events.id, eventId))
+      .returning({ configuration: events.configuration });
+
+    await logAuditTrail(
+      "events",
+      eventId,
+      "update",
+      { configuration: existing[0].configuration },
+      { configuration: updated.configuration },
+    );
+
+    return { success: true, data: updated.configuration };
+  } catch (err) {
+    console.error("[updateEventConfiguration] error:", err);
+    return { success: false, error: "Failed to update event configuration" };
   }
 }
 
@@ -235,13 +450,15 @@ export async function createEvents(
 
   const eventInputs = parseResult.data.events;
   const usesTeams = eventInputs.some((event) => event.mode === "teams");
-  const usesMembers = eventInputs.some((event) => event.mode === "members");
+  const usesAssignments = eventInputs.some(
+    (event) => event.mode === "members" || event.picIds.length > 0,
+  );
 
   if (usesTeams && !(await checkPermission("event_teams", "create"))) {
     return { success: false, error: "Forbidden" };
   }
 
-  if (usesMembers && !(await checkPermission("event_assignments", "create"))) {
+  if (usesAssignments && !(await checkPermission("event_assignments", "create"))) {
     return { success: false, error: "Forbidden" };
   }
 
@@ -267,7 +484,7 @@ export async function createEvents(
     const memberIds = new Set(memberRows.map((row) => row.id));
     const picTaskId = picTaskRows[0]?.id;
 
-    if (usesMembers && !picTaskId) {
+    if (usesAssignments && !picTaskId) {
       return { success: false, error: 'Task "Event PIC" is missing' };
     }
 
@@ -309,9 +526,10 @@ export async function createEvents(
         }
       }
 
-      if (event.mode === "members") {
-        if (uniqueMemberIds.length === 0 && uniquePicIds.length === 0) {
-          throw new Error(`Event ${itemNumber}: select at least one member or PIC`);
+        if (event.mode === "members") {
+          if (uniqueMemberIds.length === 0 && uniquePicIds.length === 0) {
+            throw new Error(`Event ${itemNumber}: select at least one member or PIC`);
+          }
         }
 
         for (const userId of [...uniqueMemberIds, ...uniquePicIds]) {
@@ -319,7 +537,6 @@ export async function createEvents(
             throw new Error(`Event ${itemNumber}: selected member was not found`);
           }
         }
-      }
 
       return {
         ...event,
@@ -381,7 +598,7 @@ export async function createEvents(
           );
         }
 
-        if (event.mode === "members") {
+        if (event.mode === "members" || event.picIds.length > 0) {
           const picIds = new Set(event.picIds);
           const directMemberIds = event.memberIds.filter((userId) => !picIds.has(userId));
           const assignmentRows = [

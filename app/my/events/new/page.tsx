@@ -462,13 +462,19 @@ export default function NewEventPage() {
                     ) : null}
 
                     {card.mode === "manual_apply" ? (
-                      <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                        <UsersRound className="mt-0.5 size-4 shrink-0" />
-                        <p>
-                          No assignment input is needed now. Members can apply
-                          later and will be added to event assignments
-                          automatically by the apply flow.
-                        </p>
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                          <UsersRound className="mt-0.5 size-4 shrink-0" />
+                          <p>Members can apply later. Optionally select Event PICs now.</p>
+                        </div>
+                        <Field label="Event PIC">
+                          <MultiSelect
+                            options={memberOptions}
+                            value={card.pics}
+                            onChange={(pics) => updateCard(card.id, { pics })}
+                            placeholder="Pick one or more PIC..."
+                          />
+                        </Field>
                       </div>
                     ) : null}
                   </div>

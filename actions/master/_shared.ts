@@ -7,7 +7,7 @@ import {
   permissions,
   roles,
   userPermissions,
-  userRoles,
+  users,
   rolePermissions,
   type Action,
 } from "@/db/schema";
@@ -37,10 +37,10 @@ export async function checkPermission(
 
   // ADMIN role grants full access
   const adminRoleRows = await db
-    .select({ roleId: userRoles.roleId })
-    .from(userRoles)
-    .innerJoin(roles, eq(userRoles.roleId, roles.id))
-    .where(and(eq(userRoles.userId, userId), eq(roles.name, "ADMIN")))
+    .select({ roleId: users.roleId })
+    .from(users)
+    .innerJoin(roles, eq(users.roleId, roles.id))
+    .where(and(eq(users.id, userId), eq(roles.name, "ADMIN")))
     .limit(1);
 
   if (adminRoleRows.length > 0) {
@@ -80,10 +80,10 @@ export async function checkPermission(
   const rolePermissionRows = await db
     .select({ id: rolePermissions.id })
     .from(rolePermissions)
-    .innerJoin(userRoles, eq(rolePermissions.roleId, userRoles.roleId))
+    .innerJoin(users, eq(rolePermissions.roleId, users.roleId))
     .where(
       and(
-        eq(userRoles.userId, userId),
+        eq(users.id, userId),
         eq(rolePermissions.permissionId, permissionId),
       ),
     )

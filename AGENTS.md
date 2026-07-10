@@ -15,8 +15,6 @@ bun dev                   # Start dev server (localhost:3000)
 bun run build             # Production build
 bun run lint              # ESLint (flat config, eslint-config-next)
 bunx tsc --noEmit         # Type check (no script configured; npx may resolve a global wrapper)
-bun run db:generate       # Generate migration from schema.ts
-bun run db:migrate        # Apply pending migrations
 bun run db:seed           # Seed master data + default admin user
 bun run db:reset          # Delete db/local.sqlite3 (Unix rm; fails on Windows)
 bunx drizzle-kit check    # Validate schema and migration state
@@ -26,6 +24,7 @@ bunx drizzle-kit studio   # Open Drizzle Studio
 - No typecheck script exists. Run `bunx tsc --noEmit` manually.
 - No test framework is configured.
 - `db:reset` uses `rm` and will not work on Windows without WSL/Git Bash.
+- Never run `bun run db:generate` or `bun run db:migrate`. Do not generate or apply database migrations.
 
 ## Environment Variables
 

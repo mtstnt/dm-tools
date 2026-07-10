@@ -274,7 +274,7 @@ export function AssignmentTab({
             </TableRow>
           ) : (
             users.map((user) => {
-              const userBlocks = user.assignedBlocks
+              const userBlocks = user.assignedBlockIds
                 .map((blockId) => {
                   const block = blocks.find((b) => b.id === blockId)
                   return block ? { id: block.id, name: block.name } : null

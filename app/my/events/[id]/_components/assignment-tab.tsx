@@ -104,7 +104,7 @@ function BlockPicker({
         {[...areas].sort((a, b) => compareBlockNames(a.name, b.name)).map((area) => (
           <div key={area.id} className="grid grid-cols-4 gap-2">
             {[...area.blocks].sort((a, b) => compareBlockNames(a.name, b.name)).map((block) => {
-              const isAssigned = user.assignedBlocks.includes(block.id)
+              const isAssigned = user.assignedBlockIds.includes(block.id)
               const isSelected = selectedBlockIds.includes(block.id)
               return (
                 <Button
@@ -399,7 +399,7 @@ export function AssignmentTab({
             <TaskPicker
               user={user}
               tasks={tasks}
-              assignedTaskIds={taskIdsByUser[user.id] ?? []}
+              assignedTaskIds={taskIdsByUser[user.id] ?? user.taskIds ?? []}
               onTasksChange={(taskIds) => {
                 setTaskIdsByUser((current) => ({ ...current, [user.id]: taskIds }))
               }}
@@ -414,13 +414,13 @@ export function AssignmentTab({
         cell: ({ row }) => {
           const user = row.original
           const isSeatCounter = seatCounterTaskId !== undefined &&
-            (taskIdsByUser[user.id] ?? []).includes(seatCounterTaskId)
+            (taskIdsByUser[user.id] ?? user.taskIds ?? []).includes(seatCounterTaskId)
           if (!isSeatCounter) {
             return <span className="text-sm text-muted-foreground">Only for Seat Counters</span>
           }
           return (
             <div className="flex flex-wrap gap-1.5">
-              {[...user.assignedBlocks]
+              {[...user.assignedBlockIds]
                 .sort((a, b) =>
                   compareBlockNames(blockMap.get(a)?.name ?? "", blockMap.get(b)?.name ?? ""),
                 )

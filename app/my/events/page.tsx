@@ -28,7 +28,6 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { DUMMY_EVENTS } from "@/lib/dummy-data";
 
 const MONTHS = [
   "JAN",
@@ -106,7 +105,7 @@ export default function EventsPage() {
         setEvents([]);
       } else {
         setError(null);
-        setEvents(result.data?.length ? result.data : DUMMY_EVENTS);
+        setEvents(result.data ?? []);
       }
 
       setIsLoading(false);
@@ -187,7 +186,7 @@ export default function EventsPage() {
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
-            Events Schedule (still dummy data)
+            Events Schedule
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Manage and assign teams for upcoming organizational services and events.

@@ -4,7 +4,12 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { getEventSchedule, type EventScheduleItem } from "@/actions/events"
+import {
+  getEventDetail,
+  getEventSchedule,
+  type EventDetailData,
+  type EventScheduleItem,
+} from "@/actions/events"
 import { getMinistries, type Ministry } from "@/actions/master/ministries"
 import { getTasks, type Task } from "@/actions/master/tasks"
 import { Badge } from "@/components/ui/badge"
@@ -17,61 +22,10 @@ import {
 } from "./_components/assignment-tab"
 import { SeatingTab } from "./_components/seating-tab"
 import { ReportingTab } from "./_components/reporting-tab"
+import { ConfigurationTab } from "./_components/configuration-tab"
 import type { EventArea, EventAssignedUser, EventUser } from "@/types/event"
-import { DUMMY_EVENTS } from "@/lib/dummy-data"
 
 type FetchStatus = "idle" | "loading" | "success" | "error"
-
-const DUMMY_EVENT = {
-  id: 1001,
-  name: "AOG Teen South",
-  date: new Date(2026, 6, 4, 16, 0),
-  status: "pending" as const,
-  regionName: "GMS Surabaya Selatan",
-  eventTypeName: "Youth Service",
-}
-
-function createEmptyChairs(row: number, column: number) {
-  return Array.from({ length: row }, () => Array(column).fill(0))
-}
-
-const DUMMY_SEATING_AREAS: EventArea[] = [
-  {
-    id: 1,
-    name: "A",
-    blocks: [
-      { id: 1, name: "A1", row: 12, column: 21, userIds: [], chairs: createEmptyChairs(12, 21) },
-      { id: 2, name: "A2", row: 9, column: 16, userIds: [], chairs: createEmptyChairs(9, 16) },
-      { id: 3, name: "A3", row: 12, column: 21, userIds: [], chairs: createEmptyChairs(12, 21) },
-    ],
-  },
-  {
-    id: 2,
-    name: "B",
-    blocks: [
-      { id: 4, name: "B1", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
-      { id: 5, name: "B2", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
-      { id: 6, name: "B3", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
-    ],
-  },
-  {
-    id: 3,
-    name: "C",
-    blocks: [
-      { id: 7, name: "C1", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
-      { id: 8, name: "C2", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
-      { id: 9, name: "C3", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
-    ],
-  },
-]
-
-const DUMMY_USERS: EventUser[] = [
-  { id: 1, fullName: "JOHN DOE", email: "john@example.com" },
-  { id: 2, fullName: "JANE SMITH", email: "jane@example.com" },
-  { id: 3, fullName: "BOB WILSON", email: "bob@example.com" },
-  { id: 4, fullName: "ALICE BROWN", email: "alice@example.com" },
-  { id: 5, fullName: "CHARLIE DAVIS", email: "charlie@example.com" },
-]
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
@@ -113,33 +67,46 @@ export default function EventDetailPage() {
   const [ministries, setMinistries] = useState<Ministry[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [availableEvents, setAvailableEvents] = useState<EventScheduleItem[]>([])
+  const [event, setEvent] = useState<EventDetailData | null>(null)
+  const [allUsers, setAllUsers] = useState<EventUser[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const seatingAreas: EventArea[] = []
 
   useEffect(() => {
     async function load() {
-      const [ministriesResult, eventsResult, tasksResult] = await Promise.all([
+      const id = Number(eventId)
+      if (!Number.isInteger(id) || id <= 0) {
+        setError("Event not found")
+        setStatus("error")
+        return
+      }
+
+      const [eventResult, ministriesResult, eventsResult, tasksResult] = await Promise.all([
+        getEventDetail(id),
         getMinistries(),
         getEventSchedule(),
         getTasks(),
       ])
+      if (!eventResult.success || !eventResult.data) {
+        setError(eventResult.error ?? "Failed to load event")
+        setStatus("error")
+        return
+      }
+      setEvent(eventResult.data)
+      setAllUsers(eventResult.data.allUsers)
+      setAssignments(eventResult.data.assignments)
       if (ministriesResult.success && ministriesResult.data) {
         setMinistries(ministriesResult.data)
       }
       if (eventsResult.success) {
-        setAvailableEvents([...DUMMY_EVENTS, ...(eventsResult.data ?? [])])
-      } else {
-        setAvailableEvents(DUMMY_EVENTS)
+        setAvailableEvents(eventsResult.data ?? [])
       }
       if (tasksResult.success && tasksResult.data) {
         setTasks(tasksResult.data)
       }
-      setAssignments([
-        { ...DUMMY_USERS[0], assignedBlocks: [1, 3] },
-        { ...DUMMY_USERS[1], assignedBlocks: [2] },
-      ])
       setStatus("success")
     }
-    const timer = setTimeout(() => { load() }, 600)
-    return () => clearTimeout(timer)
+    load()
   }, [eventId])
 
   function handleAssign(userIds: number[], blockIds: number[]) {
@@ -148,10 +115,12 @@ export default function EventDetailPage() {
       for (const userId of userIds) {
         const existing = next.find((assignment) => assignment.id === userId)
         if (existing) {
-          existing.assignedBlocks = [...new Set([...existing.assignedBlocks, ...blockIds])]
+          existing.assignedBlockIds = [
+            ...new Set([...existing.assignedBlockIds, ...blockIds]),
+          ]
         } else {
-          const user = DUMMY_USERS.find((candidate) => candidate.id === userId)
-          if (user) next.push({ ...user, assignedBlocks: [...blockIds] })
+          const user = allUsers.find((candidate) => candidate.id === userId)
+          if (user) next.push({ ...user, assignedBlockIds: blockIds, taskIds: [] })
         }
       }
       return next
@@ -163,7 +132,7 @@ export default function EventDetailPage() {
       prev
         .map((a) =>
           a.id === userId
-            ? { ...a, assignedBlocks: a.assignedBlocks.filter((id) => id !== blockId) }
+            ? { ...a, assignedBlockIds: a.assignedBlockIds.filter((id) => id !== blockId) }
             : a,
         )
     )
@@ -176,8 +145,13 @@ export default function EventDetailPage() {
   return (
     <div className="space-y-6">
       {status === "loading" && <LoadingSkeleton />}
+      {status === "error" && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
-      {status === "success" && (
+      {status === "success" && event && (
         <>
           <div>
             <Link
@@ -193,30 +167,35 @@ export default function EventDetailPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">
-                  {DUMMY_EVENT.name}
+                  {event.name}
                 </h1>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                  {formatDateDisplay(DUMMY_EVENT.date)}
-                  {` · ${DUMMY_EVENT.regionName}`}
+                  {formatDateDisplay(event.date)}
+                  {` · ${event.regionName}`}
                 </p>
               </div>
-              <Badge className={cn("w-fit capitalize", STATUS_STYLES[DUMMY_EVENT.status])}>
-                {DUMMY_EVENT.status}
+              <Badge className={cn("w-fit capitalize", STATUS_STYLES[event.status])}>
+                {event.status}
               </Badge>
             </div>
           </div>
 
-          <Tabs defaultValue="assignment" className="w-full">
+          <Tabs defaultValue="configuration" className="w-full">
             <TabsList variant="line" className="w-full">
+              <TabsTrigger value="configuration" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Configuration</TabsTrigger>
               <TabsTrigger value="assignment" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Assignment</TabsTrigger>
               <TabsTrigger value="seating" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Seating</TabsTrigger>
               <TabsTrigger value="reporting" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Reporting</TabsTrigger>
             </TabsList>
 
+            <TabsContent value="configuration">
+              <ConfigurationTab eventId={Number(eventId)} />
+            </TabsContent>
+
             <TabsContent value="assignment">
               <AssignmentTab
-                allUsers={DUMMY_USERS}
-                areas={DUMMY_SEATING_AREAS}
+                allUsers={allUsers}
+                areas={seatingAreas}
                 users={assignments}
                 tasks={tasks}
                 onAssignAction={handleAssign}
@@ -226,13 +205,13 @@ export default function EventDetailPage() {
             </TabsContent>
 
             <TabsContent value="seating">
-              <SeatingTab areas={DUMMY_SEATING_AREAS} />
+              <SeatingTab areas={seatingAreas} />
             </TabsContent>
 
             <TabsContent value="reporting">
               <ReportingTab
-                eventName={DUMMY_EVENT.name}
-                eventDate={DUMMY_EVENT.date}
+                eventName={event.name}
+                eventDate={event.date}
                 initialMinistries={ministries}
                 availableEvents={availableEvents}
               />

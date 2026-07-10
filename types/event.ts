@@ -41,5 +41,6 @@ export interface EventAssignedUser {
   id: number;
   fullName: string;
   email: string;
-  assignedBlocks: number[];
+  assignedBlockIds: number[];
+  taskIds?: number[];
 }

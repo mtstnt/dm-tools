@@ -2,8 +2,8 @@
 
 import { useEffect } from "react"
 import { useSessionUser } from "@/components/user-session-provider"
-import { decryptFirebaseCredentials } from "@/lib/crypto-client"
-import { auth } from "@/lib/firebase"
+import { decryptFirebaseCredentials } from "@/lib/crypto/crypto-client"
+import { auth } from "@/lib/firebase/firebase"
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,

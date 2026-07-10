@@ -7,7 +7,7 @@ import bcrypt from "bcrypt";
 import { db } from "@/db/connection";
 import { users } from "@/db/schema";
 import { getUserSession, type UserSession } from "@/actions/auth/session";
-import { encryptFirebaseCredentials } from "@/lib/crypto";
+import { encryptFirebaseCredentials } from "@/lib/crypto/crypto";
 
 const AUTH_COOKIE = "authenticated";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days

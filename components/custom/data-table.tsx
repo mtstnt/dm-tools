@@ -108,6 +108,7 @@ export function DataTable<TData, TValue>({
 
   const rowSelection = controlledRowSelection ?? internalRowSelection;
   const setRowSelection = onRowSelectionChange ?? setInternalRowSelection;
+  const showSearch = Boolean(searchColumn);
 
   const checkboxColumn = React.useMemo<DataTableColumnDef<TData, unknown>>(
     () => ({
@@ -188,26 +189,21 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="w-full space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          placeholder={searchPlaceholder}
-          value={
-            searchColumn
-              ? ((table.getColumn(searchColumn)?.getFilterValue() as string) ??
-                "")
-              : globalFilter
-          }
-          onChange={(event) => {
-            if (searchColumn) {
-              table.getColumn(searchColumn)?.setFilterValue(event.target.value);
-            } else {
-              setGlobalFilter(event.target.value);
-            }
-          }}
-          className="max-w-sm"
-        />
-        {toolbar}
-      </div>
+      {(showSearch || toolbar) && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {searchColumn && (
+            <Input
+              placeholder={searchPlaceholder}
+              value={(table.getColumn(searchColumn)?.getFilterValue() as string) ?? ""}
+              onChange={(event) => {
+                table.getColumn(searchColumn)?.setFilterValue(event.target.value);
+              }}
+              className="max-w-sm"
+            />
+          )}
+          {toolbar}
+        </div>
+      )}
       <div className="rounded-lg border">
         <Table>
           <TableHeader className="bg-muted/80">

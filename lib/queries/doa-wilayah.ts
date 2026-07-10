@@ -8,7 +8,7 @@ import {
   type QuerySnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 
 export const DOA_WILAYAH_COLLECTION = "doaWilayah";
 

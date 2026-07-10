@@ -6,6 +6,7 @@ import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { getEventSchedule, type EventScheduleItem } from "@/actions/events"
 import { getMinistries, type Ministry } from "@/actions/master/ministries"
+import { getTasks, type Task } from "@/actions/master/tasks"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -30,25 +31,38 @@ const DUMMY_EVENT = {
   eventTypeName: "Youth Service",
 }
 
+function createEmptyChairs(row: number, column: number) {
+  return Array.from({ length: row }, () => Array(column).fill(0))
+}
+
 const DUMMY_SEATING_AREAS: EventArea[] = [
   {
     id: 1,
     name: "A",
     blocks: [
-      { id: 1, name: "A1", row: 5, column: 8, userIds: [], chairs: Array.from({ length: 5 }, () => Array(8).fill(0)) },
-      { id: 2, name: "A2", row: 4, column: 6, userIds: [], chairs: Array.from({ length: 4 }, () => Array(6).fill(0)) },
-      { id: 3, name: "A3", row: 6, column: 10, userIds: [], chairs: Array.from({ length: 6 }, () => Array(10).fill(0)) },
+      { id: 1, name: "A1", row: 12, column: 21, userIds: [], chairs: createEmptyChairs(12, 21) },
+      { id: 2, name: "A2", row: 9, column: 16, userIds: [], chairs: createEmptyChairs(9, 16) },
+      { id: 3, name: "A3", row: 12, column: 21, userIds: [], chairs: createEmptyChairs(12, 21) },
     ],
   },
   {
     id: 2,
     name: "B",
     blocks: [
-      { id: 4, name: "B1", row: 3, column: 5, userIds: [], chairs: Array.from({ length: 3 }, () => Array(5).fill(0)) },
-      { id: 5, name: "B2", row: 2, column: 4, userIds: [], chairs: Array.from({ length: 2 }, () => Array(4).fill(0)) },
+      { id: 4, name: "B1", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
+      { id: 5, name: "B2", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
+      { id: 6, name: "B3", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
     ],
   },
-  { id: 3, name: "C", blocks: [] },
+  {
+    id: 3,
+    name: "C",
+    blocks: [
+      { id: 7, name: "C1", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
+      { id: 8, name: "C2", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
+      { id: 9, name: "C3", row: 10, column: 16, userIds: [], chairs: createEmptyChairs(10, 16) },
+    ],
+  },
 ]
 
 const DUMMY_USERS: EventUser[] = [
@@ -97,13 +111,15 @@ export default function EventDetailPage() {
   const [status, setStatus] = useState<FetchStatus>("loading")
   const [assignments, setAssignments] = useState<EventAssignedUser[]>([])
   const [ministries, setMinistries] = useState<Ministry[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
   const [availableEvents, setAvailableEvents] = useState<EventScheduleItem[]>([])
 
   useEffect(() => {
     async function load() {
-      const [ministriesResult, eventsResult] = await Promise.all([
+      const [ministriesResult, eventsResult, tasksResult] = await Promise.all([
         getMinistries(),
         getEventSchedule(),
+        getTasks(),
       ])
       if (ministriesResult.success && ministriesResult.data) {
         setMinistries(ministriesResult.data)
@@ -112,6 +128,9 @@ export default function EventDetailPage() {
         setAvailableEvents([...DUMMY_EVENTS, ...(eventsResult.data ?? [])])
       } else {
         setAvailableEvents(DUMMY_EVENTS)
+      }
+      if (tasksResult.success && tasksResult.data) {
+        setTasks(tasksResult.data)
       }
       setAssignments([
         { ...DUMMY_USERS[0], assignedBlocks: [1, 3] },
@@ -199,6 +218,7 @@ export default function EventDetailPage() {
                 allUsers={DUMMY_USERS}
                 areas={DUMMY_SEATING_AREAS}
                 users={assignments}
+                tasks={tasks}
                 onAssignAction={handleAssign}
                 onRemoveBlockAction={handleRemoveBlock}
                 onRemoveUserAction={handleRemoveUser}

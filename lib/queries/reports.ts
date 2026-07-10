@@ -4,7 +4,7 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 
 export interface Report {
   id: string;

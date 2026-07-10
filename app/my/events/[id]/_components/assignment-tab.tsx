@@ -25,6 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { EventArea, EventAssignedUser, EventUser } from "@/types/event"
+import type { Task } from "@/actions/master/tasks"
 
 type SubmitStatus = "idle" | "submitting" | "success" | "error"
 
@@ -174,10 +175,137 @@ function PlannerPlaceholder() {
   )
 }
 
+function TaskPicker({
+  user,
+  tasks,
+  assignedTaskIds,
+  onTasksChange,
+}: {
+  user: EventAssignedUser
+  tasks: Task[]
+  assignedTaskIds: number[]
+  onTasksChange: (taskIds: number[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 639px)")
+    const updateIsMobile = () => setIsMobile(mediaQuery.matches)
+    updateIsMobile()
+    mediaQuery.addEventListener("change", updateIsMobile)
+    return () => mediaQuery.removeEventListener("change", updateIsMobile)
+  }, [])
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen)
+    if (!nextOpen) setSelectedTaskIds([])
+  }
+
+  function toggleTask(taskId: number) {
+    setSelectedTaskIds((current) =>
+      current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [...current, taskId],
+    )
+  }
+
+  function handleAddTasks() {
+    if (selectedTaskIds.length === 0) return
+    onTasksChange([...new Set([...assignedTaskIds, ...selectedTaskIds])])
+    handleOpenChange(false)
+  }
+
+  const taskSelector = (
+    <>
+      <div className="grid grid-cols-4 gap-2">
+        {tasks.map((task) => {
+          const isAssigned = assignedTaskIds.includes(task.id)
+          const isSelected = selectedTaskIds.includes(task.id)
+          return (
+            <Button
+              key={task.id}
+              type="button"
+              variant={isSelected ? "default" : "outline"}
+              size="sm"
+              disabled={isAssigned}
+              aria-pressed={isSelected}
+              onClick={() => toggleTask(task.id)}
+              className="h-8 px-2"
+            >
+              {task.name}
+            </Button>
+          )
+        })}
+      </div>
+      <Button size="sm" onClick={handleAddTasks} disabled={selectedTaskIds.length === 0}>
+        Add tasks
+      </Button>
+    </>
+  )
+
+  const trigger = (
+    <Button variant="outline" size="icon-sm" className="size-7 rounded-full" disabled={tasks.length === 0}>
+      <Plus className="size-3.5" />
+      <span className="sr-only">Add tasks for {user.fullName}</span>
+    </Button>
+  )
+
+  const picker = isMobile ? (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger render={trigger} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Tasks</DialogTitle>
+        </DialogHeader>
+        {taskSelector}
+      </DialogContent>
+    </Dialog>
+  ) : (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger render={trigger} />
+      <PopoverContent align="start">
+        <PopoverHeader>
+          <PopoverTitle>Add Tasks</PopoverTitle>
+        </PopoverHeader>
+        {taskSelector}
+      </PopoverContent>
+    </Popover>
+  )
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {assignedTaskIds.map((taskId) => {
+        const task = tasks.find((candidate) => candidate.id === taskId)
+        if (!task) return null
+        const color = getBlockColor(task.name)
+        return (
+          <Badge
+            key={task.id}
+            className={cn(
+              "h-7 cursor-pointer pr-1 text-sm font-medium border-transparent",
+              color.bg,
+              color.text,
+              color.hover,
+            )}
+            onClick={() => onTasksChange(assignedTaskIds.filter((id) => id !== task.id))}
+          >
+            {task.name}
+            <X className="ml-1 size-3.5" />
+          </Badge>
+        )
+      })}
+      {picker}
+    </div>
+  )
+}
+
 export function AssignmentTab({
   users,
   allUsers,
   areas,
+  tasks,
   onAssignAction,
   onRemoveBlockAction,
   onRemoveUserAction,
@@ -185,6 +313,7 @@ export function AssignmentTab({
   users: EventAssignedUser[]
   allUsers: EventUser[]
   areas: EventArea[]
+  tasks: Task[]
   onAssignAction: (userIds: number[], blockIds: number[]) => void
   onRemoveBlockAction: (userId: number, blockId: number) => void
   onRemoveUserAction: (userId: number) => void
@@ -194,9 +323,14 @@ export function AssignmentTab({
   const [deletingUser, setDeletingUser] = useState<EventAssignedUser | null>(null)
   const [deletePending, setDeletePending] = useState(false)
   const [plannerMode, setPlannerMode] = useState(false)
+  const [taskIdsByUser, setTaskIdsByUser] = useState<Record<number, number[]>>({})
 
   const blocks = useMemo(() => areas.flatMap((area) => area.blocks), [areas])
   const blockMap = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks])
+  const seatCounterTaskId = useMemo(
+    () => tasks.find((task) => task.name.trim().toLowerCase() === "sc")?.id,
+    [tasks],
+  )
 
   const userOptions = useMemo<MultiSelectOption[]>(
     () =>
@@ -228,6 +362,11 @@ export function AssignmentTab({
     setDeletePending(true)
     setTimeout(() => {
       onRemoveUserAction(deletingUser.id)
+      setTaskIdsByUser((current) => {
+        const remaining = { ...current }
+        delete remaining[deletingUser.id]
+        return remaining
+      })
       setDeletePending(false)
       setDeletingUser(null)
     }, 300)
@@ -251,11 +390,34 @@ export function AssignmentTab({
         },
       },
       {
+        id: "task",
+        header: "Task",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const user = row.original
+          return (
+            <TaskPicker
+              user={user}
+              tasks={tasks}
+              assignedTaskIds={taskIdsByUser[user.id] ?? []}
+              onTasksChange={(taskIds) => {
+                setTaskIdsByUser((current) => ({ ...current, [user.id]: taskIds }))
+              }}
+            />
+          )
+        },
+      },
+      {
         id: "blocks",
         header: "Blocks",
         enableSorting: false,
         cell: ({ row }) => {
           const user = row.original
+          const isSeatCounter = seatCounterTaskId !== undefined &&
+            (taskIdsByUser[user.id] ?? []).includes(seatCounterTaskId)
+          if (!isSeatCounter) {
+            return <span className="text-sm text-muted-foreground">Only for Seat Counters</span>
+          }
           return (
             <div className="flex flex-wrap gap-1.5">
               {[...user.assignedBlocks]
@@ -348,8 +510,6 @@ export function AssignmentTab({
           <DataTable
             columns={columns}
             data={users}
-            searchColumn="fullName"
-            searchPlaceholder="Search user..."
             defaultSortColumn="fullName"
             pageSize={10}
           />

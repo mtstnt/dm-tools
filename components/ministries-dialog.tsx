@@ -10,12 +10,18 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Trash2, ArrowUp, ArrowDown, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus } from "lucide-react";
 
 interface MinistriesDialogProps {
   ministries: string[];
   onSave: (ministries: string[]) => void;
   trigger: React.ReactElement;
+}
+
+function sortMinistries(ministries: string[]) {
+  return [...ministries].sort((a, b) =>
+    a.localeCompare(b, "id", { sensitivity: "base" }),
+  );
 }
 
 export function MinistriesDialog({
@@ -30,7 +36,7 @@ export function MinistriesDialog({
   const [editValue, setEditValue] = useState("");
 
   const handleOpen = () => {
-    setItems([...ministries]);
+    setItems(sortMinistries(ministries));
     setNewItem("");
     setEditIndex(null);
     setEditValue("");
@@ -40,7 +46,7 @@ export function MinistriesDialog({
     const trimmed = newItem.trim();
     if (!trimmed) return;
     if (items.includes(trimmed)) return;
-    setItems((prev) => [...prev, trimmed]);
+    setItems((prev) => sortMinistries([...prev, trimmed]));
     setNewItem("");
   };
 
@@ -65,29 +71,14 @@ export function MinistriesDialog({
     setItems((prev) => {
       const next = [...prev];
       next[editIndex] = trimmed;
-      return next;
+      return sortMinistries(next);
     });
     setEditIndex(null);
     setEditValue("");
   };
 
-  const handleMove = (index: number, direction: -1 | 1) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= items.length) return;
-    setItems((prev) => {
-      const next = [...prev];
-      [next[index], next[newIndex]] = [next[newIndex], next[index]];
-      return next;
-    });
-    if (editIndex === index) {
-      setEditIndex(newIndex);
-    } else if (editIndex === newIndex) {
-      setEditIndex(index);
-    }
-  };
-
   const handleSave = () => {
-    onSave(items);
+    onSave(sortMinistries(items));
     setOpen(false);
   };
 
@@ -111,27 +102,6 @@ export function MinistriesDialog({
                 key={`${item}-${index}`}
                 className="flex items-center gap-1.5 rounded-md border border-border/50 bg-card px-2 py-1.5"
               >
-                <div className="flex flex-col -space-y-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => handleMove(index, -1)}
-                    disabled={index === 0}
-                    className="size-5 text-muted-foreground"
-                  >
-                    <ArrowUp className="size-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => handleMove(index, 1)}
-                    disabled={index === items.length - 1}
-                    className="size-5 text-muted-foreground"
-                  >
-                    <ArrowDown className="size-3" />
-                  </Button>
-                </div>
-
                 {editIndex === index ? (
                   <Input
                     value={editValue}

@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type ReactNode,
@@ -60,9 +61,9 @@ type EventFormCard = {
   pics: MultiSelectOption[];
 };
 
-function createEmptyCard(options?: EventCreationOptions): EventFormCard {
+function createEmptyCard(id: string, options?: EventCreationOptions): EventFormCard {
   return {
-    id: crypto.randomUUID(),
+    id,
     regionId: options?.regions[0] ? String(options.regions[0].id) : "",
     eventTypeId: options?.eventTypes[0] ? String(options.eventTypes[0].id) : "",
     customName: "",
@@ -78,8 +79,9 @@ export default function NewEventPage() {
   const router = useRouter();
   const [options, setOptions] = useState<EventCreationOptions | null>(null);
   const [cards, setCards] = useState<EventFormCard[]>(() => [
-    createEmptyCard(),
+    createEmptyCard("0"),
   ]);
+  const nextCardId = useRef(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -102,7 +104,8 @@ export default function NewEventPage() {
       } else {
         setError(null);
         setOptions(result.data);
-        setCards([createEmptyCard(result.data)]);
+        setCards([createEmptyCard("0", result.data)]);
+        nextCardId.current = 1;
       }
 
       setIsLoading(false);
@@ -168,7 +171,7 @@ export default function NewEventPage() {
   function addCard() {
     setCards((currentCards) => [
       ...currentCards,
-      createEmptyCard(options ?? undefined),
+      createEmptyCard(String(nextCardId.current++), options ?? undefined),
     ]);
   }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CalendarPlus,
   ChevronLeft,
@@ -354,15 +355,29 @@ function EventCard({
 }: {
   event: EventScheduleItem;
 }) {
+  const router = useRouter();
   const date = new Date(event.date);
 
+  function openEvent() {
+    router.push(`/my/events/${event.id}`);
+  }
+
   return (
-    <Card className="group gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card
+      role="link"
+      tabIndex={0}
+      onClick={openEvent}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openEvent();
+        }
+      }}
+      className="group cursor-pointer gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <CardHeader className="px-4 pt-4 pb-0">
         <CardTitle className="text-base font-semibold tracking-normal">
-          <Link href={`/my/events/${event.id}`} className="hover:text-primary">
-            {event.eventTypeName}
-          </Link>
+          {event.eventTypeName}
         </CardTitle>
         <CardDescription className="text-xs font-medium">
           {event.regionName} | {formatEventDateTime(date)}

@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "3bc9d2a4-8874-4601-a2e6-b706218e8e23",
+  "id": "fc3fb955-6553-439d-802f-6861c04b4c05",
   "prevIds": [
-    "571acb65-dcde-4212-ac86-2ed66cb0ac5b"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -80,10 +80,6 @@
     },
     {
       "name": "user_permissions",
-      "entityType": "tables"
-    },
-    {
-      "name": "user_roles",
       "entityType": "tables"
     },
     {
@@ -971,6 +967,16 @@
       "table": "events"
     },
     {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'[]'",
+      "generated": null,
+      "name": "configuration",
+      "entityType": "columns",
+      "table": "events"
+    },
+    {
       "type": "integer",
       "notNull": false,
       "autoincrement": false,
@@ -1638,76 +1644,6 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "role_id",
-      "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "CURRENT_TIMESTAMP",
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "CURRENT_TIMESTAMP",
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_by",
-      "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_by",
-      "entityType": "columns",
-      "table": "user_roles"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": true,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
       "table": "users"
     },
     {
@@ -1767,6 +1703,16 @@
       "default": null,
       "generated": null,
       "name": "team_id",
+      "entityType": "columns",
+      "table": "users"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "role_id",
       "entityType": "columns",
       "table": "users"
     },
@@ -1834,7 +1780,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_altar_calls_event_id_events_id_fk",
       "entityType": "fks",
@@ -1849,7 +1795,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_assignment_change_requests_event_id_events_id_fk",
       "entityType": "fks",
@@ -1909,7 +1855,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_assignments_event_id_events_id_fk",
       "entityType": "fks",
@@ -1969,7 +1915,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_metrics_event_id_events_id_fk",
       "entityType": "fks",
@@ -1999,7 +1945,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_teams_event_id_events_id_fk",
       "entityType": "fks",
@@ -2029,7 +1975,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "nameExplicit": false,
       "name": "fk_event_volunteers_event_id_events_id_fk",
       "entityType": "fks",
@@ -2157,18 +2103,18 @@
     },
     {
       "columns": [
-        "user_id"
+        "team_id"
       ],
-      "tableTo": "users",
+      "tableTo": "teams",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
-      "name": "fk_user_roles_user_id_users_id_fk",
+      "name": "fk_users_team_id_teams_id_fk",
       "entityType": "fks",
-      "table": "user_roles"
+      "table": "users"
     },
     {
       "columns": [
@@ -2181,22 +2127,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
-      "name": "fk_user_roles_role_id_roles_id_fk",
-      "entityType": "fks",
-      "table": "user_roles"
-    },
-    {
-      "columns": [
-        "team_id"
-      ],
-      "tableTo": "teams",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "fk_users_team_id_teams_id_fk",
+      "name": "fk_users_role_id_roles_id_fk",
       "entityType": "fks",
       "table": "users"
     },
@@ -2369,15 +2300,6 @@
       "nameExplicit": false,
       "name": "user_permissions_pk",
       "table": "user_permissions",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
-      "name": "user_roles_pk",
-      "table": "user_roles",
       "entityType": "pks"
     },
     {
@@ -2590,24 +2512,6 @@
       "name": "user_permissions_user_permission_unique",
       "entityType": "indexes",
       "table": "user_permissions"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "role_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "user_roles_user_role_unique",
-      "entityType": "indexes",
-      "table": "user_roles"
     },
     {
       "columns": [

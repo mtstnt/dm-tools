@@ -1,6 +1,6 @@
 "use server";
 
-import { encryptFirebaseCredentials } from "@/lib/crypto";
+import { encryptFirebaseCredentials } from "@/lib/crypto/crypto";
 
 export async function getFirebaseCredentials(): Promise<string | null> {
   const firebaseEmail = process.env.FIREBASE_AUTH_EMAIL;

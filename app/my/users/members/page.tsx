@@ -83,6 +83,7 @@ export default function MembersPage() {
     setDataError(null);
 
     const result = await getTeamMembers();
+    console.log(result);
 
     if (!result.success || !result.data) {
       setDataError(result.error ?? "Failed to load members");

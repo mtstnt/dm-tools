@@ -4,8 +4,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { login } from "@/actions/auth/login"
 import { useSetSessionUser } from "@/components/user-session-provider"
-import { decryptFirebaseCredentials } from "@/lib/crypto-client"
-import { auth } from "@/lib/firebase"
+import { decryptFirebaseCredentials } from "@/lib/crypto/crypto-client"
+import { auth } from "@/lib/firebase/firebase"
 import {
   signInWithEmailAndPassword,
   setPersistence,

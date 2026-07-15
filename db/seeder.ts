@@ -13,7 +13,6 @@ import {
   roles,
   permissions,
   rolePermissions,
-  userRoles,
   type Action,
 } from "./schema";
 
@@ -273,10 +272,6 @@ async function seed() {
     { resource: "user_permissions", action: "read" },
     { resource: "user_permissions", action: "update" },
     { resource: "user_permissions", action: "delete" },
-    { resource: "user_roles", action: "create" },
-    { resource: "user_roles", action: "read" },
-    { resource: "user_roles", action: "update" },
-    { resource: "user_roles", action: "delete" },
     // Events
     { resource: "events", action: "create" },
     { resource: "events", action: "read" },
@@ -376,7 +371,6 @@ async function seed() {
     { roleName: "Head Ministry", resource: "permissions", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Head Ministry", resource: "role_permissions", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Head Ministry", resource: "user_permissions", actions: ["create", "read", "update", "delete"], scope: "all" },
-    { roleName: "Head Ministry", resource: "user_roles", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Head Ministry", resource: "events", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Head Ministry", resource: "event_teams", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Head Ministry", resource: "event_volunteers", actions: ["create", "read", "update", "delete"], scope: "all" },
@@ -399,7 +393,6 @@ async function seed() {
     { roleName: "Regional PIC", resource: "permissions", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Regional PIC", resource: "role_permissions", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Regional PIC", resource: "user_permissions", actions: ["create", "read", "update", "delete"], scope: "all" },
-    { roleName: "Regional PIC", resource: "user_roles", actions: ["create", "read", "update", "delete"], scope: "all" },
     { roleName: "Regional PIC", resource: "events", actions: ["create", "read", "update", "delete"], scope: "region" },
     { roleName: "Regional PIC", resource: "event_teams", actions: ["create", "read", "update", "delete"], scope: "region" },
     { roleName: "Regional PIC", resource: "event_volunteers", actions: ["create", "read", "update", "delete"], scope: "region" },
@@ -484,6 +477,7 @@ async function seed() {
         nij: "ADMIN",
         email: adminEmail,
         password: hashedPassword,
+        roleId: roleMap.get("ADMIN"),
         createdBy: SEEDER_USER,
         updatedBy: SEEDER_USER,
       })
@@ -494,28 +488,15 @@ async function seed() {
     console.log("User already exists: ADMIN");
   }
 
-  // Ensure admin user has the ADMIN role
+  // Ensure admin user has the ADMIN role.
   if (adminUser) {
     const adminRoleId = roleMap.get("ADMIN");
     if (adminRoleId) {
-      const existingAdminRole = await db
-        .select()
-        .from(userRoles)
-        .where(
-          and(
-            eq(userRoles.userId, adminUser.id),
-            eq(userRoles.roleId, adminRoleId),
-          ),
-        )
-        .limit(1);
-
-      if (existingAdminRole.length === 0) {
-        await db.insert(userRoles).values({
-          userId: adminUser.id,
-          roleId: adminRoleId,
-          createdBy: SEEDER_USER,
-          updatedBy: SEEDER_USER,
-        });
+      if (adminUser.roleId !== adminRoleId) {
+        await db
+          .update(users)
+          .set({ roleId: adminRoleId, updatedBy: SEEDER_USER })
+          .where(eq(users.id, adminUser.id));
         console.log("Assigned ADMIN role to admin user");
       } else {
         console.log("Admin user already has ADMIN role");

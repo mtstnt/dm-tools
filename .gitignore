@@ -44,3 +44,4 @@ next-env.d.ts
 docs/crawls
 
 *.sqlite3
+db/seeders/team-members.sql

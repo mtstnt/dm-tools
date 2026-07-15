@@ -10,6 +10,11 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 async function getKey(): Promise<CryptoKey> {
+  if (!window.isSecureContext || !window.crypto?.subtle) {
+    throw new Error(
+      "Web Crypto API is not available. Ensure you are accessing this site over HTTPS or localhost.",
+    );
+  }
   const keyBase64 = process.env.NEXT_PUBLIC_FIREBASE_AUTH_ENCRYPTION_KEY;
   if (!keyBase64) {
     throw new Error("NEXT_PUBLIC_FIREBASE_AUTH_ENCRYPTION_KEY is not set");

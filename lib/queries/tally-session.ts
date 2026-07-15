@@ -9,7 +9,7 @@ import {
   serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 
 export const TALLY_SESSION_COLLECTION = "tallySession";
 

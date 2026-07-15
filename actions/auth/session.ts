@@ -1,13 +1,13 @@
 "use server";
 
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/connection";
 import {
   permissions,
   roles,
   rolePermissions,
   userPermissions,
-  userRoles,
+  users,
   type Action,
 } from "@/db/schema";
 import { getCurrentUser } from "@/actions/auth/current-user";
@@ -38,9 +38,9 @@ export async function getUserSession(): Promise<UserSession | null> {
 
   const roleRows = await db
     .select({ id: roles.id, name: roles.name })
-    .from(userRoles)
-    .innerJoin(roles, eq(userRoles.roleId, roles.id))
-    .where(eq(userRoles.userId, userId));
+    .from(users)
+    .innerJoin(roles, eq(users.roleId, roles.id))
+    .where(eq(users.id, userId));
 
   const roleNames = roleRows.map((row) => row.name);
 
@@ -55,8 +55,8 @@ export async function getUserSession(): Promise<UserSession | null> {
 
   let rolePermissionRows: UserPermission[] = [];
 
-  if (roleRows.length > 0) {
-    const roleIds = roleRows.map((row) => row.id);
+  const roleId = roleRows[0]?.id;
+  if (roleId) {
     const rows = await db
       .select({
         resource: permissions.resource,
@@ -64,7 +64,7 @@ export async function getUserSession(): Promise<UserSession | null> {
       })
       .from(rolePermissions)
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(inArray(rolePermissions.roleId, roleIds));
+      .where(eq(rolePermissions.roleId, roleId));
 
     rolePermissionRows = rows;
   }

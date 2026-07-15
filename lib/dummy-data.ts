@@ -1,0 +1,113 @@
+import { EventScheduleItem } from "@/actions/events";
+
+const AOG_TEEN_TEAMS = [
+  { id: 7, number: 7 },
+  { id: 8, number: 8 },
+];
+
+const AOG_YOUTH_TEAMS = [
+  { id: 9, number: 9 },
+  { id: 10, number: 10 },
+];
+
+export const DUMMY_EVENTS: EventScheduleItem[] = [
+  {
+    id: 1001,
+    name: "AOG TEEN",
+    date: new Date(2026, 6, 4, 16, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG TEEN",
+    requiresApplication: false,
+    teams: AOG_TEEN_TEAMS,
+  },
+  {
+    id: 1002,
+    name: "AOG YOUTH",
+    date: new Date(2026, 6, 4, 18, 30),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG YOUTH",
+    requiresApplication: false,
+    teams: AOG_YOUTH_TEAMS,
+  },
+  {
+    id: 1003,
+    name: "CT YOUTH",
+    date: new Date(2026, 6, 8, 19, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "CT YOUTH",
+    requiresApplication: true,
+    teams: [],
+  },
+  {
+    id: 1004,
+    name: "CT TEEN",
+    date: new Date(2026, 6, 9, 19, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "CT TEEN",
+    requiresApplication: true,
+    teams: [],
+  },
+  {
+    id: 1005,
+    name: "AOG TEEN",
+    date: new Date(2026, 6, 11, 16, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG TEEN",
+    requiresApplication: false,
+    teams: AOG_TEEN_TEAMS,
+  },
+  {
+    id: 1006,
+    name: "AOG YOUTH",
+    date: new Date(2026, 6, 11, 18, 30),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG YOUTH",
+    requiresApplication: false,
+    teams: AOG_YOUTH_TEAMS,
+  },
+  {
+    id: 1007,
+    name: "DOA WILAYAH",
+    date: new Date(2026, 6, 13, 19, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "DOA WILAYAH",
+    requiresApplication: true,
+    teams: [],
+  },
+  {
+    id: 1008,
+    name: "AOG TEEN",
+    date: new Date(2026, 6, 18, 16, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG TEEN",
+    requiresApplication: false,
+    teams: AOG_TEEN_TEAMS,
+  },
+  {
+    id: 1009,
+    name: "AOG YOUTH",
+    date: new Date(2026, 6, 18, 18, 30),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG YOUTH",
+    requiresApplication: false,
+    teams: AOG_YOUTH_TEAMS,
+  },
+  {
+    id: 1010,
+    name: "AOG TEEN",
+    date: new Date(2026, 6, 25, 16, 0),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG TEEN",
+    requiresApplication: false,
+    teams: AOG_TEEN_TEAMS,
+  },
+  {
+    id: 1011,
+    name: "AOG YOUTH",
+    date: new Date(2026, 6, 25, 18, 30),
+    regionName: "GMS Surabaya Selatan",
+    eventTypeName: "AOG YOUTH",
+    requiresApplication: false,
+    teams: AOG_YOUTH_TEAMS,
+  },
+];

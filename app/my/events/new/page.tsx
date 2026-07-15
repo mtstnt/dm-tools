@@ -3,12 +3,14 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type ReactNode,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatISO, isValid, parse } from "date-fns";
 import {
   ArrowLeft,
   CalendarPlus,
@@ -60,9 +62,9 @@ type EventFormCard = {
   pics: MultiSelectOption[];
 };
 
-function createEmptyCard(options?: EventCreationOptions): EventFormCard {
+function createEmptyCard(id: string, options?: EventCreationOptions): EventFormCard {
   return {
-    id: crypto.randomUUID(),
+    id,
     regionId: options?.regions[0] ? String(options.regions[0].id) : "",
     eventTypeId: options?.eventTypes[0] ? String(options.eventTypes[0].id) : "",
     customName: "",
@@ -74,12 +76,22 @@ function createEmptyCard(options?: EventCreationOptions): EventFormCard {
   };
 }
 
+function toLocalDateTimeWithOffset(value: string) {
+  if (!value) {
+    return value;
+  }
+
+  const date = parse(value, "yyyy-MM-dd'T'HH:mm", new Date());
+  return isValid(date) ? formatISO(date) : value;
+}
+
 export default function NewEventPage() {
   const router = useRouter();
   const [options, setOptions] = useState<EventCreationOptions | null>(null);
   const [cards, setCards] = useState<EventFormCard[]>(() => [
-    createEmptyCard(),
+    createEmptyCard("0"),
   ]);
+  const nextCardId = useRef(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -102,7 +114,8 @@ export default function NewEventPage() {
       } else {
         setError(null);
         setOptions(result.data);
-        setCards([createEmptyCard(result.data)]);
+        setCards([createEmptyCard("0", result.data)]);
+        nextCardId.current = 1;
       }
 
       setIsLoading(false);
@@ -168,7 +181,7 @@ export default function NewEventPage() {
   function addCard() {
     setCards((currentCards) => [
       ...currentCards,
-      createEmptyCard(options ?? undefined),
+      createEmptyCard(String(nextCardId.current++), options ?? undefined),
     ]);
   }
 
@@ -186,7 +199,7 @@ export default function NewEventPage() {
           regionId: card.regionId,
           eventTypeId: card.eventTypeId,
           customName: card.customName,
-          date: card.date,
+          date: toLocalDateTimeWithOffset(card.date),
           mode: card.mode,
           teamIds: card.teams.map((team) => Number(team.value)),
           memberIds: card.members.map((member) => Number(member.value)),
@@ -459,13 +472,19 @@ export default function NewEventPage() {
                     ) : null}
 
                     {card.mode === "manual_apply" ? (
-                      <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                        <UsersRound className="mt-0.5 size-4 shrink-0" />
-                        <p>
-                          No assignment input is needed now. Members can apply
-                          later and will be added to event assignments
-                          automatically by the apply flow.
-                        </p>
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                          <UsersRound className="mt-0.5 size-4 shrink-0" />
+                          <p>Members can apply later. Optionally select Event PICs now.</p>
+                        </div>
+                        <Field label="Event PIC">
+                          <MultiSelect
+                            options={memberOptions}
+                            value={card.pics}
+                            onChange={(pics) => updateCard(card.id, { pics })}
+                            placeholder="Pick one or more PIC..."
+                          />
+                        </Field>
                       </div>
                     ) : null}
                   </div>

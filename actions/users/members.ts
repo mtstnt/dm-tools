@@ -6,7 +6,6 @@ import {
   roles,
   teams,
   userPermissions,
-  userRoles,
   users,
 } from "@/db/schema";
 import { getCurrentUser } from "@/actions/auth/current-user";
@@ -103,65 +102,23 @@ export async function getTeamMembers(): Promise<MembersResult> {
           roleName: roles.name,
         })
         .from(users)
-        .leftJoin(userRoles, eq(users.id, userRoles.userId))
-        .leftJoin(roles, eq(userRoles.roleId, roles.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
         .orderBy(asc(users.fullName)),
     ]);
 
-    const userMap = new Map<
-      number,
-      {
-        id: number;
-        fullName: string;
-        nij: string;
-        email: string;
-        teamId: number | null;
-        roleNames: Set<string>;
-      }
-    >();
-
-    for (const row of userRows) {
-      const existing = userMap.get(row.id);
-      if (existing) {
-        if (row.roleName) {
-          existing.roleNames.add(row.roleName);
-        }
-      } else {
-        const roleNames = new Set<string>();
-        if (row.roleName) {
-          roleNames.add(row.roleName);
-        }
-        userMap.set(row.id, {
-          id: row.id,
-          fullName: row.fullName,
-          nij: row.nij,
-          email: row.email,
-          teamId: row.teamId,
-          roleNames,
-        });
-      }
-    }
-
-    const toMemberUser = (u: {
-      id: number;
-      fullName: string;
-      nij: string;
-      email: string;
-      teamId: number | null;
-      roleNames: Set<string>;
-    }): MemberUser => ({
+    const toMemberUser = (u: (typeof userRows)[number]): MemberUser => ({
       id: u.id,
       fullName: u.fullName,
       nij: u.nij,
       email: u.email,
       teamId: u.teamId,
-      isSpv: u.roleNames.has("SPV"),
+      isSpv: u.roleName === "SPV",
     });
 
     const unassigned: MemberUser[] = [];
     const usersByTeam = new Map<number, MemberUser[]>();
 
-    for (const user of userMap.values()) {
+    for (const user of userRows) {
       const member = toMemberUser(user);
       if (user.teamId === null) {
         unassigned.push(member);
@@ -225,9 +182,12 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
         updatedAt: users.updatedAt,
         createdBy: users.createdBy,
         updatedBy: users.updatedBy,
+        roleId: users.roleId,
+        roleName: roles.name,
       })
       .from(users)
       .leftJoin(teams, eq(users.teamId, teams.id))
+      .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(users.id, id))
       .limit(1);
 
@@ -242,16 +202,7 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
       ),
     );
 
-    const [roleRows, additionalPermissionRows, auditUserRows] = await Promise.all([
-      db
-        .select({
-          id: roles.id,
-          name: roles.name,
-        })
-        .from(userRoles)
-        .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, id))
-        .orderBy(asc(roles.name)),
+    const [additionalPermissionRows, auditUserRows] = await Promise.all([
       db
         .select({
           id: permissions.id,
@@ -283,7 +234,9 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
         ...user,
         createdBy: auditUsers.get(user.createdBy) ?? null,
         updatedBy: auditUsers.get(user.updatedBy) ?? null,
-        roles: roleRows,
+        roles: user.roleId && user.roleName
+          ? [{ id: user.roleId, name: user.roleName }]
+          : [],
         additionalPermissions: additionalPermissionRows,
       },
     };
@@ -333,6 +286,15 @@ export async function createUser(
     const ctx = await getUserContext();
     const hashedPassword = await bcrypt.hash(password, 10);
     const now = new Date();
+    const memberRoleRows = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(eq(roles.name, "Member"))
+      .limit(1);
+
+    if (memberRoleRows.length === 0) {
+      return { success: false, error: 'Role "Member" is missing' };
+    }
 
     const result = await db
       .insert(users)
@@ -342,6 +304,7 @@ export async function createUser(
         email: normalizedEmail,
         password: hashedPassword,
         teamId: teamId === "null" ? null : teamId,
+        roleId: memberRoleRows[0].id,
         createdAt: now,
         updatedAt: now,
         createdBy: ctx.userId,
@@ -478,7 +441,6 @@ export async function deleteUser(id: number): Promise<UserMutationResult> {
 
     const existing = existingRows[0];
 
-    await db.delete(userRoles).where(eq(userRoles.userId, id));
     await db.delete(userPermissions).where(eq(userPermissions.userId, id));
     await db.delete(users).where(eq(users.id, id));
 

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { logout } from "@/actions/auth/login"
 import { useSessionUser, useSetSessionUser } from "@/components/user-session-provider"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/firebase/firebase"
 import { signOut } from "firebase/auth"
 import { LogOut, User as UserIcon } from "lucide-react"
 import {

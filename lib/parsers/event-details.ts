@@ -114,7 +114,7 @@ export function parseEventPage(id: number, html: string): EventDetail {
     .filter(u => assignedUsers.has(u.id))
     .map(u => ({
       ...u,
-      assignedBlocks: blocksByUser.get(u.id) ?? [],
+      assignedBlockIds: blocksByUser.get(u.id) ?? [],
     }));
 
   return {

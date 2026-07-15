@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { id } from "date-fns/locale";
 import {
   CalendarPlus,
   ChevronLeft,
@@ -28,23 +31,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-const MONTHS = [
-  "JAN",
-  "FEB",
-  "MAR",
-  "APR",
-  "MEI",
-  "JUN",
-  "JUL",
-  "AGU",
-  "SEP",
-  "OKT",
-  "NOV",
-  "DES",
-];
-
-const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
 const FULL_MONTHS = [
   "Januari",
   "Februari",
@@ -65,19 +51,11 @@ function dateKey(date: Date) {
 }
 
 function formatDatePill(date: Date) {
-  return `${DAYS[date.getDay()].toLocaleUpperCase()}, ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-function formatTime(date: Date) {
-  return date.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return format(date, "EEEE, d MMM yyyy", { locale: id }).toLocaleUpperCase();
 }
 
 function formatEventDateTime(date: Date) {
-  return `${DAYS[date.getDay()]}, ${date.getDate()} ${FULL_MONTHS[date.getMonth()]} ${date.getFullYear()} ${formatTime(date)}`;
+  return format(date, "EEEE, d MMMM yyyy HH:mm zzz", { locale: id });
 }
 
 export default function EventsPage() {
@@ -104,7 +82,7 @@ export default function EventsPage() {
         setEvents([]);
       } else {
         setError(null);
-        setEvents(result.data?.length ? result.data : DUMMY_EVENTS);
+        setEvents(result.data ?? []);
       }
 
       setIsLoading(false);
@@ -181,11 +159,11 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="min-h-full rounded-[28px] bg-background p-4 text-foreground md:p-6">
+    <div className="min-h-full rounded-[28px] bg-background text-foreground md:p-6">
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
-            Events Schedule (still dummy data)
+            Events Schedule
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Manage and assign teams for upcoming organizational services and events.
@@ -213,7 +191,7 @@ export default function EventsPage() {
             {FULL_MONTHS[selectedMonth]} {selectedYear}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-nowrap items-center gap-2">
           <Button
             variant="outline"
             size="icon-sm"
@@ -353,15 +331,29 @@ function EventCard({
 }: {
   event: EventScheduleItem;
 }) {
+  const router = useRouter();
   const date = new Date(event.date);
 
+  function openEvent() {
+    router.push(`/my/events/${event.id}`);
+  }
+
   return (
-    <Card className="group gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <Card
+      role="link"
+      tabIndex={0}
+      onClick={openEvent}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openEvent();
+        }
+      }}
+      className="group cursor-pointer gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <CardHeader className="px-4 pt-4 pb-0">
         <CardTitle className="text-base font-semibold tracking-normal">
-          <Link href={`/my/events/${event.id}`} className="hover:text-primary">
-            {event.eventTypeName}
-          </Link>
+          {event.eventTypeName}
         </CardTitle>
         <CardDescription className="text-xs font-medium">
           {event.regionName} | {formatEventDateTime(date)}
@@ -406,313 +398,3 @@ function EventsSkeleton() {
     </div>
   );
 }
-
-const DUMMY_EVENTS: EventScheduleItem[] = [
-  {
-    id: 1001,
-    name: "AOG Teen",
-    date: new Date(2026, 6, 4, 16, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Youth Service",
-    requiresApplication: false,
-    teams: [
-      { id: 7, number: 7 },
-      { id: 8, number: 8 },
-    ],
-  },
-  {
-    id: 1002,
-    name: "Saturday Service",
-    date: new Date(2026, 6, 4, 18, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Weekend Service",
-    requiresApplication: true,
-    teams: [],
-  },
-  {
-    id: 1003,
-    name: "Sunday Morning",
-    date: new Date(2026, 6, 5, 8, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [
-      { id: 10, number: 10 },
-      { id: 11, number: 11 },
-    ],
-  },
-  {
-    id: 1021,
-    name: "Sunday Afternoon",
-    date: new Date(2026, 6, 5, 13, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [{ id: 25, number: 25 }],
-  },
-  {
-    id: 1022,
-    name: "Sunday Night",
-    date: new Date(2026, 6, 5, 19, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [
-      { id: 26, number: 26 },
-      { id: 27, number: 27 },
-    ],
-  },
-  {
-    id: 1004,
-    name: "Youth Service",
-    date: new Date(2026, 6, 5, 17, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Youth Service",
-    requiresApplication: false,
-    teams: [{ id: 12, number: 12 }],
-  },
-  {
-    id: 1005,
-    name: "Morning Prayer",
-    date: new Date(2026, 6, 7, 5, 30),
-    regionName: "GMS Surabaya Barat",
-    eventTypeName: "Prayer Meeting",
-    requiresApplication: false,
-    teams: [{ id: 3, number: 3 }],
-  },
-  {
-    id: 1006,
-    name: "Campus Gathering",
-    date: new Date(2026, 6, 7, 19, 0),
-    regionName: "GMS Surabaya Timur",
-    eventTypeName: "Community",
-    requiresApplication: false,
-    teams: [
-      { id: 4, number: 4 },
-      { id: 5, number: 5 },
-    ],
-  },
-  {
-    id: 1007,
-    name: "Midweek Service",
-    date: new Date(2026, 6, 9, 19, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Midweek Service",
-    requiresApplication: false,
-    teams: [{ id: 1, number: 1 }],
-  },
-  {
-    id: 1008,
-    name: "Volunteer Briefing",
-    date: new Date(2026, 6, 11, 10, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Training",
-    requiresApplication: true,
-    teams: [],
-  },
-  {
-    id: 1023,
-    name: "Hospitality Training",
-    date: new Date(2026, 6, 11, 13, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Training",
-    requiresApplication: false,
-    teams: [{ id: 28, number: 28 }],
-  },
-  {
-    id: 1024,
-    name: "Production Training",
-    date: new Date(2026, 6, 11, 15, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Training",
-    requiresApplication: false,
-    teams: [{ id: 29, number: 29 }],
-  },
-  {
-    id: 1025,
-    name: "Usher Training",
-    date: new Date(2026, 6, 11, 17, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Training",
-    requiresApplication: true,
-    teams: [],
-  },
-  {
-    id: 1009,
-    name: "Sunday Celebration",
-    date: new Date(2026, 6, 12, 9, 0),
-    regionName: "GMS Surabaya Barat",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [
-      { id: 2, number: 2 },
-      { id: 6, number: 6 },
-    ],
-  },
-  {
-    id: 1010,
-    name: "Kids Ministry",
-    date: new Date(2026, 6, 12, 11, 0),
-    regionName: "GMS Surabaya Barat",
-    eventTypeName: "Kids Service",
-    requiresApplication: false,
-    teams: [{ id: 9, number: 9 }],
-  },
-  {
-    id: 1026,
-    name: "Preteen Service",
-    date: new Date(2026, 6, 12, 13, 0),
-    regionName: "GMS Surabaya Barat",
-    eventTypeName: "Kids Service",
-    requiresApplication: false,
-    teams: [{ id: 30, number: 30 }],
-  },
-  {
-    id: 1027,
-    name: "Sunday Night Revival",
-    date: new Date(2026, 6, 12, 18, 0),
-    regionName: "GMS Surabaya Barat",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [
-      { id: 31, number: 31 },
-      { id: 32, number: 32 },
-    ],
-  },
-  {
-    id: 1011,
-    name: "Creative Night",
-    date: new Date(2026, 6, 15, 18, 30),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Creative",
-    requiresApplication: false,
-    teams: [{ id: 13, number: 13 }],
-  },
-  {
-    id: 1012,
-    name: "Leadership Class",
-    date: new Date(2026, 6, 15, 20, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Class",
-    requiresApplication: true,
-    teams: [],
-  },
-  {
-    id: 1028,
-    name: "Creative Workshop",
-    date: new Date(2026, 6, 15, 10, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Creative",
-    requiresApplication: false,
-    teams: [{ id: 33, number: 33 }],
-  },
-  {
-    id: 1029,
-    name: "Media Lab",
-    date: new Date(2026, 6, 15, 14, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Creative",
-    requiresApplication: false,
-    teams: [{ id: 34, number: 34 }],
-  },
-  {
-    id: 1030,
-    name: "Worship Lab",
-    date: new Date(2026, 6, 15, 16, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Creative",
-    requiresApplication: false,
-    teams: [{ id: 35, number: 35 }],
-  },
-  {
-    id: 1031,
-    name: "Creative Debrief",
-    date: new Date(2026, 6, 15, 21, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Creative",
-    requiresApplication: false,
-    teams: [{ id: 36, number: 36 }],
-  },
-  {
-    id: 1013,
-    name: "Healing Service",
-    date: new Date(2026, 6, 18, 17, 0),
-    regionName: "GMS Surabaya Timur",
-    eventTypeName: "Special Service",
-    requiresApplication: false,
-    teams: [
-      { id: 14, number: 14 },
-      { id: 15, number: 15 },
-    ],
-  },
-  {
-    id: 1014,
-    name: "Saturday Worship",
-    date: new Date(2026, 6, 18, 19, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Weekend Service",
-    requiresApplication: false,
-    teams: [{ id: 16, number: 16 }],
-  },
-  {
-    id: 1015,
-    name: "Sunday Evening",
-    date: new Date(2026, 6, 19, 18, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [{ id: 17, number: 17 }],
-  },
-  {
-    id: 1016,
-    name: "Marketplace Talk",
-    date: new Date(2026, 6, 22, 19, 30),
-    regionName: "GMS Surabaya Barat",
-    eventTypeName: "Seminar",
-    requiresApplication: true,
-    teams: [],
-  },
-  {
-    id: 1017,
-    name: "Prayer Tower",
-    date: new Date(2026, 6, 24, 21, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Prayer Meeting",
-    requiresApplication: false,
-    teams: [{ id: 18, number: 18 }],
-  },
-  {
-    id: 1018,
-    name: "Family Service",
-    date: new Date(2026, 6, 26, 10, 0),
-    regionName: "GMS Surabaya Selatan",
-    eventTypeName: "Sunday Service",
-    requiresApplication: false,
-    teams: [
-      { id: 19, number: 19 },
-      { id: 20, number: 20 },
-    ],
-  },
-  {
-    id: 1019,
-    name: "Young Adults",
-    date: new Date(2026, 6, 29, 19, 0),
-    regionName: "GMS Surabaya Timur",
-    eventTypeName: "Community",
-    requiresApplication: false,
-    teams: [{ id: 21, number: 21 }],
-  },
-  {
-    id: 1020,
-    name: "Revival Night",
-    date: new Date(2026, 6, 31, 19, 0),
-    regionName: "GMS Surabaya Pusat",
-    eventTypeName: "Special Service",
-    requiresApplication: false,
-    teams: [
-      { id: 22, number: 22 },
-      { id: 23, number: 23 },
-      { id: 24, number: 24 },
-    ],
-  },
-];

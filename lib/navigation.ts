@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Calculator,
+  Calendar,
   Calendar1,
   CalendarDays,
   Church,
@@ -182,6 +183,12 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Tally Counter",
         targetLink: "/tools/utilities/tally",
         icon: Hash,
+      },
+      {
+        type: "link",
+        label: "Calendar",
+        targetLink: "/tools/calendar",
+        icon: Calendar,
       },
     ],
   },

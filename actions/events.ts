@@ -115,7 +115,23 @@ const createEventItemSchema = z.object({
   teamIds: z.array(z.coerce.number().int().positive()).default([]),
   memberIds: z.array(z.coerce.number().int().positive()).default([]),
   picIds: z.array(z.coerce.number().int().positive()).default([]),
-});
+}).refine(
+  (data) => {
+    if (data.mode === "teams" && data.teamIds.length === 0) {
+      return false;
+    }
+    return true;
+  },
+  { message: "Select at least one team", path: ["teamIds"] },
+).refine(
+  (data) => {
+    if (data.mode === "members" && data.memberIds.length === 0 && data.picIds.length === 0) {
+      return false;
+    }
+    return true;
+  },
+  { message: "Select at least one member or PIC", path: ["memberIds"] },
+);
 
 const createEventsSchema = z.object({
   events: z
@@ -496,7 +512,9 @@ export async function createEvents(
       const uniqueMemberIds = Array.from(new Set(event.memberIds));
       const uniquePicIds = Array.from(new Set(event.picIds));
       const isCustomEvent = eventType?.name.trim().toUpperCase() === "CUSTOM";
-      const eventName = isCustomEvent ? event.customName?.trim() : eventType?.name;
+      const eventName = isCustomEvent
+        ? event.customName?.trim()
+        : eventType?.name.trim();
 
       if (!regionIds.has(event.regionId)) {
         throw new Error(`Event ${itemNumber}: selected region was not found`);
@@ -506,12 +524,20 @@ export async function createEvents(
         throw new Error(`Event ${itemNumber}: selected event type was not found`);
       }
 
+      if (eventType.name.trim().length === 0) {
+        throw new Error(`Event ${itemNumber}: event type name is invalid`);
+      }
+
       if (Number.isNaN(eventDate.getTime())) {
         throw new Error(`Event ${itemNumber}: event date is invalid`);
       }
 
-      if (!eventName) {
-        throw new Error(`Event ${itemNumber}: custom event name is required`);
+      if (!eventName || eventName.length === 0) {
+        throw new Error(
+          isCustomEvent
+            ? `Event ${itemNumber}: custom event name is required`
+            : `Event ${itemNumber}: event type has no name`,
+        );
       }
 
       if (event.mode === "teams") {
@@ -521,22 +547,26 @@ export async function createEvents(
 
         for (const teamId of uniqueTeamIds) {
           if (!teamIds.has(teamId)) {
-            throw new Error(`Event ${itemNumber}: selected team was not found`);
+            throw new Error(
+              `Event ${itemNumber}: team with ID ${teamId} does not exist`,
+            );
           }
         }
       }
 
-        if (event.mode === "members") {
-          if (uniqueMemberIds.length === 0 && uniquePicIds.length === 0) {
-            throw new Error(`Event ${itemNumber}: select at least one member or PIC`);
-          }
+      if (event.mode === "members") {
+        if (uniqueMemberIds.length === 0 && uniquePicIds.length === 0) {
+          throw new Error(`Event ${itemNumber}: select at least one member or PIC`);
         }
+      }
 
-        for (const userId of [...uniqueMemberIds, ...uniquePicIds]) {
-          if (!memberIds.has(userId)) {
-            throw new Error(`Event ${itemNumber}: selected member was not found`);
-          }
+      for (const userId of [...uniqueMemberIds, ...uniquePicIds]) {
+        if (!memberIds.has(userId)) {
+          throw new Error(
+            `Event ${itemNumber}: member with ID ${userId} does not exist`,
+          );
         }
+      }
 
       return {
         ...event,

@@ -159,13 +159,13 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="min-h-full rounded-[28px] bg-background text-foreground md:p-6">
+    <div className="min-h-full rounded-[28px] bg-background text-foreground">
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
             Events Schedule
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             Manage and assign teams for upcoming organizational services and events.
           </p>
         </div>

@@ -308,8 +308,8 @@ export function MasterCrudPage<T extends { id: number }>({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl tracking-tight">{title}</h1>
-          <p className="text-muted-foreground mt-2">{description}</p>
+          <h1 className="font-display text-3xl font-bold tracking-tight mb-2">{title}</h1>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         <Dialog
           open={isCreateOpen}

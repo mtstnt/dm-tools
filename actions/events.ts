@@ -1,6 +1,6 @@
 "use server";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import {
@@ -161,11 +161,25 @@ export type EventScheduleResult = {
   error?: string;
 };
 
-export async function getEventSchedule(): Promise<EventScheduleResult> {
+export async function getEventSchedule(
+  month: number,
+  year: number,
+): Promise<EventScheduleResult> {
   const allowed = await checkPermission("events", "read");
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
+
+  if (!Number.isInteger(month) || month < 0 || month > 11) {
+    return { success: false, error: "Invalid month" };
+  }
+
+  if (!Number.isInteger(year) || year < 2020 || year > 2100) {
+    return { success: false, error: "Invalid year" };
+  }
+
+  const startDate = new Date(year, month, 1);
+  const endDate = new Date(year, month + 1, 1);
 
   try {
     const rows = await db
@@ -184,6 +198,7 @@ export async function getEventSchedule(): Promise<EventScheduleResult> {
       .innerJoin(eventTypes, eq(events.eventTypeId, eventTypes.id))
       .leftJoin(eventTeams, eq(events.id, eventTeams.eventId))
       .leftJoin(teams, eq(eventTeams.teamId, teams.id))
+      .where(and(gte(events.date, startDate), lt(events.date, endDate)))
       .orderBy(asc(events.date), asc(events.name), asc(teams.number));
 
     const eventMap = new Map<number, EventScheduleItem>();
@@ -217,6 +232,35 @@ export async function getEventSchedule(): Promise<EventScheduleResult> {
   } catch (err) {
     console.error("[getEventSchedule] error:", err);
     return { success: false, error: "Failed to load events" };
+  }
+}
+
+export type EventScheduleYearsResult = {
+  success: boolean;
+  data?: number[];
+  error?: string;
+};
+
+export async function getEventScheduleYears(): Promise<EventScheduleYearsResult> {
+  const allowed = await checkPermission("events", "read");
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  try {
+    const rows = await db
+      .select({
+        year: sql<number>`cast(strftime('%Y', ${events.date} / 1000, 'unixepoch') as integer)`,
+      })
+      .from(events)
+      .groupBy(sql`strftime('%Y', ${events.date} / 1000, 'unixepoch')`)
+      .orderBy(sql`strftime('%Y', ${events.date} / 1000, 'unixepoch')`);
+
+    const years = rows.map((row) => row.year).filter(Boolean);
+    return { success: true, data: years };
+  } catch (err) {
+    console.error("[getEventScheduleYears] error:", err);
+    return { success: false, error: "Failed to load event years" };
   }
 }
 

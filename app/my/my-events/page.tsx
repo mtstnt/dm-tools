@@ -116,6 +116,12 @@ export default function EventsPage() {
     };
   }, [selectedMonth, selectedYear]);
 
+  const yearSelectOptions = useMemo(() => {
+    const years = new Set(yearOptions);
+    years.add(selectedYear);
+    return Array.from(years).sort((a, b) => a - b);
+  }, [yearOptions, selectedYear]);
+
   const groupedEvents = useMemo(() => {
     const groups = new Map<string, { date: Date; events: EventScheduleItem[] }>();
 
@@ -135,12 +141,6 @@ export default function EventsPage() {
       (a, b) => a.date.getTime() - b.date.getTime(),
     );
   }, [events]);
-
-  const yearSelectOptions = useMemo(() => {
-    const years = new Set(yearOptions);
-    years.add(selectedYear);
-    return Array.from(years).sort((a, b) => a - b);
-  }, [yearOptions, selectedYear]);
 
   function moveMonth(direction: -1 | 1) {
     const nextDate = new Date(selectedYear, selectedMonth + direction, 1);
@@ -178,24 +178,11 @@ export default function EventsPage() {
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
-            Events Schedule
+            My Events
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Manage and assign teams for upcoming organizational services and events.
           </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="shadow-sm">
-            <Filter className="size-4" />
-            Filter
-          </Button>
-          <Link
-            href="/my/events/new"
-            className={cn(buttonVariants(), "shadow-sm")}
-          >
-            <CalendarPlus className="size-4" />
-            Add Event
-          </Link>
         </div>
       </div>
 

@@ -94,7 +94,7 @@ Copy buttons: "SALIN TEEN", "SALIN YOUTH", "SALIN SEMUA" (combined).
 
 ## UI Components Used
 
-Card (with CardHeader/CardAction/CardContent/CardFooter), Button, Input, Textarea, Popover — all from `@/components/ui`
+Card (with CardHeader/CardTitle/CardDescription/CardAction/CardContent/CardFooter), Button, Input, Popover — all from `@/components/ui`
 
 ## Gotchas
 

@@ -18,6 +18,7 @@ Page that scrapes event data from an external API using Cheerio. Uses a separate
 | `actions/legacy-web/events/user-blocks/update.ts` | `updateUserBlocks()` server action |
 | `actions/legacy-web/events/user-blocks/delete.ts` | `removeUserBlock()` server action |
 | `actions/legacy-web/events/blocks/update.ts` | `updateBlock()` server action |
+| `actions/legacy-web/users/fetch-all.ts` | `fetchAllUsers()` server action — fetches all SC users from a sample event page |
 | `actions/legacy-web/_shared.ts` | Shared `webFetch()` + `LegacyWebContext` type |
 | `components/web-auth-guard.tsx` | Auth gate dialog for external API credentials |
 | `components/ui/multi-select.tsx` | Shadcn-compatible react-select wrapper for multi-select dropdowns |
@@ -26,6 +27,7 @@ Page that scrapes event data from an external API using Cheerio. Uses a separate
 | `lib/parsers/blocks.ts` | Seat-layout block parser |
 | `lib/parsers/seat-layout.ts` | Seat layout parser |
 | `lib/queries/events.ts` | Re-exports all event server actions + `eventKeys` query key factory + `EventInfo` type |
+| `lib/utils.ts` | `parseEventTitle()` — parses "date/name/time" format |
 | `types/event.ts` | `EventDetail`, `EventArea`, `EventBlock`, `EventUser`, `EventAssignedUser` interfaces |
 
 ## Auth Flow (Web Auth)
@@ -108,6 +110,10 @@ Allows SPV/PIC users to assign blocks to users and remove users/blocks.
 
 ## Server Actions
 
+### `fetchAllUsers(ctx)`
+
+Fetches all users from the external SC website by parsing a sample event edit page (event ID 95469). Returns `EventUser[]` with id, fullName, and email.
+
 ### `updateUserBlocks(ctx, eventId, userIds, blockIds)`
 
 Assigns users to blocks in the external events system.
@@ -170,7 +176,8 @@ interface EventAssignedUser {
   id: number;
   fullName: string;
   email: string;
-  assignedBlocks: number[];
+  assignedBlockIds: number[];
+  taskIds?: number[];
 }
 ```
 
@@ -186,7 +193,7 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Ret
 - Extracts users from `#users li` and `#event_users li` elements (merged, deduped)
 - Extracts areas from form groups with "Area" heading
 - Extracts blocks from `var blocks = [...]` in script tags (filters out "All Block")
-- Builds `users[i].assignedBlocks` by inverting the block→users mapping
+- Builds `users[i].assignedBlockIds` by inverting the block→users mapping
 - Pre-filters `allUsers` to `ALLOWED_USER_IDS` (hardcoded set of 36 IDs)
 - Extracts CSRF token from `<input name="_csrf">` or `window._token` script pattern
 - `allUsers` field is pre-filtered; `users` field contains only assigned users

@@ -30,6 +30,7 @@ import {
   type DashboardFilterOption,
 } from "@/actions/dashboard";
 import { dashboardKeys } from "@/lib/queries/dashboard";
+import { ThisWeekWidget } from "@/components/calendar-widget";
 
 function formatMonthLabel(monthKey: string): string {
   const [year, month] = monthKey.split("-");
@@ -145,7 +146,6 @@ export default function DashboardPage() {
 
   const canLoad =
     selectedRegions.length > 0 && selectedEventTypes.length > 0 && !optionsLoading;
-
   return (
     <div className="space-y-6">
       <div>
@@ -154,6 +154,8 @@ export default function DashboardPage() {
           View congregation attendance trends across events.
         </p>
       </div>
+
+      <ThisWeekWidget />
 
       <Card>
         <CardHeader className="pb-4">

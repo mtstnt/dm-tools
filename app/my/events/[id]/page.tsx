@@ -33,9 +33,18 @@ import type { EventArea, EventAssignedUser, EventUser } from "@/types/event"
 type FetchStatus = "idle" | "loading" | "success" | "error"
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
-  incomplete: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
-  completed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
+  Pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
+  Incomplete: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
+  Completed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
+}
+
+function getStatusLabel(status: string, date: Date) {
+  if (status === "completed") return "Completed";
+
+  const now = new Date();
+  if (date > now) return "Pending";
+
+  return "Incomplete";
 }
 
 function formatDateDisplay(date: Date) {
@@ -190,8 +199,8 @@ export default function EventDetailPage() {
                   {` · ${event.regionName}`}
                 </p>
               </div>
-              <Badge className={cn("w-fit capitalize", STATUS_STYLES[event.status])}>
-                {event.status}
+              <Badge className={cn("w-fit capitalize", STATUS_STYLES[getStatusLabel(event.status, event.date)])}>
+                {getStatusLabel(event.status, event.date)}
               </Badge>
             </div>
           </div>

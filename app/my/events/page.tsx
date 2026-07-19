@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { format, isPast } from "date-fns";
 import { id } from "date-fns/locale";
 import {
   CalendarPlus,
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Filter,
+  TriangleAlert,
 } from "lucide-react";
 import { getEventSchedule, getEventScheduleYears, type EventScheduleItem } from "@/actions/events";
 import { Badge } from "@/components/ui/badge";
@@ -270,11 +272,21 @@ export default function EventsPage() {
             >
               <CardHeader className="px-3 pt-3 pb-0">
                 <div className="flex items-center gap-3">
-                  <Badge className="h-7 rounded-md bg-primary px-3 text-[11px] font-bold tracking-wide text-primary-foreground hover:bg-primary">
+                  <Badge className={cn(
+                    "h-7 rounded-md px-3 text-[11px] font-bold tracking-wide",
+                    isPast(group.date)
+                      ? "bg-muted text-muted-foreground hover:bg-muted"
+                      : "bg-primary text-primary-foreground hover:bg-primary",
+                  )}>
                     {formatDatePill(group.date)}
                   </Badge>
-                  <div className="h-px flex-1 bg-border" />
-                  <Badge className="h-6 min-w-6 rounded-full bg-primary px-2 text-[11px] font-semibold text-primary-foreground hover:bg-primary">
+                  <div className={cn("h-px flex-1", isPast(group.date) ? "bg-muted-foreground/30" : "bg-border")} />
+                  <Badge className={cn(
+                    "h-6 min-w-6 rounded-full px-2 text-[11px] font-semibold",
+                    isPast(group.date)
+                      ? "bg-muted text-muted-foreground hover:bg-muted"
+                      : "bg-primary text-primary-foreground hover:bg-primary",
+                  )}>
                     {group.events.length}
                   </Badge>
                 </div>
@@ -329,6 +341,18 @@ function DateGroupEvents({
   );
 }
 
+function getStatusIcon(event: EventScheduleItem) {
+  if (event.status === "completed") {
+    return <CheckCircle className="size-5 shrink-0 text-green-600" />;
+  }
+
+  const now = new Date();
+  const eventDate = new Date(event.date);
+  if (eventDate > now) return null;
+
+  return <TriangleAlert className="size-5 shrink-0 text-amber-500" />;
+}
+
 function EventCard({
   event,
 }: {
@@ -341,6 +365,10 @@ function EventCard({
     router.push(`/my/events/${event.id}`);
   }
 
+  const statusIcon = getStatusIcon(event);
+  const past = isPast(date);
+  const incomplete = past && event.status !== "completed";
+
   return (
     <Card
       role="link"
@@ -352,13 +380,19 @@ function EventCard({
           openEvent();
         }
       }}
-      className="group cursor-pointer gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={cn(
+        "group cursor-pointer gap-0 rounded-lg bg-background py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        incomplete && "border border-amber-500/50",
+      )}
     >
       <CardHeader className="px-4 pt-4 pb-0">
-        <CardTitle className="text-base font-semibold tracking-normal">
-          {event.eventTypeName}
-        </CardTitle>
-        <CardDescription className="text-xs font-medium">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className={cn("text-base font-semibold tracking-normal", past && "text-muted-foreground")}>
+            {event.eventTypeName}
+          </CardTitle>
+          {statusIcon}
+        </div>
+        <CardDescription className={cn("text-xs font-medium", past && "text-muted-foreground/60")}>
           {event.regionName} | {formatEventDateTime(date)}
         </CardDescription>
       </CardHeader>

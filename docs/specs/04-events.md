@@ -262,3 +262,127 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Ret
 - CSRF token is extracted from event edit page HTML; `removeUserBlock` additionally fetches a fresh token from `/csrfToken`
 - `allUsers` is pre-filtered to `ALLOWED_USER_IDS` in the parser (`lib/parsers/event-details.ts`), not in the client component
 - Mutations refresh via `refetch` callback (re-calls `getEventDetail`), not `window.location.reload`
+
+---
+
+# Feature: Local Events (Internal Database)
+
+## Overview
+
+Events created and managed within the app's own database (SQLite/Turso via Drizzle ORM). This is a separate system from the legacy SC events browser. Events have a status that determines their visual indicator on the list page and their label on the detail page.
+
+## Files
+
+| File | Role |
+|------|------|
+| `actions/events.ts` | Server actions: `getEventSchedule`, `getEventScheduleYears`, `getEventDetail`, `getEventConfiguration`, `updateEventConfiguration`, `getEventCreationOptions`, `createEvents` |
+| `app/my/events/page.tsx` | Events schedule list with month/year filters, date-grouped cards |
+| `app/my/events/[id]/page.tsx` | Event detail with Configuration, Assignment, Seating, Reporting tabs |
+| `app/my/events/[id]/_components/configuration-tab.tsx` | Event configuration editor |
+| `app/my/events/[id]/_components/assignment-tab.tsx` | User/block assignment |
+| `app/my/events/[id]/_components/seating-tab.tsx` | Seating layout |
+| `app/my/events/[id]/_components/reporting-tab.tsx` | Event metrics and volunteer reporting |
+| `app/my/events/new/` | Event creation flow |
+| `db/schema.ts` | `events` table, `eventStatusEnum`, related tables |
+
+## Types
+
+### `EventScheduleItem` (`actions/events.ts`)
+
+```typescript
+type EventScheduleItem = {
+  id: number;
+  name: string;
+  date: Date;
+  status: EventStatus;          // "pending" | "incomplete" | "completed"
+  regionName: string;
+  eventTypeName: string;
+  mode?: EventMode;             // "teams" | "members" | "manual_apply"
+  requiresApplication: boolean;
+  teams: { id: number; number: number }[];
+};
+```
+
+### `EventDetailData` (`actions/events.ts`)
+
+```typescript
+type EventDetailData = {
+  id: number;
+  name: string;
+  date: Date;
+  status: EventStatus;
+  regionName: string;
+  eventTypeName: string;
+  mode: EventMode;
+  allUsers: { id: number; fullName: string; email: string }[];
+  assignments: {
+    id: number;
+    fullName: string;
+    email: string;
+    assignedBlockIds: number[];
+    taskIds: number[];
+  }[];
+};
+```
+
+### `EventStatus` (`db/schema.ts`)
+
+```typescript
+const eventStatusEnum = ["pending", "incomplete", "completed"] as const;
+type EventStatus = "pending" | "incomplete" | "completed";
+```
+
+## Status Indicator Logic
+
+The status displayed to the user is **derived** from both the `status` database field and the event date. This logic is shared between the list page and detail page.
+
+### Derivation Rules
+
+| DB `status` | Event Date | Display Indicator | Display Label |
+|-------------|-----------|-------------------|---------------|
+| `completed` | any | Green check icon (`CheckCircle`) | "Completed" |
+| `pending` | future | Nothing (hidden) | "Pending" |
+| `pending` | past / present | Yellow warning icon (`TriangleAlert`) | "Incomplete" |
+| `incomplete` | future | Nothing (hidden) | "Pending" |
+| `incomplete` | past / present | Yellow warning icon (`TriangleAlert`) | "Incomplete" |
+
+### Implementation
+
+**List page** (`app/my/events/page.tsx`): `getStatusIcon(event)` returns a JSX icon element or `null`. The icon is rendered to the right of the event type name in each card's header. When the event date has passed, the card header text (`CardTitle` and `CardDescription`) renders in muted/gray color (`text-muted-foreground`) to visually distinguish past events.
+
+**Detail page** (`app/my/events/[id]/page.tsx`): `getStatusLabel(status, date)` returns `"Completed"`, `"Pending"`, or `"Incomplete"`. The `STATUS_STYLES` record maps these labels to color classes (green, yellow, orange).
+
+## Tab Architecture (Event Detail)
+
+The detail page uses Shadcn `Tabs` with four tabs:
+
+1. **Configuration** — Editable key-value fields stored as JSON in `events.configuration`.
+2. **Assignment** — Assign users to tasks/blocks. Uses `allUsers` for selection and existing `assignments` for display.
+3. **Seating** — Visual seating layout (WIP).
+4. **Reporting** — Event metrics (altar calls, volunteers) sourced from `eventMetrics`, `eventVolunteers`, `eventAltarCalls`.
+
+## Database Schema
+
+The `events` table (`db/schema.ts:329`) includes:
+- `regionId`, `eventTypeId` — foreign keys to master tables
+- `date` — event date/time as timestamp
+- `name` — display name (derived from event type, or custom)
+- `mode` — `"teams"` | `"members"` | `"manual_apply"`
+- `configuration` — JSON array of `{ field, value }` pairs
+- `sourceId` — optional reference to external event ID (legacy sync)
+- `status` — `"pending"` (default) | `"incomplete"` | `"completed"`
+
+Related tables: `eventTeams`, `eventAssignments`, `eventMetrics`, `eventVolunteers`, `eventAltarCalls`.
+
+## Queries
+
+### `getEventSchedule(month, year)`
+- **Authorization**: Requires `events:read` permission.
+- Returns all events within the given calendar month.
+- Uses `leftJoin` on `eventTeams`/`teams` — events with multiple teams produce multiple rows, deduplicated via a `Map<id, EventScheduleItem>`.
+- Each event includes its `status` for the status indicator logic.
+
+### `getEventDetail(eventId)`
+- **Authorization**: Requires `events:read` permission.
+- Returns a single event with its status, all system users, and all assignments for that event.
+- Assignments are aggregated by `userId`, collecting `assignedBlockIds` (from `blockName`) and `taskIds`.

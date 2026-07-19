@@ -25,6 +25,7 @@ export type EventScheduleItem = {
   id: number;
   name: string;
   date: Date;
+  status: EventStatus;
   regionName: string;
   eventTypeName: string;
   mode?: EventMode;
@@ -187,6 +188,7 @@ export async function getEventSchedule(
         id: events.id,
         name: events.name,
         date: events.date,
+        status: events.status,
         regionName: regions.name,
         eventTypeName: eventTypes.name,
         mode: events.mode,
@@ -217,6 +219,7 @@ export async function getEventSchedule(
         id: row.id,
         name: row.name,
         date: row.date,
+        status: row.status,
         regionName: row.regionName,
         eventTypeName: row.eventTypeName,
         mode: row.mode,

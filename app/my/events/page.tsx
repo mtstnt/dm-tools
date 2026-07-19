@@ -43,7 +43,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { MONTHS_ID } from "@/lib/constants";
-import { useSessionUser, hasPermission } from "@/components/user-session-provider";
+import { useSessionUser } from "@/components/user-session-provider";
+import { canAccess, ROLES } from "@/lib/permissions";
 
 const FULL_MONTHS = MONTHS_ID;
 
@@ -68,8 +69,8 @@ export default function EventsPage() {
   const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(() => new Set());
   const [yearOptions, setYearOptions] = useState<number[]>(() => [new Date().getFullYear()]);
   const session = useSessionUser();
-  const canEdit = hasPermission(session, "events", "update");
-  const canDelete = hasPermission(session, "events", "delete");
+  const canEdit = canAccess(session?.role, [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
+  const canDelete = canAccess(session?.role, [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   const [deletingEvent, setDeletingEvent] = useState<EventScheduleItem | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);

@@ -1,17 +1,10 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/connection";
-import {
-  auditTrails,
-  permissions,
-  roles,
-  userPermissions,
-  users,
-  rolePermissions,
-  type Action,
-} from "@/db/schema";
+import { auditTrails, roles, users } from "@/db/schema";
 import { getCurrentUser } from "@/actions/auth/current-user";
+import { canAccess, type Role } from "@/lib/permissions";
 
 export async function getUserContext(): Promise<{
   userId: string;
@@ -24,72 +17,24 @@ export async function getUserContext(): Promise<{
   return { userId: String(user.id), userName: user.fullName };
 }
 
-export async function checkPermission(
-  resource: string,
-  action: Action,
-): Promise<boolean> {
+export async function getUserRole(): Promise<string | null> {
   const user = await getCurrentUser();
-  if (!user) {
-    return false;
-  }
+  if (!user) return null;
 
-  const userId = user.id;
-
-  // ADMIN role grants full access
-  const adminRoleRows = await db
-    .select({ roleId: users.roleId })
+  const rows = await db
+    .select({ name: roles.name })
     .from(users)
     .innerJoin(roles, eq(users.roleId, roles.id))
-    .where(and(eq(users.id, userId), eq(roles.name, "ADMIN")))
-    .limit(1);
+    .where(eq(users.id, user.id));
 
-  if (adminRoleRows.length > 0) {
-    return true;
+  return rows[0]?.name ?? null;
+}
+
+export async function requireRole(allowedRoles: Role[]): Promise<void> {
+  const role = await getUserRole();
+  if (!canAccess(role, allowedRoles)) {
+    throw new Error("Forbidden");
   }
-
-  // Find the permission record for the resource/action
-  const permissionRows = await db
-    .select({ id: permissions.id })
-    .from(permissions)
-    .where(and(eq(permissions.resource, resource), eq(permissions.action, action)))
-    .limit(1);
-
-  if (permissionRows.length === 0) {
-    return false;
-  }
-
-  const permissionId = permissionRows[0].id;
-
-  // Check direct user permission
-  const directPermissionRows = await db
-    .select({ id: userPermissions.id })
-    .from(userPermissions)
-    .where(
-      and(
-        eq(userPermissions.userId, userId),
-        eq(userPermissions.permissionId, permissionId),
-      ),
-    )
-    .limit(1);
-
-  if (directPermissionRows.length > 0) {
-    return true;
-  }
-
-  // Check role-based permissions
-  const rolePermissionRows = await db
-    .select({ id: rolePermissions.id })
-    .from(rolePermissions)
-    .innerJoin(users, eq(rolePermissions.roleId, users.roleId))
-    .where(
-      and(
-        eq(users.id, userId),
-        eq(rolePermissions.permissionId, permissionId),
-      ),
-    )
-    .limit(1);
-
-  return rolePermissionRows.length > 0;
 }
 
 export async function logAuditTrail(

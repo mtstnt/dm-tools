@@ -6,11 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type {
-  UserSession,
-  UserPermission,
-} from "@/actions/auth/session";
-import type { Action } from "@/db/schema";
+import type { UserSession } from "@/actions/auth/session";
 
 type UserSessionContextValue = {
   session: UserSession | null;
@@ -50,23 +46,4 @@ export function useSetSessionUser(): (
     );
   }
   return ctx.setSession;
-}
-
-export function hasPermission(
-  session: UserSession | null | undefined,
-  resource: string,
-  action: Action,
-): boolean {
-  if (!session) {
-    return false;
-  }
-
-  if (session.roles.includes("ADMIN")) {
-    return true;
-  }
-
-  return session.permissions.some(
-    (permission: UserPermission) =>
-      permission.resource === resource && permission.action === action,
-  );
 }

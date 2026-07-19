@@ -29,9 +29,9 @@ import {
 } from "@/lib/navigation";
 import {
   useSessionUser,
-  hasPermission,
 } from "@/components/user-session-provider";
 import type { UserSession } from "@/actions/auth/session";
+import { canAccess } from "@/lib/permissions";
 import Link from "next/link";
 
 function isLink(
@@ -57,14 +57,14 @@ function isNodeVisible(
   node: NavigationChild,
 ): boolean {
   if (isDropdown(node)) {
-    if (node.resource && !hasPermission(session, node.resource, "read")) {
+    if (node.allowedRoles && !canAccess(session?.role, node.allowedRoles)) {
       return false;
     }
     return node.children.some((child) => isNodeVisible(session, child));
   }
 
-  if (isLink(node) && node.resource) {
-    return hasPermission(session, node.resource, "read");
+  if (isLink(node) && node.allowedRoles) {
+    return canAccess(session?.role, node.allowedRoles);
   }
 
   return true;

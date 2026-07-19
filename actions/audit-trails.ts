@@ -3,7 +3,8 @@
 import { desc, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { auditTrails } from "@/db/schema";
-import { checkPermission } from "@/actions/master/_shared";
+import { getUserRole } from "@/actions/master/_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const AUDIT_TRAIL_PAGE_SIZE = 20;
 
@@ -35,7 +36,7 @@ export type AuditTrailListResult =
 export async function getAuditTrails(
   inputPage: number,
 ): Promise<AuditTrailListResult> {
-  const allowed = await checkPermission("audit_trails", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

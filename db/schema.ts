@@ -10,23 +10,12 @@ import { defineRelations, sql } from "drizzle-orm";
  * ENUMS
  * ========================================================================== */
 
-export const actionsEnum = [
-  "create",
-  "read",
-  "update",
-  "delete",
-  "execute",
-] as const;
-
-export type Action = (typeof actionsEnum)[number];
 export const eventStatusEnum = ["pending", "incomplete", "completed"] as const;
 export type EventStatus = (typeof eventStatusEnum)[number];
 export const eventModes = ["teams", "members", "manual_apply"] as const;
 export type EventMode = (typeof eventModes)[number];
 export const approvalStatusEnum = ["pending", "approved", "rejected"] as const;
 export type ApprovalStatus = (typeof approvalStatusEnum)[number];
-export const roleScopes = ["all", "self", "team", "region"] as const;
-export type RoleScope = (typeof roleScopes)[number];
 
 /* ============================================================================
  * MASTER TABLES
@@ -209,36 +198,6 @@ export const users = sqliteTable(
   (table) => [uniqueIndex("users_email_unique").on(table.email)],
 );
 
-export const permissions = sqliteTable(
-  "permissions",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-
-    resource: text("resource").notNull(),
-
-    action: text("action", {
-      enum: actionsEnum,
-    }).notNull(),
-
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    createdBy: text("created_by").notNull(),
-    updatedBy: text("updated_by").notNull(),
-  },
-  (table) => [
-    uniqueIndex("permissions_resource_action_unique").on(
-      table.resource,
-      table.action,
-    ),
-  ],
-);
-
 export const roles = sqliteTable("roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
 
@@ -255,72 +214,6 @@ export const roles = sqliteTable("roles", {
   createdBy: text("created_by").notNull(),
   updatedBy: text("updated_by").notNull(),
 });
-
-export const rolePermissions = sqliteTable(
-  "role_permissions",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-
-    roleId: integer("role_id")
-      .notNull()
-      .references(() => roles.id),
-
-    permissionId: integer("permission_id")
-      .notNull()
-      .references(() => permissions.id),
-
-    scope: text("scope").$type<RoleScope>(),
-
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    createdBy: text("created_by").notNull(),
-    updatedBy: text("updated_by").notNull(),
-  },
-  (table) => [
-    uniqueIndex("role_permissions_role_permission_unique").on(
-      table.roleId,
-      table.permissionId,
-    ),
-  ],
-);
-
-export const userPermissions = sqliteTable(
-  "user_permissions",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-
-    userId: integer("user_id")
-      .notNull()
-      .references(() => users.id),
-
-    permissionId: integer("permission_id")
-      .notNull()
-      .references(() => permissions.id),
-
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-
-    createdBy: text("created_by").notNull(),
-    updatedBy: text("updated_by").notNull(),
-  },
-  (table) => [
-    uniqueIndex("user_permissions_user_permission_unique").on(
-      table.userId,
-      table.permissionId,
-    ),
-  ],
-);
 
 /* ============================================================================
  * EVENT DATA COLLECTION
@@ -641,10 +534,7 @@ export const schemaRelations = defineRelations(
     tasks,
     configurations,
     users,
-    permissions,
     roles,
-    rolePermissions,
-    userPermissions,
     events,
     eventTeams,
     eventAssignments,
@@ -678,10 +568,6 @@ export const schemaRelations = defineRelations(
         from: r.users.roleId,
         to: r.roles.id,
       }),
-      permissions: r.many.permissions({
-        from: r.users.id.through(r.userPermissions.userId),
-        to: r.permissions.id.through(r.userPermissions.permissionId),
-      }),
       assignments: r.many.eventAssignments({
         from: r.users.id,
         to: r.eventAssignments.userId,
@@ -709,48 +595,7 @@ export const schemaRelations = defineRelations(
     },
 
     roles: {
-      permissions: r.many.permissions({
-        from: r.roles.id.through(r.rolePermissions.roleId),
-        to: r.permissions.id.through(r.rolePermissions.permissionId),
-      }),
       users: r.many.users(),
-    },
-
-    permissions: {
-      roles: r.many.roles({
-        from: r.permissions.id.through(r.rolePermissions.permissionId),
-        to: r.roles.id.through(r.rolePermissions.roleId),
-      }),
-      users: r.many.users({
-        from: r.permissions.id.through(r.userPermissions.permissionId),
-        to: r.users.id.through(r.userPermissions.userId),
-      }),
-    },
-
-    rolePermissions: {
-      role: r.one.roles({
-        from: r.rolePermissions.roleId,
-        to: r.roles.id,
-        optional: false,
-      }),
-      permission: r.one.permissions({
-        from: r.rolePermissions.permissionId,
-        to: r.permissions.id,
-        optional: false,
-      }),
-    },
-
-    userPermissions: {
-      user: r.one.users({
-        from: r.userPermissions.userId,
-        to: r.users.id,
-        optional: false,
-      }),
-      permission: r.one.permissions({
-        from: r.userPermissions.permissionId,
-        to: r.permissions.id,
-        optional: false,
-      }),
     },
 
     events: {

@@ -8,7 +8,7 @@
 
 Displays a month-based calendar view of internal events grouped by date. Each date group shows event cards with event type, region, date/time, and assigned teams. Supports month/year navigation and expandable date groups.
 
-Each event card shows an edit button (pencil icon) for users with `events:update` permission, and a delete button (trash icon) for users with `events:delete` permission. Clicking delete opens a confirmation dialog; confirming removes the event and all related data (teams, assignments, metrics, volunteers, altar calls) in a single transaction.
+Each event card shows an edit button (pencil icon) for users with Admin, Head Ministry, Regional PIC, or SPV role, and a delete button (trash icon) for users with Admin or Head Ministry role. Checks use `canAccess(role, [...])` from `lib/permissions.ts`. Clicking delete opens a confirmation dialog; confirming removes the event and all related data (teams, assignments, metrics, volunteers, altar calls) in a single transaction.
 
 ### Event Creation
 
@@ -379,12 +379,12 @@ Related tables: `eventTeams`, `eventAssignments`, `eventMetrics`, `eventVoluntee
 ## Queries
 
 ### `getEventSchedule(month, year)`
-- **Authorization**: Requires `events:read` permission.
+- **Authorization**: Requires at least `Member` role. Uses `canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER])`.
 - Returns all events within the given calendar month.
 - Uses `leftJoin` on `eventTeams`/`teams` — events with multiple teams produce multiple rows, deduplicated via a `Map<id, EventScheduleItem>`.
 - Each event includes its `status` for the status indicator logic.
 
 ### `getEventDetail(eventId)`
-- **Authorization**: Requires `events:read` permission.
+- **Authorization**: Requires at least `Member` role.
 - Returns a single event with its status, all system users, and all assignments for that event.
 - Assignments are aggregated by `userId`, collecting `assignedBlockIds` (from `blockName`) and `taskIds`.

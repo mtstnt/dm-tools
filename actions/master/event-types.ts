@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { eventTypes } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const eventTypeSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
@@ -34,7 +35,7 @@ export type EventTypeMutationResult = {
 };
 
 export async function getEventTypes(): Promise<EventTypeListResult> {
-  const allowed = await checkPermission("event_types", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -58,7 +59,7 @@ export async function getEventTypes(): Promise<EventTypeListResult> {
 export async function getEventTypeById(
   id: number,
 ): Promise<EventTypeDetailResult> {
-  const allowed = await checkPermission("event_types", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -87,7 +88,7 @@ export async function getEventTypeById(
 export async function createEventType(
   input: Record<string, string>,
 ): Promise<EventTypeMutationResult> {
-  const allowed = await checkPermission("event_types", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -131,7 +132,7 @@ export async function updateEventType(
   id: number,
   input: Record<string, string>,
 ): Promise<EventTypeMutationResult> {
-  const allowed = await checkPermission("event_types", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -176,7 +177,7 @@ export async function updateEventType(
 export async function deleteEventType(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("event_types", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

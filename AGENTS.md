@@ -68,8 +68,6 @@ app/
     master/                 CRUD for regions, teams, event-types, ministries, metrics, tasks
     users/
       members/              Team member browser + dialogs
-      permissions/page.tsx  Permission list
-      roles/                Role list + role permission matrix
   tools/                    Protected area (AuthGuard + sidebar)
     page.tsx                Missing — /tools redirects via proxy.ts (but middleware is not wired)
     utilities/
@@ -83,10 +81,10 @@ app/
 
 actions/                    Root-level server actions (NOT under app/)
   auth/login.ts             login(), logout(), getCurrentUser(), checkAuth()
-  auth/session.ts           getUserSession() — full user session with roles + permissions
-  master/_shared.ts         getUserContext(), checkPermission(), logAuditTrail()
+  auth/session.ts           getUserSession() — session with role, teamId, regionId
+  master/_shared.ts         getUserContext(), getUserRole(), logAuditTrail()
   master/{regions,teams,event-types,ministries,metrics,tasks}.ts
-  users/{members,roles,permissions}.ts
+  users/members.ts
   audit-trails.ts
   legacy-web/_shared.ts     webFetch(), LegacyWebContext type
   legacy-web/auth/web-login.ts
@@ -101,17 +99,18 @@ db/
 components/
   ui/                       Shadcn components (base-nova, lucide icons)
   custom/                   master-crud-page.tsx, data-table.tsx
-  app-sidebar.tsx           Navigation driven by lib/navigation.ts; filters by permissions
+  app-sidebar.tsx           Navigation driven by lib/navigation.ts; filters by role
   auth-guard.tsx            Client-side route guard (cookie check)
   web-auth-guard.tsx        Auth gate for external SC events API
   providers.tsx             React Query (staleTime 5m, gcTime 30m, no refetch on focus)
   theme-provider.tsx        next-themes wrapper
-  user-session-provider.tsx React Context for user session, roles, and permissions
+  user-session-provider.tsx React Context for user session and role
   account-info.tsx          Logged-in user dropdown (local auth)
 
 lib/
   firebase.ts               Hardcoded Firebase client config ("use client")
-  navigation.ts             Sidebar menu items: groups + root links/dropdowns with optional resource
+  navigation.ts             Sidebar menu items: groups + root links/dropdowns with optional allowedRoles
+  permissions.ts            Role constants + canAccess() guard (shared frontend/backend)
   utils.ts                  cn() helper
   queries/
     reports.ts              Firestore reports fetch + reportKeys
@@ -138,8 +137,8 @@ proxy.ts                    Exported middleware function + matcher; NOT wired to
 - **Pages are client components**: All `page.tsx` files should be client components. Load page data by calling actions from the page component to avoid RSC -> Client runtime errors in the frontend.
 - **Auth**: Local `users` table with bcrypt. Sets httpOnly `authenticated` cookie containing the numeric user ID. Firebase Auth is **not** used for app authentication; Firebase is only used for Firestore.
 - **No middleware.ts**: `proxy.ts` exports middleware logic but is not wired up. Route protection is client-side via `AuthGuard` on `/my/*` and `/tools/*` layouts.
-- **Default admin**: `db/seeder.ts` creates `admin@email.com` / `123456` with the `ADMIN` role.
-- **Permission model**: Resources (`users`, `events`, `regions`, ...) × actions (`create`, `read`, `update`, `delete`, `execute`). The hardcoded `ADMIN` role name bypasses all permission checks in both `checkPermission()` (`actions/master/_shared.ts`) and `hasPermission()` (`components/user-session-provider.tsx`). Other roles receive explicit permissions via `db/seeder.ts`.
+- **Default admin**: `db/seeder.ts` creates `admin@email.com` / `123456` with the `Admin` role.
+- **Permission model**: 5 hardcoded roles (Admin, Head Ministry, Regional PIC, SPV, Member) defined in `lib/permissions.ts`. Access is checked via `canAccess(userRole, allowedRoles)` — a pure function importable from both server and client. The `Admin` role bypasses all checks. Each server action explicitly sets its own allowed roles and handles data scoping per role inline.
 - **Route redirects**: `/` → `/my` via `proxy.ts`; `/my` → `/my/home`; `/auth` → `/auth/login`. These redirects only work if `middleware.ts` is created from `proxy.ts`.
 - **Indonesian dates**: Month names are Indonesian (Januari–Desember). `parseDate()` in `lib/queries/reports.ts` and report pages use them.
 - **Members page**: Renders team cards ordered numerically, SPVs first, plus a "Not Assigned" card. Full names stored uppercase, emails lowercase, both trimmed.
@@ -166,7 +165,7 @@ proxy.ts                    Exported middleware function + matcher; NOT wired to
 - `drizzle.config.ts` switches dialect to `turso` in production; local uses `sqlite`.
 - Run `bun run db:generate` then `bun run db:migrate` after schema changes.
 - `bun run db:seed` is idempotent and safe to run multiple times.
-- Schema includes users/roles/permissions, events, event assignments/metrics/volunteers/altar-calls, audit trails, and master tables.
+- Schema includes users/roles, events, event assignments/metrics/volunteers/altar-calls, audit trails, and master tables.
 
 ## Docs
 

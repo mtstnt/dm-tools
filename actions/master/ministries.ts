@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { ministries } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const ministrySchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
@@ -34,7 +35,7 @@ export type MinistryMutationResult = {
 };
 
 export async function getMinistries(): Promise<MinistryListResult> {
-  const allowed = await checkPermission("ministries", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -58,7 +59,7 @@ export async function getMinistries(): Promise<MinistryListResult> {
 export async function getMinistryById(
   id: number,
 ): Promise<MinistryDetailResult> {
-  const allowed = await checkPermission("ministries", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -87,7 +88,7 @@ export async function getMinistryById(
 export async function createMinistry(
   input: Record<string, string>,
 ): Promise<MinistryMutationResult> {
-  const allowed = await checkPermission("ministries", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -131,7 +132,7 @@ export async function updateMinistry(
   id: number,
   input: Record<string, string>,
 ): Promise<MinistryMutationResult> {
-  const allowed = await checkPermission("ministries", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -176,7 +177,7 @@ export async function updateMinistry(
 export async function deleteMinistry(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("ministries", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

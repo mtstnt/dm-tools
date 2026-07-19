@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { tasks } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const taskSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
@@ -34,7 +35,7 @@ export type TaskMutationResult = {
 };
 
 export async function getTasks(): Promise<TaskListResult> {
-  const allowed = await checkPermission("tasks", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -58,7 +59,7 @@ export async function getTasks(): Promise<TaskListResult> {
 export async function getTaskById(
   id: number,
 ): Promise<TaskDetailResult> {
-  const allowed = await checkPermission("tasks", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -87,7 +88,7 @@ export async function getTaskById(
 export async function createTask(
   input: Record<string, string>,
 ): Promise<TaskMutationResult> {
-  const allowed = await checkPermission("tasks", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -131,7 +132,7 @@ export async function updateTask(
   id: number,
   input: Record<string, string>,
 ): Promise<TaskMutationResult> {
-  const allowed = await checkPermission("tasks", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -176,7 +177,7 @@ export async function updateTask(
 export async function deleteTask(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("tasks", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

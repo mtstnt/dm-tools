@@ -10,15 +10,14 @@ import {
   Hash,
   History,
   Home,
-  Key,
   ScrollText,
   Settings,
-  SquareUser,
   User,
   UserCheck,
   Users,
   Workflow,
 } from "lucide-react";
+import { ROLES, type Role } from "@/lib/permissions";
 
 export type NavigationLink = {
   type: "link";
@@ -26,7 +25,7 @@ export type NavigationLink = {
   targetLink: string;
   icon?: LucideIcon;
   badge?: string;
-  resource?: string;
+  allowedRoles?: Role[];
 };
 
 export type NavigationDropdown = {
@@ -34,7 +33,7 @@ export type NavigationDropdown = {
   label: string;
   icon?: LucideIcon;
   children: NavigationChild[];
-  resource?: string;
+  allowedRoles?: Role[];
 };
 
 export type NavigationChild = NavigationLink | NavigationDropdown;
@@ -63,14 +62,14 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "My Events",
         targetLink: "/my/events",
         icon: Calendar,
-        resource: "events",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
         type: "link",
         label: "All Events",
         targetLink: "/my/events",
         icon: CalendarDays,
-        resource: "events",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
         type: "link",
@@ -89,56 +88,56 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Regions",
         targetLink: "/my/master/regions",
         icon: Globe,
-        resource: "regions",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY],
       },
       {
         type: "link",
         label: "Teams",
         targetLink: "/my/master/teams",
         icon: Users,
-        resource: "teams",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Event Types",
         targetLink: "/my/master/event-types",
         icon: Calendar1,
-        resource: "event_types",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Ministries",
         targetLink: "/my/master/ministries",
         icon: Church,
-        resource: "ministries",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Metrics",
         targetLink: "/my/master/metrics",
         icon: Calculator,
-        resource: "metrics",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Tasks",
         targetLink: "/my/master/tasks",
         icon: Workflow,
-        resource: "tasks",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Configurations",
         targetLink: "/my/master/configurations",
         icon: Settings,
-        resource: "configurations",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY],
       },
       {
         type: "link",
         label: "Audit Trails",
         targetLink: "/my/audit-trails",
         icon: ScrollText,
-        resource: "audit_trails",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY],
       },
     ],
   },
@@ -151,21 +150,7 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Members",
         targetLink: "/my/users/members",
         icon: User,
-        resource: "users",
-      },
-      {
-        type: "link",
-        label: "Permissions",
-        targetLink: "/my/users/permissions",
-        icon: Key,
-        resource: "permissions",
-      },
-      {
-        type: "link",
-        label: "Roles",
-        targetLink: "/my/users/roles",
-        icon: SquareUser,
-        resource: "roles",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV],
       },
     ],
   },
@@ -208,7 +193,7 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Events (Web SC)",
         targetLink: "/tools/legacy/events",
         icon: CalendarDays,
-        resource: "events",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
         type: "link",
@@ -221,7 +206,7 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Members (Firebase)",
         targetLink: "/tools/members",
         icon: UserCheck,
-        resource: "users",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV],
       },
     ],
   },

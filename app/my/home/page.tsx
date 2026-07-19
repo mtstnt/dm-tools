@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -11,6 +12,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type TooltipValueType,
 } from "recharts";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -263,11 +265,11 @@ export default function DashboardPage() {
                       fontSize: "0.875rem",
                     }}
                     labelStyle={{ color: "var(--muted-foreground)" }}
-                    formatter={(value) => [
+                    formatter={(value: TooltipValueType | undefined) => [
                       Number(value).toLocaleString(),
                       "Seat Counter",
                     ]}
-                    labelFormatter={(label) =>
+                    labelFormatter={(label: ReactNode) =>
                       formatMonthLabel(String(label))
                     }
                   />
@@ -298,8 +300,8 @@ export default function DashboardPage() {
 function FiltersSkeleton() {
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-      <Skeleton className="h-[44px] w-full sm:flex-1 rounded-md" />
-      <Skeleton className="h-[44px] w-full sm:flex-1 rounded-md" />
+      <Skeleton className="h-11 w-full sm:flex-1 rounded-md" />
+      <Skeleton className="h-11 w-full sm:flex-1 rounded-md" />
       <Skeleton className="h-9 w-24 rounded-md shrink-0" />
     </div>
   );
@@ -308,7 +310,7 @@ function FiltersSkeleton() {
 function ChartSkeleton() {
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-      <Skeleton className="h-[350px] w-full rounded-lg" />
+      <Skeleton className="h-87.5 w-full rounded-lg" />
     </div>
   );
 }

@@ -5,83 +5,44 @@ import {
   useMemo,
   useState,
   useTransition,
+  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { format, formatISO, isValid, parse } from "date-fns";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save, UsersRound } from "lucide-react";
 import {
   getEventForEdit,
   updateEvent,
   type EventCreationOptions,
-  type EventForEditData,
 } from "@/actions/events";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  MultiSelect,
+  type MultiSelectOption,
+} from "@/components/ui/multi-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { type MultiSelectOption } from "@/components/ui/multi-select";
-import {
-  EventFormCardEditor,
-  type EventFormCard,
-} from "@/app/my/events/_components/event-form-card";
+
+type AssignmentMode = "teams" | "members" | "manual_apply";
 
 function formatDateForInput(date: Date) {
   return format(date, "yyyy-MM-dd'T'HH:mm");
 }
 
 function toLocalDateTimeWithOffset(value: string) {
-  if (!value) {
-    return value;
-  }
-
+  if (!value) return value;
   const d = parse(value, "yyyy-MM-dd'T'HH:mm", new Date());
   return isValid(d) ? formatISO(d) : value;
-}
-
-function buildCardFromEvent(
-  event: EventForEditData,
-  options: EventCreationOptions,
-): EventFormCard {
-  const eventType = options.eventTypes.find(
-    (type) => type.id === event.eventTypeId,
-  );
-  const isCustomEvent =
-    eventType?.name.trim().toUpperCase() === "CUSTOM";
-
-  const teamMap = new Map(
-    options.teams.map((team) => [
-      team.id,
-      { value: String(team.id), label: `Team ${team.number} - ${team.regionName}` },
-    ]),
-  );
-
-  const memberMap = new Map(
-    options.members.map((member) => [
-      member.id,
-      {
-        value: String(member.id),
-        label: `${member.fullName}${member.teamNumber ? ` - Team ${member.teamNumber}` : " - Not Assigned"}`,
-      },
-    ]),
-  );
-
-  return {
-    id: "edit-card",
-    regionId: String(event.regionId),
-    eventTypeId: String(event.eventTypeId),
-    customName: isCustomEvent ? event.name : "",
-    date: formatDateForInput(new Date(event.date)),
-    mode: event.mode,
-    teams: event.teamIds
-      .map((id) => teamMap.get(id))
-      .filter((opt): opt is MultiSelectOption => !!opt),
-    members: event.memberIds
-      .map((id) => memberMap.get(id))
-      .filter((opt): opt is MultiSelectOption => !!opt),
-    pics: event.picIds
-      .map((id) => memberMap.get(id))
-      .filter((opt): opt is MultiSelectOption => !!opt),
-  };
 }
 
 export default function EditEventPage() {
@@ -89,8 +50,15 @@ export default function EditEventPage() {
   const router = useRouter();
   const eventId = Number(params.id);
 
-  const [data, setData] = useState<EventForEditData | null>(null);
-  const [card, setCard] = useState<EventFormCard | null>(null);
+  const [options, setOptions] = useState<EventCreationOptions | null>(null);
+  const [regionId, setRegionId] = useState("");
+  const [eventTypeId, setEventTypeId] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [date, setDate] = useState("");
+  const [mode, setMode] = useState<AssignmentMode>("teams");
+  const [teams, setTeams] = useState<MultiSelectOption[]>([]);
+  const [members, setMembers] = useState<MultiSelectOption[]>([]);
+  const [pics, setPics] = useState<MultiSelectOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -112,12 +80,61 @@ export default function EditEventPage() {
 
       if (!result.success || !result.data) {
         setError(result.error ?? "Failed to load event");
-      } else {
-        setError(null);
-        setData(result.data);
-        setCard(buildCardFromEvent(result.data, result.data.options));
+        setIsLoading(false);
+        return;
       }
 
+      const { options: eventOptions, ...event } = result.data;
+      setOptions(eventOptions);
+
+      const eventType = eventOptions.eventTypes.find(
+        (type) => type.id === event.eventTypeId,
+      );
+      const isCustomEvent =
+        eventType?.name.trim().toUpperCase() === "CUSTOM";
+
+      const teamMap = new Map(
+        eventOptions.teams.map((team) => [
+          team.id,
+          {
+            value: String(team.id),
+            label: `Team ${team.number} - ${team.regionName}`,
+          },
+        ]),
+      );
+
+      const memberMap = new Map(
+        eventOptions.members.map((member) => [
+          member.id,
+          {
+            value: String(member.id),
+            label: `${member.fullName}${member.teamNumber ? ` - Team ${member.teamNumber}` : " - Not Assigned"}`,
+          },
+        ]),
+      );
+
+      setRegionId(String(event.regionId));
+      setEventTypeId(String(event.eventTypeId));
+      setCustomName(isCustomEvent ? event.name : "");
+      setDate(formatDateForInput(new Date(event.date)));
+      setMode(event.mode as AssignmentMode);
+      setTeams(
+        event.teamIds
+          .map((id) => teamMap.get(id))
+          .filter((opt): opt is MultiSelectOption => !!opt),
+      );
+      setMembers(
+        event.memberIds
+          .map((id) => memberMap.get(id))
+          .filter((opt): opt is MultiSelectOption => !!opt),
+      );
+      setPics(
+        event.picIds
+          .map((id) => memberMap.get(id))
+          .filter((opt): opt is MultiSelectOption => !!opt),
+      );
+
+      setError(null);
       setIsLoading(false);
     }
 
@@ -130,68 +147,59 @@ export default function EditEventPage() {
 
   const eventTypeMap = useMemo(() => {
     return new Map(
-      data?.options.eventTypes.map((eventType) => [
-        String(eventType.id),
-        eventType,
-      ]) ?? [],
+      options?.eventTypes.map((type) => [String(type.id), type]) ?? [],
     );
-  }, [data?.options.eventTypes]);
+  }, [options?.eventTypes]);
+
+  const isCustomEvent = useMemo(() => {
+    return (
+      eventTypeMap.get(eventTypeId)?.name.trim().toUpperCase() === "CUSTOM"
+    );
+  }, [eventTypeMap, eventTypeId]);
 
   const teamOptions = useMemo<MultiSelectOption[]>(() => {
     return (
-      data?.options.teams.map((team) => ({
+      options?.teams.map((team) => ({
         value: String(team.id),
         label: `Team ${team.number} - ${team.regionName}`,
       })) ?? []
     );
-  }, [data?.options.teams]);
+  }, [options?.teams]);
 
   const regionItems = useMemo(() => {
     return Object.fromEntries(
-      data?.options.regions.map((region) => [
-        String(region.id),
-        region.name,
-      ]) ?? [],
+      options?.regions.map((region) => [String(region.id), region.name]) ?? [],
     );
-  }, [data?.options.regions]);
+  }, [options?.regions]);
 
   const eventTypeItems = useMemo(() => {
     return Object.fromEntries(
-      data?.options.eventTypes.map((eventType) => [
-        String(eventType.id),
-        eventType.name,
-      ]) ?? [],
+      options?.eventTypes.map((type) => [String(type.id), type.name]) ?? [],
     );
-  }, [data?.options.eventTypes]);
+  }, [options?.eventTypes]);
 
   const memberOptions = useMemo<MultiSelectOption[]>(() => {
     return (
-      data?.options.members.map((member) => ({
+      options?.members.map((member) => ({
         value: String(member.id),
         label: `${member.fullName}${member.teamNumber ? ` - Team ${member.teamNumber}` : " - Not Assigned"}`,
       })) ?? []
     );
-  }, [data?.options.members]);
-
-  function updateCard(_id: string, updates: Partial<EventFormCard>) {
-    setCard((current) => (current ? { ...current, ...updates } : null));
-  }
+  }, [options?.members]);
 
   function submitEdit() {
-    if (!card) return;
-
     setError(null);
 
     startTransition(async () => {
       const result = await updateEvent(eventId, {
-        regionId: card.regionId,
-        eventTypeId: card.eventTypeId,
-        customName: card.customName,
-        date: toLocalDateTimeWithOffset(card.date),
-        mode: card.mode,
-        teamIds: card.teams.map((team) => Number(team.value)),
-        memberIds: card.members.map((member) => Number(member.value)),
-        picIds: card.pics.map((pic) => Number(pic.value)),
+        regionId,
+        eventTypeId,
+        customName,
+        date: toLocalDateTimeWithOffset(date),
+        mode,
+        teamIds: teams.map((team) => Number(team.value)),
+        memberIds: members.map((member) => Number(member.value)),
+        picIds: pics.map((pic) => Number(pic.value)),
       });
 
       if (!result.success) {
@@ -236,30 +244,149 @@ export default function EditEventPage() {
         <div className="grid gap-4">
           <Skeleton className="h-48 rounded-2xl" />
         </div>
-      ) : !card || !data ? (
+      ) : !options ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">
           Event data could not be loaded.
         </div>
       ) : (
         <>
-          <div className="mb-4">
-            <EventFormCardEditor
-              card={card}
-              index={0}
-              options={data.options}
-              regionItems={regionItems}
-              eventTypeItems={eventTypeItems}
-              isCustomEvent={
-                eventTypeMap.get(card.eventTypeId)?.name.trim().toUpperCase() ===
-                "CUSTOM"
-              }
-              teamOptions={teamOptions}
-              memberOptions={memberOptions}
-              onUpdate={updateCard}
-              onDuplicate={() => {}}
-              onRemove={() => {}}
-            />
-          </div>
+          <Card className="mb-4 overflow-hidden rounded-2xl py-0 shadow-sm">
+            <CardContent className="space-y-2 p-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Region">
+                  <Select
+                    value={regionId}
+                    items={regionItems}
+                    onValueChange={(value) => {
+                      if (value) setRegionId(value);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select region" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.regions.map((region) => (
+                        <SelectItem key={region.id} value={String(region.id)}>
+                          {region.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field label="Event date">
+                  <Input
+                    type="datetime-local"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </Field>
+
+                <Field label="Event type">
+                  <Select
+                    value={eventTypeId}
+                    items={eventTypeItems}
+                    onValueChange={(value) => {
+                      if (value) setEventTypeId(value);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.eventTypes.map((type) => (
+                        <SelectItem key={type.id} value={String(type.id)}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field label="Assignment mode">
+                  <Select
+                    value={mode}
+                    items={{
+                      teams: "Teams",
+                      members: "Members",
+                      manual_apply: "Manual Apply",
+                    }}
+                    onValueChange={(value) =>
+                      setMode(value as AssignmentMode)
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="teams">Teams</SelectItem>
+                      <SelectItem value="members">Members</SelectItem>
+                      <SelectItem value="manual_apply">Manual Apply</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              {isCustomEvent && (
+                <Field label="Custom event name">
+                  <Input
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder="Example: Volunteer Appreciation Night"
+                  />
+                </Field>
+              )}
+
+              {mode === "teams" && (
+                <Field label="Assigned teams">
+                  <MultiSelect
+                    options={teamOptions}
+                    value={teams}
+                    onChange={setTeams}
+                    placeholder="Search and select teams..."
+                  />
+                </Field>
+              )}
+
+              {mode === "members" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Assigned members">
+                    <MultiSelect
+                      options={memberOptions}
+                      value={members}
+                      onChange={setMembers}
+                      placeholder="Search and select members..."
+                    />
+                  </Field>
+                  <Field label="Event PIC">
+                    <MultiSelect
+                      options={memberOptions}
+                      value={pics}
+                      onChange={setPics}
+                      placeholder="Pick one or more PIC..."
+                    />
+                  </Field>
+                </div>
+              )}
+
+              {mode === "manual_apply" && (
+                <div className="space-y-3">
+                  <Field label="Event PIC">
+                    <MultiSelect
+                      options={memberOptions}
+                      value={pics}
+                      onChange={setPics}
+                      placeholder="Pick one or more PIC..."
+                    />
+                  </Field>
+                  <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                    <UsersRound className="size-3.5 shrink-0" />
+                    Members can apply later. Optionally select Event PICs now.
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Button
             size="lg"
@@ -277,5 +404,16 @@ export default function EditEventPage() {
         </>
       )}
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { isPast } from "date-fns"
+import { ArrowLeft, TriangleAlert } from "lucide-react"
 import {
   getEventDetail,
   getEventSchedule,
@@ -205,12 +206,23 @@ export default function EventDetailPage() {
             </div>
           </div>
 
-          <Tabs defaultValue="configuration" className="w-full">
-            <TabsList variant="line" className="w-full">
-              <TabsTrigger value="configuration" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Configuration</TabsTrigger>
-              <TabsTrigger value="assignment" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Assignment</TabsTrigger>
-              <TabsTrigger value="seating" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Seating</TabsTrigger>
-              <TabsTrigger value="reporting" className="flex-1 px-4 pb-4 pt-2 text-sm font-semibold">Reporting</TabsTrigger>
+          {event.status !== "completed" && isPast(event.date) && (
+            <div className="mt-5 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+              <TriangleAlert className="size-5 shrink-0 text-amber-600" />
+              <span className="text-amber-700 dark:text-amber-300">
+                This event report has not been completed. Please fill in the{" "}
+                <span className="font-semibold">Reporting</span> tab to finalize
+                the record.
+              </span>
+            </div>
+          )}
+
+          <Tabs defaultValue="configuration" className="bg-white p-2 w-full">
+            <TabsList variant="default" className="w-full">
+              <TabsTrigger value="configuration" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Configuration</TabsTrigger>
+              <TabsTrigger value="assignment" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Assignment</TabsTrigger>
+              <TabsTrigger value="seating" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Seating</TabsTrigger>
+              <TabsTrigger value="reporting" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Reporting</TabsTrigger>
             </TabsList>
 
             <TabsContent value="configuration">

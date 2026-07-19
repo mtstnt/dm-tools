@@ -155,12 +155,11 @@ export default function RoleAssignmentsPage() {
                     <Select
                       value={String(user.roleId)}
                       onValueChange={(value) => handleRoleChange(user.id, value)}
-                      items={Object.fromEntries(
-                        allRoles.map((role) => [String(role.id), role.name]),
-                      )}
                     >
                       <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Select role" />
+                        <SelectValue placeholder="Select role">
+                          {allRoles.find((r) => r.id === user.roleId)?.name}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {allRoles.map((role) => (

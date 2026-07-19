@@ -29,11 +29,6 @@ const roleSchema = z.object({
 });
 
 export async function getRoles(): Promise<RoleListResult> {
-  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN]);
-  if (!allowed) {
-    return { success: false, error: "Forbidden" };
-  }
-
   try {
     const rows = await db
       .select({

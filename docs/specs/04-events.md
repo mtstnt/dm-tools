@@ -1,4 +1,43 @@
-# Feature: Events Browser (Legacy SC Website)
+# Feature: Events
+
+## Internal Events
+
+### Event Schedule Browser
+
+**Route**: `/my/events`
+
+Displays a month-based calendar view of internal events grouped by date. Each date group shows event cards with event type, region, date/time, and assigned teams. Supports month/year navigation and expandable date groups.
+
+### Event Creation
+
+**Route**: `/my/events/new`
+
+Stack-based event creation form. Users can add multiple event cards, each with region, date/time, event type, and assignment mode (teams, members, or manual apply). Submit creates all events in a single transaction.
+
+#### Monthly Bulk Create
+
+A "Monthly Bulk Create" button opens a dialog that auto-generates event cards for AOG TEEN (16:00) and AOG YOUTH (18:30) on every Saturday of a selected month.
+
+**Dialog fields**:
+- **Region** — select the region for all generated events
+- **Month** — Indonesian month names (Januari–Desember)
+- **Year** — range of ±5 years from current
+
+**Generation logic**:
+1. Reads `BULK_EVENT_TYPES` from `lib/constants.ts` (default: `["AOG TEEN", "AOG YOUTH"]`) and looks up each by name (case-insensitive) from master data
+2. Uses `eachWeekendOfMonth()` from `date-fns` and filters to `BULK_EVENT_TARGET_DAY` (default: `6` = Saturday)
+3. Creates one card per event type per Saturday, using start times from `BULK_EVENT_TIME` (default: AOG TEEN 16:00, AOG YOUTH 18:30) and `DATETIME_LOCAL_FORMAT` for the input
+4. All cards default to "teams" assignment mode
+5. Cards are appended to the existing card list for review/editing before submission
+
+**Files**:
+- `app/my/events/new/page.tsx` — trigger button and dialog wiring
+- `app/my/events/_components/monthly-bulk-create-dialog.tsx` — standalone dialog component
+- `lib/constants.ts` — shared constants: `MONTHS_ID`, `BULK_EVENT_TYPES`, `BULK_EVENT_TIME`, `BULK_EVENT_TARGET_DAY`, `DATETIME_LOCAL_FORMAT`
+
+---
+
+## Legacy Events Browser (SC Website)
 
 ## Overview
 

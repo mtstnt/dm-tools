@@ -30,21 +30,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { MONTHS_ID } from "@/lib/constants";
 
-const FULL_MONTHS = [
-  "Januari",
-  "Februari",
-  "Maret",
-  "April",
-  "Mei",
-  "Juni",
-  "Juli",
-  "Agustus",
-  "September",
-  "Oktober",
-  "November",
-  "Desember",
-];
+const FULL_MONTHS = MONTHS_ID;
 
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -185,7 +173,7 @@ export default function EventsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="shadow-sm">
+          <Button variant="outline" className="shadow-sm" disabled={events.length === 0}>
             <Filter className="size-4" />
             Filter
           </Button>

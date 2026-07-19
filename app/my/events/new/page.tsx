@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,11 +13,9 @@ import { formatISO, isValid, parse } from "date-fns";
 import {
   ArrowLeft,
   CalendarPlus,
-  Copy,
+  Layers,
   Loader2,
   Plus,
-  Trash2,
-  UsersRound,
 } from "lucide-react";
 import {
   createEvents,
@@ -26,52 +23,15 @@ import {
   type EventCreationOptions,
 } from "@/actions/events";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  MultiSelect,
-  type MultiSelectOption,
-} from "@/components/ui/multi-select";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
-type AssignmentMode = "teams" | "members" | "manual_apply";
-
-type EventFormCard = {
-  id: string;
-  regionId: string;
-  eventTypeId: string;
-  customName: string;
-  date: string;
-  mode: AssignmentMode;
-  teams: MultiSelectOption[];
-  members: MultiSelectOption[];
-  pics: MultiSelectOption[];
-};
-
-function createEmptyCard(id: string, options?: EventCreationOptions): EventFormCard {
-  return {
-    id,
-    regionId: options?.regions[0] ? String(options.regions[0].id) : "",
-    eventTypeId: options?.eventTypes[0] ? String(options.eventTypes[0].id) : "",
-    customName: "",
-    date: "",
-    mode: "teams",
-    teams: [],
-    members: [],
-    pics: [],
-  };
-}
+import { type MultiSelectOption } from "@/components/ui/multi-select";
+import MonthlyBulkCreateDialog from "@/app/my/events/_components/monthly-bulk-create-dialog";
+import {
+  EventFormCardEditor,
+  createEmptyCard,
+  type EventFormCard,
+} from "@/app/my/events/_components/event-form-card";
 
 function toLocalDateTimeWithOffset(value: string) {
   if (!value) {
@@ -85,14 +45,13 @@ function toLocalDateTimeWithOffset(value: string) {
 export default function NewEventPage() {
   const router = useRouter();
   const [options, setOptions] = useState<EventCreationOptions | null>(null);
-  const [cards, setCards] = useState<EventFormCard[]>(() => [
-    createEmptyCard("0"),
-  ]);
+  const [cards, setCards] = useState<EventFormCard[]>([]);
   const nextCardId = useRef(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -111,7 +70,7 @@ export default function NewEventPage() {
       } else {
         setError(null);
         setOptions(result.data);
-        setCards([createEmptyCard("0", result.data)]);
+        setCards([]);
         nextCardId.current = 1;
       }
 
@@ -234,6 +193,10 @@ export default function NewEventPage() {
     });
   }
 
+  function handleBulkGenerate(generatedCards: typeof cards) {
+    setCards((currentCards) => [...currentCards, ...generatedCards]);
+  }
+
   return (
     <div className="min-h-full rounded-[28px] bg-background text-foreground xl:max-w-[75%]">
       <div className="mb-6 space-y-3">
@@ -278,196 +241,37 @@ export default function NewEventPage() {
         </div>
       ) : !options ? null : (
         <>
-          <div className="grid gap-4">
+          <div className="grid gap-4 mb-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full shadow-sm"
+              onClick={() => setBulkDialogOpen(true)}
+              disabled={isLoading || !options || isPending}
+            >
+              <Layers className="size-4" />
+              Monthly Bulk Create
+            </Button>
             {cards.map((card, index) => {
               const selectedEventType = eventTypeMap.get(card.eventTypeId);
               const isCustomEvent =
                 selectedEventType?.name.trim().toUpperCase() === "CUSTOM";
 
               return (
-                <Card
+                <EventFormCardEditor
                   key={card.id}
-                  className="overflow-hidden rounded-2xl py-0 shadow-sm"
-                >
-                  <CardContent className="space-y-2 p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                        {index + 1}
-                      </span>
-                      {cards.length > 1 ? (
-                        <div className="flex gap-0.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => duplicateCard(card.id)}
-                            aria-label={`Duplicate event ${index + 1}`}
-                          >
-                            <Copy className="size-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="icon-sm"
-                            onClick={() => removeCard(card.id)}
-                            aria-label={`Remove event ${index + 1}`}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <Field label="Region">
-                        <Select
-                          value={card.regionId}
-                          items={regionItems}
-                          onValueChange={(regionId) => {
-                            if (regionId) updateCard(card.id, { regionId });
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select region" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {options.regions.map((region) => (
-                              <SelectItem
-                                key={region.id}
-                                value={String(region.id)}
-                              >
-                                {region.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </Field>
-
-                      <Field label="Event date">
-                        <Input
-                          type="datetime-local"
-                          value={card.date}
-                          onChange={(event) =>
-                            updateCard(card.id, { date: event.target.value })
-                          }
-                        />
-                      </Field>
-
-                      <Field label="Event type">
-                        <Select
-                          value={card.eventTypeId}
-                          items={eventTypeItems}
-                          onValueChange={(eventTypeId) => {
-                            if (eventTypeId) updateCard(card.id, { eventTypeId });
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {options.eventTypes.map((eventType) => (
-                              <SelectItem
-                                key={eventType.id}
-                                value={String(eventType.id)}
-                              >
-                                {eventType.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </Field>
-
-                      <Field label="Assignment mode">
-                        <Select
-                          value={card.mode}
-                          items={{
-                            teams: "Teams",
-                            members: "Members",
-                            manual_apply: "Manual Apply",
-                          }}
-                          onValueChange={(mode) =>
-                            updateCard(card.id, { mode: mode as AssignmentMode })
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select mode" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="teams">Teams</SelectItem>
-                            <SelectItem value="members">Members</SelectItem>
-                            <SelectItem value="manual_apply">
-                              Manual Apply
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                    </div>
-
-                    {isCustomEvent ? (
-                      <Field label="Custom event name">
-                        <Input
-                          value={card.customName}
-                          onChange={(event) =>
-                            updateCard(card.id, {
-                              customName: event.target.value,
-                            })
-                          }
-                          placeholder="Example: Volunteer Appreciation Night"
-                        />
-                      </Field>
-                    ) : null}
-
-                    {card.mode === "teams" ? (
-                      <Field label="Assigned teams">
-                        <MultiSelect
-                          options={teamOptions}
-                          value={card.teams}
-                          onChange={(teams) => updateCard(card.id, { teams })}
-                          placeholder="Search and select teams..."
-                        />
-                      </Field>
-                    ) : null}
-
-                    {card.mode === "members" ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="Assigned members">
-                          <MultiSelect
-                            options={memberOptions}
-                            value={card.members}
-                            onChange={(members) =>
-                              updateCard(card.id, { members })
-                            }
-                            placeholder="Search and select members..."
-                          />
-                        </Field>
-                        <Field label="Event PIC">
-                          <MultiSelect
-                            options={memberOptions}
-                            value={card.pics}
-                            onChange={(pics) => updateCard(card.id, { pics })}
-                            placeholder="Pick one or more PIC..."
-                          />
-                        </Field>
-                      </div>
-                    ) : null}
-
-                    {card.mode === "manual_apply" ? (
-                      <div className="space-y-3">
-                        <Field label="Event PIC">
-                          <MultiSelect
-                            options={memberOptions}
-                            value={card.pics}
-                            onChange={(pics) => updateCard(card.id, { pics })}
-                            placeholder="Pick one or more PIC..."
-                          />
-                        </Field>
-                        <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                          <UsersRound className="size-3.5 shrink-0" />
-                          Members can apply later. Optionally select Event PICs now.
-                        </div>
-                      </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
+                  card={card}
+                  index={index}
+                  options={options}
+                  regionItems={regionItems}
+                  eventTypeItems={eventTypeItems}
+                  isCustomEvent={isCustomEvent}
+                  teamOptions={teamOptions}
+                  memberOptions={memberOptions}
+                  onUpdate={updateCard}
+                  onDuplicate={duplicateCard}
+                  onRemove={removeCard}
+                />
               );
             })}
 
@@ -475,7 +279,7 @@ export default function NewEventPage() {
               type="button"
               onClick={addCard}
               disabled={isLoading || !options || isPending}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-muted-foreground/30 bg-muted/20 py-4 text-sm font-medium text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 cursor-pointer mb-3"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-muted-foreground/30 bg-muted/20 py-4 text-sm font-medium text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
             >
               <Plus className="size-4" />
               Add another event
@@ -497,18 +301,16 @@ export default function NewEventPage() {
           </Button>
         </>
       )}
-    </div>
-  );
-}
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
+      <MonthlyBulkCreateDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        regions={options?.regions ?? []}
+        eventTypes={options?.eventTypes ?? []}
+        nextCardId={() => String(nextCardId.current++)}
+        onGenerate={handleBulkGenerate}
+      />
+    </div>
   );
 }
 

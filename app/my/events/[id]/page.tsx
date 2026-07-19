@@ -28,7 +28,7 @@ import {
 } from "./_components/assignment-tab"
 import { SeatingTab } from "./_components/seating-tab"
 import { ReportingTab } from "./_components/reporting-tab"
-import { ConfigurationTab } from "./_components/configuration-tab"
+// import { ConfigurationTab } from "./_components/configuration-tab"
 import type { EventArea, EventAssignedUser, EventUser } from "@/types/event"
 
 type FetchStatus = "idle" | "loading" | "success" | "error"
@@ -217,17 +217,17 @@ export default function EventDetailPage() {
             </div>
           )}
 
-          <Tabs defaultValue="configuration" className="bg-white p-2 w-full">
+          <Tabs defaultValue="assignment" className="bg-white p-2 w-full">
             <TabsList variant="default" className="w-full">
-              <TabsTrigger value="configuration" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Configuration</TabsTrigger>
+              {/* <TabsTrigger value="configuration" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Configuration</TabsTrigger> */}
               <TabsTrigger value="assignment" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Assignment</TabsTrigger>
               <TabsTrigger value="seating" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Seating</TabsTrigger>
               <TabsTrigger value="reporting" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Reporting</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="configuration">
+            {/* <TabsContent value="configuration">
               <ConfigurationTab eventId={Number(eventId)} />
-            </TabsContent>
+            </TabsContent> */}
 
             <TabsContent value="assignment">
               <AssignmentTab

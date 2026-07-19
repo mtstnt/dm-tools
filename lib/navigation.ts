@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Calculator,
   Calendar,
   Calendar1,
@@ -77,6 +78,13 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Doa Wilayah",
         targetLink: "/tools/doa-wilayah",
         icon: UserCheck,
+      },
+      {
+        type: "link",
+        label: "Event Recap",
+        targetLink: "/my/events/recap",
+        icon: BarChart3,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
     ],
   },

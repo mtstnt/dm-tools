@@ -388,3 +388,67 @@ Related tables: `eventTeams`, `eventAssignments`, `eventMetrics`, `eventVoluntee
 - **Authorization**: Requires at least `Member` role.
 - Returns a single event with its status, all system users, and all assignments for that event.
 - Assignments are aggregated by `userId`, collecting `assignedBlockIds` (from `blockName`) and `taskIds`.
+
+---
+
+# Feature: Event Recap
+
+## Overview
+
+A participation summary table that shows how many non-mandatory events each user has participated in within a given year. Excludes AOG TEEN and AOG YOUTH event types.
+
+**Route**: `/my/events/recap`
+
+## Files
+
+| File | Role |
+|------|------|
+| `actions/events/recap.ts` | Server actions: `getEventRecapSummary`, `getUserRecapEvents` |
+| `app/my/events/recap/page.tsx` | Client component with table and year navigation |
+
+## UI
+
+- **Table columns**: Full Name, NIJ, Team, Role, Participations (count)
+- **Sorting**: Descending by participation count, ties broken alphabetically by full name
+- **Year navigation**: Previous/next year buttons; defaults to current year
+- **Expandable rows**: Click a row to expand and show the user's event list
+  - Events are lazy-loaded when the row is first expanded, then cached client-side for the session
+  - Loading state shows a spinner while fetching
+- **Event badges**: Each event renders as a `<Badge variant="secondary">` with format `"<Event Name> / <Event Date>"` where the date uses `"d MMM yyyy"` format (e.g. "24 Jun 2026")
+  - If the user's assignment includes the "Event PIC" task, `(PIC)` is appended to the badge
+  - Badges are clickable links that open `/my/events/[eventId]` in a new tab
+
+## Server Actions
+
+### `getEventRecapSummary(year?)`
+
+- **Authorization**: Requires at least `Member` role
+- **Year**: Defaults to current year; validated range 2020–2100
+- **Query**: Joins `eventAssignments` → `users`, `events`, `eventTypes`, `teams`, `roles`
+- **Filters**: Excludes event types "AOG TEEN" and "AOG YOUTH"; scoped to the target calendar year (`date >= Jan 1 AND date < Jan 1 of next year`)
+- **Aggregation**: `COUNT(DISTINCT eventId)` per user
+- **Returns**: `EventRecapSummaryItem[]` with `userId`, `fullName`, `nij`, `teamNumber`, `roleName`, `participationCount`
+
+### `getUserRecapEvents(userId, year?)`
+
+- **Authorization**: Requires at least `Member` role
+- **Purpose**: Lazy-loaded per-user event list when a row is expanded
+- **Query**: Joins `eventAssignments` → `events`, `eventTypes`, `tasks`; filtered by `userId`, year, and excluded event types
+- **Returns**: `UserRecapEvent[]` with `eventId`, `eventName`, `eventDate`, `isPic`
+- **Deduplication**: Uses a `Map<eventId>` — if a user has multiple assignments for the same event (e.g. PIC + another role), they appear as one entry with `isPic: true`
+- **Caching**: Client-side `useRef<Map<number, UserRecapEvent[]>>()`; cleared on year change
+
+## Data Model
+
+The recap is derived entirely from existing tables:
+
+```
+eventAssignments → users (full_name, nij, team_id, role_id)
+                 → events (date, event_type_id)
+                 → eventTypes (name) — filtered to exclude AOG TEEN / AOG YOUTH
+                 → tasks (name) — checked for "Event PIC"
+
+teams, roles — LEFT JOINed via users for display
+```
+
+No new database tables or columns are required.

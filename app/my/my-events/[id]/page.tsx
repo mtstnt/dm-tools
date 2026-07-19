@@ -12,11 +12,6 @@ import {
 } from "@/actions/events"
 import { getMinistries, type Ministry } from "@/actions/master/ministries"
 import { getTasks, type Task } from "@/actions/master/tasks"
-import { getMetrics, type Metric } from "@/actions/master/metrics"
-import {
-  getEventReportingData,
-  type EventReportingData,
-} from "@/actions/events/reporting"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -33,18 +28,9 @@ import type { EventArea, EventAssignedUser, EventUser } from "@/types/event"
 type FetchStatus = "idle" | "loading" | "success" | "error"
 
 const STATUS_STYLES: Record<string, string> = {
-  Pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
-  Incomplete: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
-  Completed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
-}
-
-function getStatusLabel(status: string, date: Date) {
-  if (status === "completed") return "Completed";
-
-  const now = new Date();
-  if (date > now) return "Pending";
-
-  return "Incomplete";
+  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
+  incomplete: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
+  completed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
 }
 
 function formatDateDisplay(date: Date) {
@@ -80,8 +66,6 @@ export default function EventDetailPage() {
   const [assignments, setAssignments] = useState<EventAssignedUser[]>([])
   const [ministries, setMinistries] = useState<Ministry[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
-  const [metrics, setMetrics] = useState<Metric[]>([])
-  const [reportingData, setReportingData] = useState<EventReportingData | undefined>(undefined)
   const [availableEvents, setAvailableEvents] = useState<EventScheduleItem[]>([])
   const [event, setEvent] = useState<EventDetailData | null>(null)
   const [allUsers, setAllUsers] = useState<EventUser[]>([])
@@ -98,13 +82,11 @@ export default function EventDetailPage() {
       }
 
       const now = new Date();
-      const [eventResult, ministriesResult, eventsResult, tasksResult, metricsResult, reportingResult] = await Promise.all([
+      const [eventResult, ministriesResult, eventsResult, tasksResult] = await Promise.all([
         getEventDetail(id),
         getMinistries(),
         getEventSchedule(now.getMonth(), now.getFullYear()),
         getTasks(),
-        getMetrics(),
-        getEventReportingData(id),
       ])
       if (!eventResult.success || !eventResult.data) {
         setError(eventResult.error ?? "Failed to load event")
@@ -122,12 +104,6 @@ export default function EventDetailPage() {
       }
       if (tasksResult.success && tasksResult.data) {
         setTasks(tasksResult.data)
-      }
-      if (metricsResult.success && metricsResult.data) {
-        setMetrics(metricsResult.data)
-      }
-      if (reportingResult.success && reportingResult.data) {
-        setReportingData(reportingResult.data)
       }
       setStatus("success")
     }
@@ -189,18 +165,18 @@ export default function EventDetailPage() {
               <ArrowLeft className="size-4" />
               Back to events
             </Link>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h1 className="font-display text-3xl font-bold tracking-tight mb-2">
+                <h1 className="font-display text-3xl md:text-4xl tracking-tight text-foreground leading-[1.1]">
                   {event.name}
                 </h1>
-                <p className="text-sm text-muted-foreground">
+                <p className="mt-1.5 text-sm text-muted-foreground">
                   {formatDateDisplay(event.date)}
                   {` · ${event.regionName}`}
                 </p>
               </div>
-              <Badge className={cn("w-fit capitalize", STATUS_STYLES[getStatusLabel(event.status, event.date)])}>
-                {getStatusLabel(event.status, event.date)}
+              <Badge className={cn("w-fit capitalize", STATUS_STYLES[event.status])}>
+                {event.status}
               </Badge>
             </div>
           </div>
@@ -235,14 +211,10 @@ export default function EventDetailPage() {
 
             <TabsContent value="reporting">
               <ReportingTab
-                eventId={Number(eventId)}
                 eventName={event.name}
                 eventDate={event.date}
                 initialMinistries={ministries}
                 availableEvents={availableEvents}
-                availableMetrics={metrics}
-                initialMetricNames={reportingData?.metrics.map((m) => m.metricName) ?? []}
-                initialReportingData={reportingData}
               />
             </TabsContent>
           </Tabs>

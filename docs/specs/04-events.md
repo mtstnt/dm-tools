@@ -1,4 +1,43 @@
-# Feature: Events Browser (Legacy SC Website)
+# Feature: Events
+
+## Internal Events
+
+### Event Schedule Browser
+
+**Route**: `/my/events`
+
+Displays a month-based calendar view of internal events grouped by date. Each date group shows event cards with event type, region, date/time, and assigned teams. Supports month/year navigation and expandable date groups.
+
+### Event Creation
+
+**Route**: `/my/events/new`
+
+Stack-based event creation form. Users can add multiple event cards, each with region, date/time, event type, and assignment mode (teams, members, or manual apply). Submit creates all events in a single transaction.
+
+#### Monthly Bulk Create
+
+A "Monthly Bulk Create" button opens a dialog that auto-generates event cards for AOG TEEN (16:00) and AOG YOUTH (18:30) on every Saturday of a selected month.
+
+**Dialog fields**:
+- **Region** — select the region for all generated events
+- **Month** — Indonesian month names (Januari–Desember)
+- **Year** — range of ±5 years from current
+
+**Generation logic**:
+1. Reads `BULK_EVENT_TYPES` from `lib/constants.ts` (default: `["AOG TEEN", "AOG YOUTH"]`) and looks up each by name (case-insensitive) from master data
+2. Uses `eachWeekendOfMonth()` from `date-fns` and filters to `BULK_EVENT_TARGET_DAY` (default: `6` = Saturday)
+3. Creates one card per event type per Saturday, using start times from `BULK_EVENT_TIME` (default: AOG TEEN 16:00, AOG YOUTH 18:30) and `DATETIME_LOCAL_FORMAT` for the input
+4. All cards default to "teams" assignment mode
+5. Cards are appended to the existing card list for review/editing before submission
+
+**Files**:
+- `app/my/events/new/page.tsx` — trigger button and dialog wiring
+- `app/my/events/_components/monthly-bulk-create-dialog.tsx` — standalone dialog component
+- `lib/constants.ts` — shared constants: `MONTHS_ID`, `BULK_EVENT_TYPES`, `BULK_EVENT_TIME`, `BULK_EVENT_TARGET_DAY`, `DATETIME_LOCAL_FORMAT`
+
+---
+
+## Legacy Events Browser (SC Website)
 
 ## Overview
 
@@ -18,6 +57,7 @@ Page that scrapes event data from an external API using Cheerio. Uses a separate
 | `actions/legacy-web/events/user-blocks/update.ts` | `updateUserBlocks()` server action |
 | `actions/legacy-web/events/user-blocks/delete.ts` | `removeUserBlock()` server action |
 | `actions/legacy-web/events/blocks/update.ts` | `updateBlock()` server action |
+| `actions/legacy-web/users/fetch-all.ts` | `fetchAllUsers()` server action — fetches all SC users from a sample event page |
 | `actions/legacy-web/_shared.ts` | Shared `webFetch()` + `LegacyWebContext` type |
 | `components/web-auth-guard.tsx` | Auth gate dialog for external API credentials |
 | `components/ui/multi-select.tsx` | Shadcn-compatible react-select wrapper for multi-select dropdowns |
@@ -26,6 +66,7 @@ Page that scrapes event data from an external API using Cheerio. Uses a separate
 | `lib/parsers/blocks.ts` | Seat-layout block parser |
 | `lib/parsers/seat-layout.ts` | Seat layout parser |
 | `lib/queries/events.ts` | Re-exports all event server actions + `eventKeys` query key factory + `EventInfo` type |
+| `lib/utils.ts` | `parseEventTitle()` — parses "date/name/time" format |
 | `types/event.ts` | `EventDetail`, `EventArea`, `EventBlock`, `EventUser`, `EventAssignedUser` interfaces |
 
 ## Auth Flow (Web Auth)
@@ -108,6 +149,10 @@ Allows SPV/PIC users to assign blocks to users and remove users/blocks.
 
 ## Server Actions
 
+### `fetchAllUsers(ctx)`
+
+Fetches all users from the external SC website by parsing a sample event edit page (event ID 95469). Returns `EventUser[]` with id, fullName, and email.
+
 ### `updateUserBlocks(ctx, eventId, userIds, blockIds)`
 
 Assigns users to blocks in the external events system.
@@ -170,7 +215,8 @@ interface EventAssignedUser {
   id: number;
   fullName: string;
   email: string;
-  assignedBlocks: number[];
+  assignedBlockIds: number[];
+  taskIds?: number[];
 }
 ```
 
@@ -186,7 +232,7 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Ret
 - Extracts users from `#users li` and `#event_users li` elements (merged, deduped)
 - Extracts areas from form groups with "Area" heading
 - Extracts blocks from `var blocks = [...]` in script tags (filters out "All Block")
-- Builds `users[i].assignedBlocks` by inverting the block→users mapping
+- Builds `users[i].assignedBlockIds` by inverting the block→users mapping
 - Pre-filters `allUsers` to `ALLOWED_USER_IDS` (hardcoded set of 36 IDs)
 - Extracts CSRF token from `<input name="_csrf">` or `window._token` script pattern
 - `allUsers` field is pre-filtered; `users` field contains only assigned users
@@ -216,3 +262,127 @@ Targets `.card` elements. Header format: `"24 JUN 2026 / AOG TEEN / 16:00"`. Ret
 - CSRF token is extracted from event edit page HTML; `removeUserBlock` additionally fetches a fresh token from `/csrfToken`
 - `allUsers` is pre-filtered to `ALLOWED_USER_IDS` in the parser (`lib/parsers/event-details.ts`), not in the client component
 - Mutations refresh via `refetch` callback (re-calls `getEventDetail`), not `window.location.reload`
+
+---
+
+# Feature: Local Events (Internal Database)
+
+## Overview
+
+Events created and managed within the app's own database (SQLite/Turso via Drizzle ORM). This is a separate system from the legacy SC events browser. Events have a status that determines their visual indicator on the list page and their label on the detail page.
+
+## Files
+
+| File | Role |
+|------|------|
+| `actions/events.ts` | Server actions: `getEventSchedule`, `getEventScheduleYears`, `getEventDetail`, `getEventConfiguration`, `updateEventConfiguration`, `getEventCreationOptions`, `createEvents` |
+| `app/my/events/page.tsx` | Events schedule list with month/year filters, date-grouped cards |
+| `app/my/events/[id]/page.tsx` | Event detail with Configuration, Assignment, Seating, Reporting tabs |
+| `app/my/events/[id]/_components/configuration-tab.tsx` | Event configuration editor |
+| `app/my/events/[id]/_components/assignment-tab.tsx` | User/block assignment |
+| `app/my/events/[id]/_components/seating-tab.tsx` | Seating layout |
+| `app/my/events/[id]/_components/reporting-tab.tsx` | Event metrics and volunteer reporting |
+| `app/my/events/new/` | Event creation flow |
+| `db/schema.ts` | `events` table, `eventStatusEnum`, related tables |
+
+## Types
+
+### `EventScheduleItem` (`actions/events.ts`)
+
+```typescript
+type EventScheduleItem = {
+  id: number;
+  name: string;
+  date: Date;
+  status: EventStatus;          // "pending" | "incomplete" | "completed"
+  regionName: string;
+  eventTypeName: string;
+  mode?: EventMode;             // "teams" | "members" | "manual_apply"
+  requiresApplication: boolean;
+  teams: { id: number; number: number }[];
+};
+```
+
+### `EventDetailData` (`actions/events.ts`)
+
+```typescript
+type EventDetailData = {
+  id: number;
+  name: string;
+  date: Date;
+  status: EventStatus;
+  regionName: string;
+  eventTypeName: string;
+  mode: EventMode;
+  allUsers: { id: number; fullName: string; email: string }[];
+  assignments: {
+    id: number;
+    fullName: string;
+    email: string;
+    assignedBlockIds: number[];
+    taskIds: number[];
+  }[];
+};
+```
+
+### `EventStatus` (`db/schema.ts`)
+
+```typescript
+const eventStatusEnum = ["pending", "incomplete", "completed"] as const;
+type EventStatus = "pending" | "incomplete" | "completed";
+```
+
+## Status Indicator Logic
+
+The status displayed to the user is **derived** from both the `status` database field and the event date. This logic is shared between the list page and detail page.
+
+### Derivation Rules
+
+| DB `status` | Event Date | Display Indicator | Display Label |
+|-------------|-----------|-------------------|---------------|
+| `completed` | any | Green check icon (`CheckCircle`) | "Completed" |
+| `pending` | future | Nothing (hidden) | "Pending" |
+| `pending` | past / present | Yellow warning icon (`TriangleAlert`) | "Incomplete" |
+| `incomplete` | future | Nothing (hidden) | "Pending" |
+| `incomplete` | past / present | Yellow warning icon (`TriangleAlert`) | "Incomplete" |
+
+### Implementation
+
+**List page** (`app/my/events/page.tsx`): `getStatusIcon(event)` returns a JSX icon element or `null`. The icon is rendered to the right of the event type name in each card's header. When the event date has passed, the card header text (`CardTitle` and `CardDescription`) renders in muted/gray color (`text-muted-foreground`) to visually distinguish past events.
+
+**Detail page** (`app/my/events/[id]/page.tsx`): `getStatusLabel(status, date)` returns `"Completed"`, `"Pending"`, or `"Incomplete"`. The `STATUS_STYLES` record maps these labels to color classes (green, yellow, orange).
+
+## Tab Architecture (Event Detail)
+
+The detail page uses Shadcn `Tabs` with four tabs:
+
+1. **Configuration** — Editable key-value fields stored as JSON in `events.configuration`.
+2. **Assignment** — Assign users to tasks/blocks. Uses `allUsers` for selection and existing `assignments` for display.
+3. **Seating** — Visual seating layout (WIP).
+4. **Reporting** — Event metrics (altar calls, volunteers) sourced from `eventMetrics`, `eventVolunteers`, `eventAltarCalls`.
+
+## Database Schema
+
+The `events` table (`db/schema.ts:329`) includes:
+- `regionId`, `eventTypeId` — foreign keys to master tables
+- `date` — event date/time as timestamp
+- `name` — display name (derived from event type, or custom)
+- `mode` — `"teams"` | `"members"` | `"manual_apply"`
+- `configuration` — JSON array of `{ field, value }` pairs
+- `sourceId` — optional reference to external event ID (legacy sync)
+- `status` — `"pending"` (default) | `"incomplete"` | `"completed"`
+
+Related tables: `eventTeams`, `eventAssignments`, `eventMetrics`, `eventVolunteers`, `eventAltarCalls`.
+
+## Queries
+
+### `getEventSchedule(month, year)`
+- **Authorization**: Requires `events:read` permission.
+- Returns all events within the given calendar month.
+- Uses `leftJoin` on `eventTeams`/`teams` — events with multiple teams produce multiple rows, deduplicated via a `Map<id, EventScheduleItem>`.
+- Each event includes its `status` for the status indicator logic.
+
+### `getEventDetail(eventId)`
+- **Authorization**: Requires `events:read` permission.
+- Returns a single event with its status, all system users, and all assignments for that event.
+- Assignments are aggregated by `userId`, collecting `assignedBlockIds` (from `blockName`) and `taskIds`.

@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,67 +13,25 @@ import { formatISO, isValid, parse } from "date-fns";
 import {
   ArrowLeft,
   CalendarPlus,
+  Layers,
   Loader2,
   Plus,
-  Trash2,
-  UsersRound,
 } from "lucide-react";
 import {
   createEvents,
   getEventCreationOptions,
   type EventCreationOptions,
 } from "@/actions/events";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  MultiSelect,
-  type MultiSelectOption,
-} from "@/components/ui/multi-select";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
-type AssignmentMode = "teams" | "members" | "manual_apply";
-
-type EventFormCard = {
-  id: string;
-  regionId: string;
-  eventTypeId: string;
-  customName: string;
-  date: string;
-  mode: AssignmentMode;
-  teams: MultiSelectOption[];
-  members: MultiSelectOption[];
-  pics: MultiSelectOption[];
-};
-
-function createEmptyCard(id: string, options?: EventCreationOptions): EventFormCard {
-  return {
-    id,
-    regionId: options?.regions[0] ? String(options.regions[0].id) : "",
-    eventTypeId: options?.eventTypes[0] ? String(options.eventTypes[0].id) : "",
-    customName: "",
-    date: "",
-    mode: "teams",
-    teams: [],
-    members: [],
-    pics: [],
-  };
-}
+import { type MultiSelectOption } from "@/components/ui/multi-select";
+import MonthlyBulkCreateDialog from "@/app/my/events/_components/monthly-bulk-create-dialog";
+import {
+  EventFormCardEditor,
+  createEmptyCard,
+  type EventFormCard,
+} from "@/app/my/events/_components/event-form-card";
 
 function toLocalDateTimeWithOffset(value: string) {
   if (!value) {
@@ -88,14 +45,13 @@ function toLocalDateTimeWithOffset(value: string) {
 export default function NewEventPage() {
   const router = useRouter();
   const [options, setOptions] = useState<EventCreationOptions | null>(null);
-  const [cards, setCards] = useState<EventFormCard[]>(() => [
-    createEmptyCard("0"),
-  ]);
+  const [cards, setCards] = useState<EventFormCard[]>([]);
   const nextCardId = useRef(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -114,7 +70,7 @@ export default function NewEventPage() {
       } else {
         setError(null);
         setOptions(result.data);
-        setCards([createEmptyCard("0", result.data)]);
+        setCards([]);
         nextCardId.current = 1;
       }
 
@@ -189,6 +145,24 @@ export default function NewEventPage() {
     setCards((currentCards) => currentCards.filter((card) => card.id !== id));
   }
 
+  function duplicateCard(id: string) {
+    setCards((currentCards) => {
+      const index = currentCards.findIndex((card) => card.id === id);
+      if (index === -1) return currentCards;
+      const source = currentCards[index];
+      const duplicate: EventFormCard = {
+        ...source,
+        id: String(nextCardId.current++),
+        teams: [...source.teams],
+        members: [...source.members],
+        pics: [...source.pics],
+      };
+      const next = [...currentCards];
+      next.splice(index + 1, 0, duplicate);
+      return next;
+    });
+  }
+
   function submitEvents() {
     setError(null);
     setSuccessMessage(null);
@@ -219,40 +193,102 @@ export default function NewEventPage() {
     });
   }
 
+  function handleBulkGenerate(generatedCards: typeof cards) {
+    setCards((currentCards) => [...currentCards, ...generatedCards]);
+  }
+
   return (
-    <div className="min-h-full rounded-[28px] bg-background p-4 text-foreground md:p-6">
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-3">
-          <Link
-            href="/my/events"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "sm" }),
-              "w-fit px-0",
-            )}
-          >
-            <ArrowLeft className="size-4" />
-            Back to events
-          </Link>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Create events
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Stack multiple event cards, choose how each one receives
-              assignments, and submit them together.
-            </p>
-          </div>
+    <div className="min-h-full rounded-[28px] bg-background text-foreground xl:max-w-[75%]">
+      <div className="mb-6 space-y-3">
+        <Link
+          href="/my/events"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            "w-fit px-0",
+          )}
+        >
+          <ArrowLeft className="size-4" />
+          Back to events
+        </Link>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Create events
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Stack multiple event cards, choose how each one receives
+            assignments, and submit them together.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+      </div>
+
+      {error && (
+        <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-5 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm text-primary">
+          {successMessage}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="grid gap-4">
+          {[0, 1].map((item) => (
+            <Skeleton key={item} className="h-48 rounded-2xl" />
+          ))}
+        </div>
+      ) : !options ? null : (
+        <>
+          <div className="grid gap-4 mb-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full shadow-sm"
+              onClick={() => setBulkDialogOpen(true)}
+              disabled={isLoading || !options || isPending}
+            >
+              <Layers className="size-4" />
+              Monthly Bulk Create
+            </Button>
+            {cards.map((card, index) => {
+              const selectedEventType = eventTypeMap.get(card.eventTypeId);
+              const isCustomEvent =
+                selectedEventType?.name.trim().toUpperCase() === "CUSTOM";
+
+              return (
+                <EventFormCardEditor
+                  key={card.id}
+                  card={card}
+                  index={index}
+                  options={options}
+                  regionItems={regionItems}
+                  eventTypeItems={eventTypeItems}
+                  isCustomEvent={isCustomEvent}
+                  teamOptions={teamOptions}
+                  memberOptions={memberOptions}
+                  onUpdate={updateCard}
+                  onDuplicate={duplicateCard}
+                  onRemove={removeCard}
+                />
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={addCard}
+              disabled={isLoading || !options || isPending}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-muted-foreground/30 bg-muted/20 py-4 text-sm font-medium text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            >
+              <Plus className="size-4" />
+              Add another event
+            </button>
+          </div>
+
           <Button
-            variant="outline"
-            onClick={addCard}
-            disabled={isLoading || !options || isPending}
-          >
-            <Plus className="size-4" />
-            Add another event
-          </Button>
-          <Button
+            size="lg"
+            className="w-full"
             onClick={submitEvents}
             disabled={isLoading || !options || isPending}
           >
@@ -263,260 +299,18 @@ export default function NewEventPage() {
             )}
             Submit {cards.length} event{cards.length === 1 ? "" : "s"}
           </Button>
-        </div>
-      </div>
-
-      {error ? (
-        <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div className="mb-5 rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm text-primary">
-          {successMessage}
-        </div>
-      ) : null}
-
-      {isLoading ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {[0, 1].map((item) => (
-            <Skeleton key={item} className="h-[34rem] rounded-2xl" />
-          ))}
-        </div>
-      ) : !options ? null : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {cards.map((card, index) => {
-            const selectedEventType = eventTypeMap.get(card.eventTypeId);
-            const isCustomEvent =
-              selectedEventType?.name.trim().toUpperCase() === "CUSTOM";
-
-            return (
-              <Card
-                key={card.id}
-                className="overflow-hidden rounded-2xl py-0 shadow-sm"
-              >
-                <CardHeader className="border-b bg-muted/30 px-5 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                          {index + 1}
-                        </span>
-                        Event card
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        Region, date, type, and assignment mode for one event.
-                      </CardDescription>
-                    </div>
-                    {cards.length > 1 ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeCard(card.id)}
-                        aria-label={`Remove event ${index + 1}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-5 p-5">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Region">
-                      <Select
-                        value={card.regionId}
-                        items={regionItems}
-                        onValueChange={(regionId) => {
-                          if (regionId) updateCard(card.id, { regionId });
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select region" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {options.regions.map((region) => (
-                            <SelectItem
-                              key={region.id}
-                              value={String(region.id)}
-                            >
-                              {region.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-
-                    <Field label="Event date">
-                      <Input
-                        type="datetime-local"
-                        value={card.date}
-                        onChange={(event) =>
-                          updateCard(card.id, { date: event.target.value })
-                        }
-                      />
-                    </Field>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Event type">
-                      <Select
-                        value={card.eventTypeId}
-                        items={eventTypeItems}
-                        onValueChange={(eventTypeId) => {
-                          if (eventTypeId) updateCard(card.id, { eventTypeId });
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select event type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {options.eventTypes.map((eventType) => (
-                            <SelectItem
-                              key={eventType.id}
-                              value={String(eventType.id)}
-                            >
-                              {eventType.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-
-                    <Field label="Assignment mode">
-                      <Select
-                        value={card.mode}
-                        items={{
-                          teams: "Teams",
-                          members: "Members",
-                          manual_apply: "Manual Apply",
-                        }}
-                        onValueChange={(mode) =>
-                          updateCard(card.id, { mode: mode as AssignmentMode })
-                        }
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select mode" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="teams">Teams</SelectItem>
-                          <SelectItem value="members">Members</SelectItem>
-                          <SelectItem value="manual_apply">
-                            Manual Apply
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-
-                  {isCustomEvent ? (
-                    <Field label="Custom event name">
-                      <Input
-                        value={card.customName}
-                        onChange={(event) =>
-                          updateCard(card.id, {
-                            customName: event.target.value,
-                          })
-                        }
-                        placeholder="Example: Volunteer Appreciation Night"
-                      />
-                    </Field>
-                  ) : null}
-
-                  <div className="rounded-xl border bg-card p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium">Assignments</p>
-                        <p className="text-xs text-muted-foreground">
-                          {getModeDescription(card.mode)}
-                        </p>
-                      </div>
-                      <Badge variant="secondary" className="capitalize">
-                        {card.mode.replace("_", " ")}
-                      </Badge>
-                    </div>
-
-                    {card.mode === "teams" ? (
-                      <Field label="Assigned teams">
-                        <MultiSelect
-                          options={teamOptions}
-                          value={card.teams}
-                          onChange={(teams) => updateCard(card.id, { teams })}
-                          placeholder="Search and select teams..."
-                        />
-                      </Field>
-                    ) : null}
-
-                    {card.mode === "members" ? (
-                      <div className="space-y-4">
-                        <Field label="Assigned members">
-                          <MultiSelect
-                            options={memberOptions}
-                            value={card.members}
-                            onChange={(members) =>
-                              updateCard(card.id, { members })
-                            }
-                            placeholder="Search and select members..."
-                          />
-                        </Field>
-                        <Field label="Event PIC">
-                          <MultiSelect
-                            options={memberOptions}
-                            value={card.pics}
-                            onChange={(pics) => updateCard(card.id, { pics })}
-                            placeholder="Pick one or more PIC..."
-                          />
-                        </Field>
-                      </div>
-                    ) : null}
-
-                    {card.mode === "manual_apply" ? (
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                          <UsersRound className="mt-0.5 size-4 shrink-0" />
-                          <p>Members can apply later. Optionally select Event PICs now.</p>
-                        </div>
-                        <Field label="Event PIC">
-                          <MultiSelect
-                            options={memberOptions}
-                            value={card.pics}
-                            onChange={(pics) => updateCard(card.id, { pics })}
-                            placeholder="Pick one or more PIC..."
-                          />
-                        </Field>
-                      </div>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        </>
       )}
+
+      <MonthlyBulkCreateDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        regions={options?.regions ?? []}
+        eventTypes={options?.eventTypes ?? []}
+        nextCardId={() => String(nextCardId.current++)}
+        onGenerate={handleBulkGenerate}
+      />
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function getModeDescription(mode: AssignmentMode) {
-  if (mode === "teams") {
-    return "Assign one or more teams to this event.";
-  }
-
-  if (mode === "members") {
-    return "Assign members directly and mark PICs with the Event PIC task.";
-  }
-
-  return "Leave assignments open for manual application.";
-}

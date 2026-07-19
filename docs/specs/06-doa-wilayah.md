@@ -9,7 +9,7 @@ Monthly prayer schedule page. Each month gets exactly one Doa Wilayah entry with
 | File | Role |
 |------|------|
 | `app/tools/doa-wilayah/page.tsx` | Main page — year selector, month list, summary cards, tally dialog |
-| `lib/queries/doa-wilayah.ts` | Firestore read/write/subscribe helpers |
+| `lib/queries/doa-wilayah.ts` | Firestore read/write/subscribe helpers, `buildDoaWilayahSessionId()` |
 | `lib/queries/members.ts` | Firestore `members` fetch for person picker |
 | `lib/queries/tally-session.ts` | Creates and reads linked TC tally sessions |
 | `lib/fuzzy-search.ts` | Fuzzy name/nickname ranking for the person picker |
@@ -55,13 +55,13 @@ Two modes:
 ### Date & TC Tally
 
 - Date field and "Buka TC" button lock once `tallySessionId` is set
-- TC session ID is deterministic: `doa-wilayah__{date}`
+- TC session ID is deterministic: `doa-wilayah__{date}` (built by `buildDoaWilayahSessionId()` in `lib/queries/doa-wilayah.ts`)
 - Opening TC calls `ensureDoaWilayahTallySession()` and writes `tallySessionId` back to the month document
 - Live In/Out badge appears when a TC session is linked
 
 ## Permissions
 
-Currently open (`canWrite = true`) — no role/permission checks. The code keeps a `canWrite` switch so access control can be reintroduced later.
+Currently open (`canWrite = true`) — no role/permission checks. The code keeps a `canWrite` state variable so access control can be reintroduced later.
 
 ## UI Components Used
 

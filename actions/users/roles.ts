@@ -2,7 +2,7 @@
 
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/connection";
-import { permissions, roles, rolePermissions, type Action } from "@/db/schema";
+import { permissions, roles, rolePermissions, type Action, type RoleScope } from "@/db/schema";
 import { checkPermission, getUserContext, logAuditTrail } from "@/actions/master/_shared";
 
 export type Role = {
@@ -17,6 +17,7 @@ export type RoleListResult = {
 };
 
 export type ActionStatus = {
+  permissionId: number;
   exists: boolean;
   assigned: boolean;
   scope: string | null;
@@ -141,6 +142,7 @@ export async function getRolePermissions(roleId: number): Promise<RolePermission
         const scope = assignedPermissionScopes.get(permissionId) ?? null;
 
         actions[action] = {
+          permissionId,
           exists: true,
           assigned,
           scope,
@@ -181,12 +183,79 @@ export async function deleteRole(id: number): Promise<RoleDeleteResult> {
     await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
     await db.delete(roles).where(eq(roles.id, id));
 
-    const ctx = await getUserContext();
     await logAuditTrail("roles", id, "delete", existing[0], {});
 
     return { success: true };
   } catch (err) {
     console.error("[deleteRole] error:", err);
     return { success: false, error: "Failed to delete role" };
+  }
+}
+
+export async function assignRolePermission(
+  roleId: number,
+  permissionId: number,
+  scope?: RoleScope,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const ctx = await getUserContext();
+    const now = new Date();
+
+    await db.insert(rolePermissions).values({
+      roleId,
+      permissionId,
+      scope: scope ?? null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: ctx.userId,
+      updatedBy: ctx.userId,
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error("[assignRolePermission] error:", err);
+    return { success: false, error: "Failed to assign permission" };
+  }
+}
+
+export async function unassignRolePermission(
+  roleId: number,
+  permissionId: number,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await db
+      .delete(rolePermissions)
+      .where(
+        eq(rolePermissions.roleId, roleId) &&
+          eq(rolePermissions.permissionId, permissionId),
+      );
+
+    return { success: true };
+  } catch (err) {
+    console.error("[unassignRolePermission] error:", err);
+    return { success: false, error: "Failed to unassign permission" };
+  }
+}
+
+export async function updateRolePermissionScope(
+  roleId: number,
+  permissionId: number,
+  scope: RoleScope,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const ctx = await getUserContext();
+
+    await db
+      .update(rolePermissions)
+      .set({ scope, updatedAt: new Date(), updatedBy: ctx.userId })
+      .where(
+        eq(rolePermissions.roleId, roleId) &&
+          eq(rolePermissions.permissionId, permissionId),
+      );
+
+    return { success: true };
+  } catch (err) {
+    console.error("[updateRolePermissionScope] error:", err);
+    return { success: false, error: "Failed to update scope" };
   }
 }

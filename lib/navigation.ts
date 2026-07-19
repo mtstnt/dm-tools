@@ -60,7 +60,14 @@ export const sidebarMenus: NavigationRootItem[] = [
     children: [
       {
         type: "link",
-        label: "Events",
+        label: "My Events",
+        targetLink: "/my/events",
+        icon: Calendar,
+        resource: "events",
+      },
+      {
+        type: "link",
+        label: "All Events",
         targetLink: "/my/events",
         icon: CalendarDays,
         resource: "events",

@@ -8,8 +8,8 @@ Read-only browser for service reports stored in Firestore. Displays reports in a
 
 | File | Role |
 |------|------|
-| `app/tools/reports-history/page.tsx` | Table + detail sheet (304 lines, client component) |
-| `lib/queries/reports.ts` | Firestore fetch function + query key factory + Report interface |
+| `app/tools/reports-history/page.tsx` | Table + detail sheet (client component) |
+| `lib/queries/reports.ts` | Firestore fetch function (`fetchReports`), query key factory (`reportKeys`), and `Report` interface |
 
 ## Data Fetching
 

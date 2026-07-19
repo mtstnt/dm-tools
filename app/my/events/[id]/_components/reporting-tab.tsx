@@ -1,15 +1,21 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Plus, Trash2, Copy, Check, Settings2 } from "lucide-react"
+import { Plus, Trash2, Copy, Check, Settings2, Pencil, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select"
 import { MinistriesDialog } from "@/components/ministries-dialog"
+import { MetricsDialog } from "@/components/metrics-dialog"
 import type { EventScheduleItem } from "@/actions/events"
 import type { Ministry } from "@/actions/master/ministries"
+import type { Metric } from "@/actions/master/metrics"
+import {
+  saveEventReportingData,
+  type EventReportingData,
+} from "@/actions/events/reporting"
 
 interface AltarCallEntry {
   description: string
@@ -23,8 +29,7 @@ interface VolunteerData {
 
 interface ReportFormData {
   volunteers: VolunteerData
-  congregationCount: string
-  congregationTcCount: string
+  metricValues: Record<string, string>
   altarCalls: AltarCallEntry[]
 }
 
@@ -56,16 +61,59 @@ function formatAltarCalls(altarCalls: AltarCallEntry[]): string {
   return valid.map((e) => `${e.description}: ${e.count}`).join("; ")
 }
 
+const DEFAULT_TEMPLATE_BODY = `1. Pastor and Speaker:
+2. Guest:
+3. Volunteer: %Volunteer%
+4. %Altar Call%
+5. Baptisan:
+6. WHL:   (Bersedia Join CG: )
+7. Prayer Station:
+8. One Minute Prayer: `
+
+function getDefaultTemplate(metricNames: string[]): string {
+  if (metricNames.length === 0) return DEFAULT_TEMPLATE_BODY
+  const metricPlaceholders = metricNames.map((n) => `%${n}%`).join(" ; ")
+  const lines = DEFAULT_TEMPLATE_BODY.split("\n")
+  lines[3] = `4. ${metricPlaceholders} %Altar Call%`
+  return lines.join("\n")
+}
+
+const KNOWN_PLACEHOLDERS = new Set(["Volunteer", "Altar Call"])
+
+function getUnresolvedPlaceholders(template: string, metricNames: string[]): string[] {
+  const pattern = /%(.+?)%/g
+  const unresolved: string[] = []
+  const seen = new Set<string>()
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(template)) !== null) {
+    const name = match[1].trim()
+    if (seen.has(name)) continue
+    seen.add(name)
+    if (KNOWN_PLACEHOLDERS.has(name)) continue
+    if (metricNames.includes(name)) continue
+    unresolved.push(name)
+  }
+  return unresolved
+}
+
 export function ReportingTab({
+  eventId,
   eventName,
   eventDate,
   initialMinistries,
   availableEvents,
+  availableMetrics,
+  initialMetricNames,
+  initialReportingData,
 }: {
+  eventId: number
   eventName: string
   eventDate: Date
   initialMinistries: Ministry[]
   availableEvents: EventScheduleItem[]
+  availableMetrics: Metric[]
+  initialMetricNames: string[]
+  initialReportingData?: EventReportingData
 }) {
   const [useMinistries, setUseMinistries] = useState(true)
   const [useBulkVolunteerInput, setUseBulkVolunteerInput] = useState(false)
@@ -76,20 +124,65 @@ export function ReportingTab({
   const [copied, setCopied] = useState(false)
   const [clipboardUnavailable, setClipboardUnavailable] = useState(false)
   const [canUseClipboard, setCanUseClipboard] = useState(false)
+  const [metricNames, setMetricNames] = useState<string[]>(initialMetricNames)
+  const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE_BODY)
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     setCanUseClipboard(window.isSecureContext && Boolean(navigator.clipboard))
-  }, [])
+    setReportTemplate(getDefaultTemplate(initialMetricNames))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [formData, setFormData] = useState<ReportFormData>({
     volunteers: {
       count: "",
       byMinistry: Object.fromEntries(initialMinistries.map((m) => [m.name, ""])),
     },
-    congregationCount: "",
-    congregationTcCount: "",
+    metricValues: Object.fromEntries(initialMetricNames.map((m) => [m, ""])),
     altarCalls: [{ description: "", count: "" }],
   })
+
+  useEffect(() => {
+    if (!initialReportingData) return
+    const { metrics, volunteers: vols, altarCalls } = initialReportingData
+
+    if (metrics.length > 0) {
+      const names = metrics.map((m) => m.metricName)
+      const values: Record<string, string> = {}
+      for (const m of metrics) {
+        values[m.metricName] = String(m.count)
+      }
+      setMetricNames(names)
+      setReportTemplate(getDefaultTemplate(names))
+      setFormData((prev) => ({ ...prev, metricValues: values }))
+    }
+
+    if (vols.length > 0) {
+      setFormData((prev) => {
+        const byMinistry = { ...prev.volunteers.byMinistry }
+        for (const v of vols) {
+          byMinistry[v.ministryName] = String(v.count)
+        }
+        return {
+          ...prev,
+          volunteers: { ...prev.volunteers, byMinistry },
+        }
+      })
+    }
+
+    if (altarCalls.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        altarCalls: altarCalls.map((a) => ({
+          description: a.description,
+          count: String(a.count),
+        })),
+      }))
+    }
+  }, [initialReportingData])
 
   const eventOptions = useMemo(
     () => [...availableEvents]
@@ -110,7 +203,45 @@ export function ReportingTab({
     : formData.volunteers.count
 
   const date = formatDateDisplay(eventDate)
-  const altarCallText = formatAltarCalls(formData.altarCalls)
+
+  function resolveTemplate(template: string): string {
+    let resolved = template
+
+    const altarCallFormatted = formatAltarCalls(formData.altarCalls)
+    const altarCallReplacement = altarCallFormatted
+      ? ` (Altarcall ${altarCallFormatted})`
+      : ""
+    resolved = resolved.replace(/%Altar Call%/g, altarCallReplacement)
+
+    resolved = resolved.replace(/%Volunteer%/g, effectiveVolunteerCount)
+
+    for (const name of metricNames) {
+      const value = formData.metricValues[name] ?? ""
+      resolved = resolved.replace(
+        new RegExp(`%${escapeRegExp(name)}%`, "g"),
+        value,
+      )
+    }
+
+    resolved = resolved.replace(/%(.+?)%/g, "")
+
+    return resolved
+  }
+
+  function escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  }
+
+  const unresolvedPlaceholders = useMemo(
+    () => getUnresolvedPlaceholders(reportTemplate, metricNames),
+    [reportTemplate, metricNames],
+  )
+
+  const resolvedBody = useMemo(
+    () => resolveTemplate(reportTemplate),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reportTemplate, effectiveVolunteerCount, formData.metricValues, formData.altarCalls, metricNames],
+  )
 
   function handleMinistriesSave(newNames: string[]) {
     setMinistryNames(newNames)
@@ -126,11 +257,22 @@ export function ReportingTab({
     })
   }
 
-  function handleChange(
-    field: keyof Omit<ReportFormData, "volunteers" | "altarCalls">,
-    value: string,
-  ) {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+  function handleMetricsSave(selected: string[]) {
+    setMetricNames(selected)
+    setFormData((prev) => {
+      const updatedValues: Record<string, string> = {}
+      for (const name of selected) {
+        updatedValues[name] = prev.metricValues[name] ?? ""
+      }
+      return { ...prev, metricValues: updatedValues }
+    })
+  }
+
+  function handleMetricValueChange(metricName: string, value: string) {
+    setFormData((prev) => ({
+      ...prev,
+      metricValues: { ...prev.metricValues, [metricName]: value },
+    }))
   }
 
   function handleVolunteerCountChange(value: string) {
@@ -173,17 +315,54 @@ export function ReportingTab({
     })
   }
 
-  function generateReport() {
-    const altarCallLine = altarCallText ? ` (Altarcall ${altarCallText})` : ""
-    return `*${eventName} ${date}*
-1. Pastor and Speaker:
-2. Guest:
-3. Volunteer: ${effectiveVolunteerCount}
-4. Jemaat: ${formData.congregationCount} ; TC: ${formData.congregationTcCount}${altarCallLine}
-5. Baptisan:
-6. WHL:   (Bersedia Join CG: )
-7. Prayer Station:
-8. One Minute Prayer: `
+  async function handleSave() {
+    setSaving(true)
+    setSaveError(null)
+
+    const metricsPayload = metricNames
+      .filter((name) => formData.metricValues[name]?.trim())
+      .map((name) => {
+        const metric = availableMetrics.find((m) => m.name === name)
+        return {
+          metricId: metric!.id,
+          count: parseInt(formData.metricValues[name], 10) || 0,
+        }
+      })
+
+    const volunteersPayload = useMinistries
+      ? ministryNames
+          .filter((name) => formData.volunteers.byMinistry[name]?.trim())
+          .map((name) => {
+            const ministry = initialMinistries.find((m) => m.name === name)
+            return {
+              ministryId: ministry!.id,
+              count: parseInt(formData.volunteers.byMinistry[name], 10) || 0,
+            }
+          })
+      : []
+
+    const altarCallsPayload = formData.altarCalls
+      .filter((e) => e.description.trim() || e.count.trim())
+      .map((e, i) => ({
+        description: e.description.trim(),
+        count: parseInt(e.count, 10) || 0,
+        sequence: i,
+      }))
+
+    const result = await saveEventReportingData(eventId, {
+      metrics: metricsPayload,
+      volunteers: volunteersPayload,
+      altarCalls: altarCallsPayload,
+    })
+
+    setSaving(false)
+
+    if (result.success) {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } else {
+      setSaveError(result.error ?? "Failed to save")
+    }
   }
 
   async function handleCopy() {
@@ -193,7 +372,8 @@ export function ReportingTab({
       return
     }
 
-    await navigator.clipboard.writeText(generateReport())
+    const header = `*${eventName} ${date}*`
+    await navigator.clipboard.writeText(`${header}\n${resolvedBody}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -215,24 +395,72 @@ export function ReportingTab({
               <h2 className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground/60">
                 Preview
               </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopy}
-                disabled={!canUseClipboard}
-                className="gap-2 text-xs h-8"
-              >
-                {copied ? (
-                  <Check className="size-3.5" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-                {copied ? "Copied!" : "Copy"}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={showTemplateEditor ? "secondary" : "ghost"}
+                  size="icon-sm"
+                  onClick={() => setShowTemplateEditor((prev) => !prev)}
+                  className="size-7"
+                  title="Edit template"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopy}
+                  disabled={!canUseClipboard}
+                  className="gap-2 text-xs h-8"
+                >
+                  {copied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copied ? "Copied!" : "Copy"}
+                </Button>
+              </div>
             </div>
-            <pre className="bg-card border border-border/70 rounded-xl p-5 text-sm whitespace-pre-wrap font-mono leading-relaxed shadow-sm">
-              {generateReport()}
-            </pre>
+            <div className="bg-card border border-border/70 rounded-xl shadow-sm overflow-hidden">
+              {showTemplateEditor ? (
+                <div className="p-5 space-y-3">
+                  <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                    Editable Template
+                  </label>
+                  <Textarea
+                    value={reportTemplate}
+                    onChange={(e) => setReportTemplate(e.target.value)}
+                    className="min-h-40 font-mono text-sm"
+                    placeholder="Enter template…"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use <code className="text-xs bg-secondary px-1 rounded">%Metric Name%</code> as placeholders.
+                    Special: <code className="text-xs bg-secondary px-1 rounded">%Volunteer%</code>,{" "}
+                    <code className="text-xs bg-secondary px-1 rounded">%Altar Call%</code>.
+                  </p>
+                </div>
+              ) : (
+                <pre className="p-5 text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                  *{eventName} {date}*
+                  {resolvedBody ? "\n" : ""}{resolvedBody}
+                </pre>
+              )}
+            </div>
+
+            {unresolvedPlaceholders.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                Unresolved placeholders:{" "}
+                {unresolvedPlaceholders.map((p, i) => (
+                  <span key={p}>
+                    {i > 0 && ", "}
+                    <code className="text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">
+                      %{p}%
+                    </code>
+                  </span>
+                ))}
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -252,6 +480,7 @@ export function ReportingTab({
                 />
                 Bulk Volunteer Input
               </label>
+              <p className="text-xs text-muted-foreground ml-6">Bulk input is not yet supported.</p>
               {useBulkVolunteerInput && (
                 <MultiSelect
                   options={eventOptions}
@@ -325,25 +554,47 @@ export function ReportingTab({
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
-                  Jemaat
-                </label>
-                <Input
-                  value={formData.congregationCount}
-                  onChange={(e) => handleChange("congregationCount", e.target.value)}
-                  placeholder="e.g. 11"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
-                  TC
-                </label>
-                <Input
-                  value={formData.congregationTcCount}
-                  onChange={(e) => handleChange("congregationTcCount", e.target.value)}
-                  placeholder="e.g. 11"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground/70">
+                    Metrics
+                  </label>
+                  <MetricsDialog
+                    availableMetrics={availableMetrics}
+                    selectedMetrics={metricNames}
+                    onSave={handleMetricsSave}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-6 text-muted-foreground"
+                      >
+                        <Settings2 className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                </div>
+                <div className="space-y-3">
+                  {metricNames.length === 0 && (
+                    <p className="text-xs text-muted-foreground py-2">
+                      No metrics selected. Click the gear icon to select metrics.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {metricNames.map((metricName) => (
+                      <div key={metricName} className="space-y-1">
+                        <label className="text-xs text-muted-foreground">
+                          {metricName}
+                        </label>
+                        <Input
+                          value={formData.metricValues[metricName] ?? ""}
+                          onChange={(e) => handleMetricValueChange(metricName, e.target.value)}
+                          placeholder="0"
+                          className="h-8"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -391,9 +642,19 @@ export function ReportingTab({
             </div>
           </div>
 
-          <Button className="w-full sm:w-auto sm:self-end">
-            Save
-          </Button>
+          <div className="flex flex-col gap-3">
+            {saveError && (
+              <p className="text-xs text-destructive">{saveError}</p>
+            )}
+            <Button
+              className="w-full sm:w-auto sm:self-end"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              {saving ? "Saving..." : saved ? "Saved!" : "Save"}
+            </Button>
+          </div>
         </div>
 
       </div>

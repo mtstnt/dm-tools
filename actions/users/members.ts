@@ -19,6 +19,7 @@ export type MemberUser = {
   nij: string;
   email: string;
   teamId: number | null;
+  roleName: string | null;
   isSpv: boolean;
 };
 
@@ -49,15 +50,8 @@ export type UserDetail = {
   updatedAt: Date;
   createdBy: string | null;
   updatedBy: string | null;
-  roles: {
-    id: number;
-    name: string;
-  }[];
-  additionalPermissions: {
-    id: number;
-    resource: string;
-    action: string;
-  }[];
+  roleId: number | null;
+  roleName: string | null;
 };
 
 export type UserDetailResult = {
@@ -111,6 +105,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
       nij: u.nij,
       email: u.email,
       teamId: u.teamId,
+      roleName: u.roleName ?? null,
       isSpv: u.roleName === "SPV",
     });
 
@@ -218,13 +213,19 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
     return {
       success: true,
       data: {
-        ...user,
+        id: user.id,
+        fullName: user.fullName,
+        nij: user.nij,
+        email: user.email,
+        sourceId: user.sourceId,
+        teamId: user.teamId,
+        teamNumber: user.teamNumber,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
         createdBy: auditUsers.get(user.createdBy) ?? null,
         updatedBy: auditUsers.get(user.updatedBy) ?? null,
-        roles: user.roleId && user.roleName
-          ? [{ id: user.roleId, name: user.roleName }]
-          : [],
-        additionalPermissions: [],
+        roleId: user.roleId ?? null,
+        roleName: user.roleName ?? null,
       },
     };
   } catch (err) {

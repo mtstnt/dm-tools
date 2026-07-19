@@ -12,6 +12,7 @@ import {
   Home,
   ScrollText,
   Settings,
+  SquareUser,
   User,
   UserCheck,
   Users,
@@ -59,16 +60,9 @@ export const sidebarMenus: NavigationRootItem[] = [
     children: [
       {
         type: "link",
-        label: "My Events",
+        label: "Events",
         targetLink: "/my/events",
         icon: Calendar,
-        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
-      },
-      {
-        type: "link",
-        label: "All Events",
-        targetLink: "/my/events",
-        icon: CalendarDays,
         allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
@@ -151,6 +145,20 @@ export const sidebarMenus: NavigationRootItem[] = [
         targetLink: "/my/users/members",
         icon: User,
         allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV],
+      },
+      {
+        type: "link",
+        label: "Roles",
+        targetLink: "/my/users/roles",
+        icon: SquareUser,
+        allowedRoles: [ROLES.ADMIN],
+      },
+      {
+        type: "link",
+        label: "Role Assignments",
+        targetLink: "/my/users/role-assignments",
+        icon: UserCheck,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
     ],
   },

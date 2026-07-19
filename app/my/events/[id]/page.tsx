@@ -217,7 +217,7 @@ export default function EventDetailPage() {
             </div>
           )}
 
-          <Tabs defaultValue="assignment" className="bg-white p-2 w-full">
+          <Tabs defaultValue="assignment" className="w-full">
             <TabsList variant="default" className="w-full">
               {/* <TabsTrigger value="configuration" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Configuration</TabsTrigger> */}
               <TabsTrigger value="assignment" className="flex-1 px-4 text-sm font-semibold cursor-pointer">Assignment</TabsTrigger>

@@ -17,14 +17,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Tabs,
   TabsContent,
   TabsList,
@@ -36,12 +28,6 @@ function formatDate(value: Date) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value);
-}
-
-function formatResourceName(resource: string) {
-  return resource
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function DetailField({
@@ -131,7 +117,7 @@ export default function MemberDetailPage() {
             {user.fullName}
           </h1>
           <p className="mt-2 text-muted-foreground">
-            User profile, roles, and additional permissions.
+            User profile and schedule overview.
           </p>
           <Badge className="mt-3" variant={user.sourceId ? "secondary" : "outline"}>
             {user.sourceId
@@ -158,12 +144,6 @@ export default function MemberDetailPage() {
           <TabsTrigger value="review" className="w-full">
             Review
           </TabsTrigger>
-          <TabsTrigger value="roles" className="w-full">
-            Roles
-          </TabsTrigger>
-          <TabsTrigger value="permissions" className="w-full">
-            Additional Permissions
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -179,6 +159,7 @@ export default function MemberDetailPage() {
               <DetailField label="NIJ" value={user.nij} />
               <DetailField label="Email" value={user.email} />
               <DetailField label="Team" value={user.teamNumber ? `Team ${user.teamNumber}` : null} />
+              <DetailField label="Role" value={user.roleName} />
               <DetailField label="Created at" value={formatDate(user.createdAt)} />
               <DetailField label="Updated at" value={formatDate(user.updatedAt)} />
               <DetailField label="Created by" value={user.createdBy} />
@@ -205,79 +186,6 @@ export default function MemberDetailPage() {
             </CardHeader>
             <CardContent>
               Coming soon...
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="roles">
-          <Card>
-            <CardHeader>
-              <CardTitle>Roles</CardTitle>
-              <CardDescription>Roles directly assigned to this user.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {user.roles.length === 0 ? (
-                <p className="text-muted-foreground">No roles assigned.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {user.roles.map((role) => (
-                    <Badge key={role.id} variant="secondary">
-                      {role.name}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="permissions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Permissions</CardTitle>
-              <CardDescription>
-                User-specific permissions outside role assignments.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader className="bg-muted/80">
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Resource</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {user.additionalPermissions.length === 0 ? (
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={2} className="h-24 text-center">
-                          No additional permissions.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      user.additionalPermissions.map((permission, index) => (
-                        <TableRow
-                          key={permission.id}
-                          className={
-                            index % 2 === 1
-                              ? "bg-muted/12 hover:bg-primary/5"
-                              : "hover:bg-primary/5"
-                          }
-                        >
-                          <TableCell>{formatResourceName(permission.resource)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {permission.action.charAt(0).toUpperCase() +
-                                permission.action.slice(1)}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

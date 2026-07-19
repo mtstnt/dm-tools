@@ -25,8 +25,7 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-2 px-4">
-          <h3 className="text-sm font-medium text-muted-foreground">Aplikasi</h3>
+        <div className="px-4">
           <InstallAppCard />
         </div>
       </SheetContent>

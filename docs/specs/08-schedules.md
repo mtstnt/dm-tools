@@ -19,23 +19,35 @@ All authenticated roles (Admin, Head Ministry, Regional PIC, SPV, Member) can vi
 - Previous/next month navigation with month dropdown and year dropdown.
 - Year options sourced from `getEventScheduleYears()`.
 
-### Events Table
+### Tab Bar
 
-- Full-width table with rows = one event each.
-- Columns: **No**, **Tanggal** (date), then dynamic **Tim Slot N** + **Anggota Slot N** pairs.
-- Max slot columns determined by the event with the most teams.
-- Empty slots shown as `-` when an event has fewer teams.
-- Date cell shows formatted date (e.g. "Sat, 04 Jul 2026").
-- Team slot shows team name badge (e.g. "Team 8").
-- Anggota slot lists all members for that team vertically.
+- **Assignments** tab — the events table (described below).
+- **Swap Requests** tab — all swap requests for events in the selected month, with status badges and approve/reject actions for pending requests.
 
-### Member Rows (within Anggota Slot)
+### Events Table (Assignments Tab)
 
-Each member is shown with:
-- Crown icon (if SPV role)
-- Full name (bold/primary color if SPV)
-- PIC badge (amber, if assigned "Event PIC" task)
-- Swap icon button (visible on hover to Admin/Regional PIC/SPV)
+- Full-width table with columns: **No**, **Tanggal**, **Event**, **Members**.
+- Each row = one event.
+- Members column is a flex-wrap grid of clickable cards.
+- Members sorted by team number, then SPV first, then alphabetical.
+- Each member card shows:
+  - Full name (with crown icon if SPV, bold/primary color)
+  - Team badge (e.g. "Team 8")
+  - PIC badge (amber, if "Event PIC" task)
+  - SWAPPED badge (if pending swap exists; card is opaque and not clickable)
+  - Swap icon (visible when hovering eligible cards, Admin/Regional PIC/SPV only)
+- Clicking a card opens the swap dialog.
+
+### Swap Requests Table (Swap Requests Tab)
+
+- All swap requests for the selected month, regardless of status.
+- Columns: Event, Date, From, From Team, To, To Team, Status, Actions.
+- Status rendered as color-coded badge:
+  - Pending: amber
+  - Approved: green
+  - Rejected: red/destructive
+- Approve/Reject buttons only visible for pending requests (Admin/SPV only).
+- Requests loading automatically when the tab is selected.
 
 ### Swap Dialog
 
@@ -61,9 +73,10 @@ Visible to Admin and SPV users when there are pending swap requests. Displays a 
 ### `getSchedules(month, year)`
 - Returns `ScheduleEvent[]` — events with `members: ScheduleMember[]`.
 - Members are unique per event, deduplicated by `userId`.
+- Shows **all** `event_assignments` rows (including block-seat and rated assignments).
 - `isSpv` determined by `roles.name === "SPV"`.
 - `isPic` determined by `taskId` matching the "Event PIC" task.
-- Filters out block-seat and rated assignments (`blockName IS NULL AND rating IS NULL`).
+- `hasPendingSwap` is `true` when a pending `event_assignment_change_requests` row exists for the member in that event.
 
 ### `getAvailableReplacements(eventId, userFromId)`
 - Returns all users not currently assigned to the event, excluding `userFromId`.
@@ -77,6 +90,11 @@ Visible to Admin and SPV users when there are pending swap requests. Displays a 
 - Auth: Admin, Regional PIC, SPV.
 - Admin/Regional PIC see all pending requests.
 - SPV sees only requests where `userFrom` belongs to their team.
+
+### `getSwapRequests(month, year)`
+- Auth: Admin, Regional PIC, SPV.
+- Returns all swap requests for events in the given month, across all statuses.
+- Admin/Regional PIC see all; SPV sees only requests where `userFrom` belongs to their team.
 
 ### `approveSwap(requestId)`
 - Auth: Admin, or SPV of the `userFrom`'s team.

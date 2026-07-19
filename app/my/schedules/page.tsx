@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, isPast } from "date-fns";
 import { id } from "date-fns/locale";
 import {
@@ -12,8 +12,9 @@ import {
   Loader,
   X,
 } from "lucide-react";
-import { getSchedules, getPendingSwaps, approveSwap, rejectSwap, requestSwap, getAvailableReplacements, type ScheduleEvent, type ScheduleMember, type SwapRequestItem, type ReplacementUser } from "@/actions/schedules";
+import { getSchedules, getSwapRequests, approveSwap, rejectSwap, requestSwap, getAvailableReplacements, type ScheduleEvent, type ScheduleMember, type SwapRequestItem, type ReplacementUser } from "@/actions/schedules";
 import { getEventScheduleYears } from "@/actions/events";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,26 +39,14 @@ import { ROLES } from "@/lib/permissions";
 
 const FULL_MONTHS = MONTHS_ID;
 
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function groupMembersByTeam(members: ScheduleMember[], teamNumbers: number[]): Map<number, ScheduleMember[]> {
-  const map = new Map<number, ScheduleMember[]>();
-  for (const num of teamNumbers) {
-    map.set(num, []);
-  }
-  for (const m of members) {
-    if (m.teamNumber != null) {
-      const list = map.get(m.teamNumber);
-      if (list) {
-        list.push(m);
-      } else {
-        map.set(m.teamNumber, [m]);
-      }
-    }
-  }
-  return map;
+function sortMembers(members: ScheduleMember[]): ScheduleMember[] {
+  return [...members].sort((a, b) => {
+    const aTeam = a.teamNumber ?? 999;
+    const bTeam = b.teamNumber ?? 999;
+    if (aTeam !== bTeam) return aTeam - bTeam;
+    if (a.isSpv !== b.isSpv) return a.isSpv ? -1 : 1;
+    return a.fullName.localeCompare(b.fullName);
+  });
 }
 
 export default function SchedulesPage() {
@@ -67,6 +56,7 @@ export default function SchedulesPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [yearOptions, setYearOptions] = useState<number[]>(() => [new Date().getFullYear()]);
+  const [activeTab, setActiveTab] = useState<"assignments" | "swaps">("assignments");
 
   const session = useSessionUser();
   const canSwap = session?.role === ROLES.ADMIN || session?.role === ROLES.REGIONAL_PIC || session?.role === ROLES.SPV;
@@ -80,8 +70,8 @@ export default function SchedulesPage() {
   const [swapPending, setSwapPending] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
 
-  const [pendingSwaps, setPendingSwaps] = useState<SwapRequestItem[]>([]);
-  const [pendingSwapsLoading, setPendingSwapsLoading] = useState(false);
+  const [swapRequests, setSwapRequests] = useState<SwapRequestItem[]>([]);
+  const [swapRequestsLoading, setSwapRequestsLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -116,31 +106,23 @@ export default function SchedulesPage() {
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
-    if (!canApprove) return;
+    if (activeTab !== "swaps") return;
     let mounted = true;
-    async function loadPending() {
-      setPendingSwapsLoading(true);
-      const result = await getPendingSwaps();
+    async function loadSwapRequests() {
+      setSwapRequestsLoading(true);
+      const result = await getSwapRequests(selectedMonth, selectedYear);
       if (!mounted) return;
       if (result.success && result.data) {
-        setPendingSwaps(result.data);
+        setSwapRequests(result.data);
       }
-      setPendingSwapsLoading(false);
+      setSwapRequestsLoading(false);
     }
-    loadPending();
+    loadSwapRequests();
     return () => { mounted = false; };
-  }, [canApprove, events]);
+  }, [activeTab, selectedMonth, selectedYear]);
 
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [events]);
-
-  const maxTeamSlots = useMemo(() => {
-    let max = 0;
-    for (const e of events) {
-      if (e.teams.length > max) max = e.teams.length;
-    }
-    return Math.max(max, 1);
   }, [events]);
 
   const yearSelectOptions = useMemo(() => {
@@ -197,46 +179,31 @@ export default function SchedulesPage() {
     if (refreshed.success && refreshed.data) {
       setEvents(refreshed.data);
     }
-    if (canApprove) {
-      const pendingResult = await getPendingSwaps();
-      if (pendingResult.success && pendingResult.data) {
-        setPendingSwaps(pendingResult.data);
-      }
+  }
+
+  async function refreshSwapRequests() {
+    const result = await getSwapRequests(selectedMonth, selectedYear);
+    if (result.success && result.data) {
+      setSwapRequests(result.data);
     }
   }
 
   async function handleApprove(requestId: number) {
     const result = await approveSwap(requestId);
     if (!result.success) return;
-    const [schedulesResult, pendingResult] = await Promise.all([
+    const [schedulesResult] = await Promise.all([
       getSchedules(selectedMonth, selectedYear),
-      getPendingSwaps(),
+      refreshSwapRequests(),
     ]);
     if (schedulesResult.success && schedulesResult.data) {
       setEvents(schedulesResult.data);
-    }
-    if (pendingResult.success && pendingResult.data) {
-      setPendingSwaps(pendingResult.data);
     }
   }
 
   async function handleReject(requestId: number) {
     const result = await rejectSwap(requestId);
     if (!result.success) return;
-    const pendingResult = await getPendingSwaps();
-    if (pendingResult.success && pendingResult.data) {
-      setPendingSwaps(pendingResult.data);
-    }
-  }
-
-  const showPendingSection = canApprove && !pendingSwapsLoading && pendingSwaps.length > 0;
-
-  const slotHeaders: { team: string; members: string }[] = [];
-  for (let i = 0; i < maxTeamSlots; i++) {
-    slotHeaders.push({
-      team: `Tim Slot ${i + 1}`,
-      members: `Anggota Slot ${i + 1}`,
-    });
+    await refreshSwapRequests();
   }
 
   return (
@@ -299,127 +266,147 @@ export default function SchedulesPage() {
         </div>
       </div>
 
-      {showPendingSection && (
-        <PendingApprovals
-          swaps={pendingSwaps}
+      <div className="mb-6 flex gap-1 border-b">
+        <button
+          onClick={() => setActiveTab("assignments")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+            activeTab === "assignments"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Assignments
+        </button>
+        <button
+          onClick={() => setActiveTab("swaps")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+            activeTab === "swaps"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Swap Requests
+        </button>
+      </div>
+
+      {activeTab === "assignments" && (
+        isLoading ? (
+          <SchedulesSkeleton />
+        ) : error ? (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
+            {error}
+          </div>
+        ) : sortedEvents.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">
+            No events scheduled yet.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
+                  <th className="px-3 py-2.5 text-center w-10">No</th>
+                  <th className="px-3 py-2.5 w-36">Tanggal</th>
+                  <th className="px-3 py-2.5 w-40">Event</th>
+                  <th className="px-3 py-2.5">Members</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedEvents.map((event, rowIdx) => {
+                  const date = new Date(event.date);
+                  const sorted = sortMembers(event.members);
+                  const past = isPast(date);
+
+                  return (
+                    <tr key={event.id} className="border-b last:border-b-0">
+                      <td className="px-3 py-3 text-center text-muted-foreground align-top">
+                        {rowIdx + 1}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap align-top">
+                        <span className={cn("text-sm font-medium", past && "text-muted-foreground")}>
+                          {format(date, "EEE, dd MMM yyyy", { locale: id })}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <span className={cn("text-sm font-medium", past && "text-muted-foreground")}>
+                          {event.eventTypeName}
+                        </span>
+                        <p className="text-xs text-muted-foreground mt-0.5">{event.regionName}</p>
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        {sorted.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic py-1">
+                            No members assigned yet.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {sorted.map((member) => (
+                              <div
+                                key={member.userId}
+                                onClick={() => {
+                                  if (canSwap && !member.hasPendingSwap) {
+                                    openSwapDialog(event.id, member);
+                                  }
+                                }}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 transition-colors",
+                                  canSwap && !member.hasPendingSwap
+                                    ? "cursor-pointer hover:bg-muted hover:shadow-sm"
+                                    : "cursor-default",
+                                  member.hasPendingSwap && "opacity-40",
+                                )}
+                              >
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  {member.isSpv && (
+                                    <Crown className="size-3 shrink-0 text-primary" />
+                                  )}
+                                  <span className={cn(
+                                    "text-xs font-medium",
+                                    member.isSpv ? "text-primary" : "text-foreground",
+                                  )}>
+                                    {member.fullName}
+                                  </span>
+                                </div>
+                                <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                  Team {member.teamNumber}
+                                </span>
+                                {member.isPic && (
+                                  <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600">
+                                    PIC
+                                  </span>
+                                )}
+                                {member.hasPendingSwap && (
+                                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    SWAPPED
+                                  </span>
+                                )}
+                                {canSwap && !member.hasPendingSwap && (
+                                  <ArrowLeftRight className="size-3 shrink-0 text-muted-foreground" />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {activeTab === "swaps" && (
+        <SwapsTab
+          swaps={swapRequests}
+          loading={swapRequestsLoading}
+          canApprove={canApprove}
           onApprove={handleApprove}
           onReject={handleReject}
         />
-      )}
-
-      {isLoading ? (
-        <SchedulesSkeleton />
-      ) : error ? (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">
-          {error}
-        </div>
-      ) : sortedEvents.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">
-          No events scheduled yet.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
-                <th className="px-3 py-2.5 text-center">No</th>
-                <th className="px-3 py-2.5">Tanggal</th>
-                {slotHeaders.map((h, i) => (
-                  <th key={i} colSpan={2} className="px-3 py-2.5 text-center border-l">
-                    Slot {i + 1}
-                  </th>
-                ))}
-              </tr>
-              <tr className="border-b bg-muted/30 text-left text-[11px] font-medium text-muted-foreground">
-                <th />
-                <th />
-                {slotHeaders.map((h, i) => (
-                  <Fragment key={i}>
-                    <th className="px-3 py-2 border-l font-medium">{h.team}</th>
-                    <th className="px-3 py-2 font-medium">{h.members}</th>
-                  </Fragment>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedEvents.map((event, rowIdx) => {
-                const date = new Date(event.date);
-                const teamNumbers = event.teams.map((t) => t.number);
-                const membersByTeam = groupMembersByTeam(event.members, teamNumbers);
-                const past = isPast(date);
-
-                return (
-                  <tr key={event.id} className="border-b last:border-b-0">
-                    <td className="px-3 py-2.5 text-center text-muted-foreground">
-                      {rowIdx + 1}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <span className={cn("text-sm font-medium", past && "text-muted-foreground")}>
-                        {format(date, "EEE, dd MMM yyyy", { locale: id })}
-                      </span>
-                    </td>
-                    {Array.from({ length: maxTeamSlots }).map((_, slotIdx) => {
-                      const team = event.teams[slotIdx];
-                      if (!team) {
-                        return (
-                          <Fragment key={slotIdx}>
-                            <td className="px-3 py-2 border-l text-muted-foreground">-</td>
-                            <td className="px-3 py-2 text-muted-foreground">-</td>
-                          </Fragment>
-                        );
-                      }
-                      const members = membersByTeam.get(team.number) ?? [];
-                      return (
-                        <Fragment key={slotIdx}>
-                          <td className={cn("px-3 py-2 border-l align-top", past && "text-muted-foreground")}>
-                            <span className="inline-block rounded bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                              Team {team.number}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 align-top">
-                            {members.length === 0 ? (
-                              <span className="text-xs text-muted-foreground italic">-</span>
-                            ) : (
-                              <ul className="space-y-1">
-                                {members.map((member) => (
-                                  <li key={member.userId} className="group/item flex items-center gap-1.5">
-                                    {member.isSpv && (
-                                      <Crown className="size-3 shrink-0 text-primary" />
-                                    )}
-                                    <span className={cn(
-                                      "text-xs",
-                                      member.isSpv ? "font-semibold text-primary" : "text-foreground",
-                                    )}>
-                                      {member.fullName}
-                                    </span>
-                                    {member.isPic && (
-                                      <span className="rounded bg-amber-500/15 px-1 py-px text-[9px] font-bold text-amber-600">
-                                        PIC
-                                      </span>
-                                    )}
-                                    {canSwap && (
-                                      <button
-                                        onClick={() => openSwapDialog(event.id, member)}
-                                        className="ml-auto shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100 text-muted-foreground hover:text-foreground"
-                                        aria-label={`Swap ${member.fullName}`}
-                                      >
-                                        <ArrowLeftRight className="size-3" />
-                                      </button>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </td>
-                        </Fragment>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       )}
 
       <Dialog open={swapDialogOpen} onOpenChange={setSwapDialogOpen}>
@@ -484,94 +471,130 @@ export default function SchedulesPage() {
   );
 }
 
-function PendingApprovals({
+function SwapsTab({
   swaps,
+  loading,
+  canApprove,
   onApprove,
   onReject,
 }: {
   swaps: SwapRequestItem[];
+  loading: boolean;
+  canApprove: boolean;
   onApprove: (id: number) => void;
   onReject: (id: number) => void;
 }) {
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
 
-  return (
-    <div className="mb-7 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h2 className="mb-3 text-lg font-semibold tracking-tight">Pending Swap Approvals</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-xs text-muted-foreground">
-              <th className="pb-2 pr-3 font-medium">Event</th>
-              <th className="pb-2 pr-3 font-medium">Date</th>
-              <th className="pb-2 pr-3 font-medium">From</th>
-              <th className="pb-2 pr-3 font-medium">From Team</th>
-              <th className="pb-2 pr-3 font-medium">To</th>
-              <th className="pb-2 pr-3 font-medium">To Team</th>
-              <th className="pb-2 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {swaps.map((swap) => (
-              <tr key={swap.id} className="border-b last:border-b-0">
-                <td className="py-2 pr-3 font-medium">{swap.eventName}</td>
-                <td className="py-2 pr-3 text-muted-foreground">
-                  {format(new Date(swap.eventDate), "d MMM yyyy", { locale: id })}
-                </td>
-                <td className="py-2 pr-3">{swap.userFromName}</td>
-                <td className="py-2 pr-3 text-muted-foreground">
-                  {swap.fromTeamNumber ? `Team ${swap.fromTeamNumber}` : "-"}
-                </td>
-                <td className="py-2 pr-3">{swap.userToName ?? "-"}</td>
-                <td className="py-2 pr-3 text-muted-foreground">
-                  {swap.toTeamNumber ? `Team ${swap.toTeamNumber}` : "-"}
-                </td>
-                <td className="py-2 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-green-600 hover:text-green-700"
-                      disabled={approvingId === swap.id || rejectingId === swap.id}
-                      onClick={async () => {
-                        setApprovingId(swap.id);
-                        await onApprove(swap.id);
-                        setApprovingId(null);
-                      }}
-                      aria-label="Approve"
-                    >
-                      {approvingId === swap.id ? (
-                        <Loader className="size-3.5 animate-spin" />
-                      ) : (
-                        <Check className="size-3.5" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-destructive hover:text-destructive"
-                      disabled={approvingId === swap.id || rejectingId === swap.id}
-                      onClick={async () => {
-                        setRejectingId(swap.id);
-                        await onReject(swap.id);
-                        setRejectingId(null);
-                      }}
-                      aria-label="Reject"
-                    >
-                      {rejectingId === swap.id ? (
-                        <Loader className="size-3.5 animate-spin" />
-                      ) : (
-                        <X className="size-3.5" />
-                      )}
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-12 w-full rounded-lg bg-card" />
+        ))}
       </div>
+    );
+  }
+
+  if (swaps.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">
+        No swap requests for this period.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
+            <th className="px-3 py-2.5">Event</th>
+            <th className="px-3 py-2.5">Date</th>
+            <th className="px-3 py-2.5">From</th>
+            <th className="px-3 py-2.5">From Team</th>
+            <th className="px-3 py-2.5">To</th>
+            <th className="px-3 py-2.5">To Team</th>
+            <th className="px-3 py-2.5">Status</th>
+            {canApprove && <th className="px-3 py-2.5 text-center">Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {swaps.map((swap) => (
+            <tr key={swap.id} className="border-b last:border-b-0">
+              <td className="px-3 py-2.5 font-medium">{swap.eventName}</td>
+              <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                {format(new Date(swap.eventDate), "d MMM yyyy", { locale: id })}
+              </td>
+              <td className="px-3 py-2.5">{swap.userFromName}</td>
+              <td className="px-3 py-2.5 text-muted-foreground">
+                {swap.fromTeamNumber ? `Team ${swap.fromTeamNumber}` : "-"}
+              </td>
+              <td className="px-3 py-2.5">{swap.userToName ?? "-"}</td>
+              <td className="px-3 py-2.5 text-muted-foreground">
+                {swap.toTeamNumber ? `Team ${swap.toTeamNumber}` : "-"}
+              </td>
+              <td className="px-3 py-2.5">
+                <Badge className={cn(
+                  "h-5 rounded px-2 text-[10px] font-semibold",
+                  swap.status === "pending" && "bg-amber-500/15 text-amber-600 hover:bg-amber-500/15",
+                  swap.status === "approved" && "bg-green-500/15 text-green-600 hover:bg-green-500/15",
+                  swap.status === "rejected" && "bg-destructive/15 text-destructive hover:bg-destructive/15",
+                )}>
+                  {swap.status.charAt(0).toUpperCase() + swap.status.slice(1)}
+                </Badge>
+              </td>
+              {canApprove && (
+                <td className="px-3 py-2.5 text-center">
+                  {swap.status === "pending" ? (
+                    <div className="flex items-center justify-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-green-600 hover:text-green-700"
+                        disabled={approvingId === swap.id || rejectingId === swap.id}
+                        onClick={async () => {
+                          setApprovingId(swap.id);
+                          await onApprove(swap.id);
+                          setApprovingId(null);
+                        }}
+                        aria-label="Approve"
+                      >
+                        {approvingId === swap.id ? (
+                          <Loader className="size-3.5 animate-spin" />
+                        ) : (
+                          <Check className="size-3.5" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-destructive hover:text-destructive"
+                        disabled={approvingId === swap.id || rejectingId === swap.id}
+                        onClick={async () => {
+                          setRejectingId(swap.id);
+                          await onReject(swap.id);
+                          setRejectingId(null);
+                        }}
+                        aria-label="Reject"
+                      >
+                        {rejectingId === swap.id ? (
+                          <Loader className="size-3.5 animate-spin" />
+                        ) : (
+                          <X className="size-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Providers } from "@/components/providers"
 import { UserSessionProvider } from "@/components/user-session-provider"
 import { FirebaseAuthInitializer } from "@/components/firebase-auth-initializer"
+import { RegisterServiceWorker } from "@/components/register-service-worker"
 import { getUserSession } from "@/actions/auth/session"
 import "./globals.css"
 
@@ -69,6 +70,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans">
+        <RegisterServiceWorker />
         <ThemeProvider>
           <Providers>
             <UserSessionProvider initialSession={session}>

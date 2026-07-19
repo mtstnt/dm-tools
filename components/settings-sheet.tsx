@@ -1,12 +1,12 @@
 "use client"
 
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { InstallAppCard } from "@/components/install-app-card"
 
 interface SettingsSheetProps {
@@ -16,19 +16,17 @@ interface SettingsSheetProps {
 
 export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex flex-col gap-6 overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Pengaturan</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] flex-col gap-6 overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Pengaturan</DialogTitle>
+          <DialogDescription>
             Kelola preferensi aplikasi DM Tools di perangkat ini.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="px-4">
-          <InstallAppCard />
-        </div>
-      </SheetContent>
-    </Sheet>
+        <InstallAppCard />
+      </DialogContent>
+    </Dialog>
   )
 }

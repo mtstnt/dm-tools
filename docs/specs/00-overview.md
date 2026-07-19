@@ -50,7 +50,7 @@ app/
     home/page.tsx     Placeholder home
     audit-trails/     Paginated audit log
     events/           DB-backed event management (schedule, create, detail with tabs)
-    schedules/page.tsx Placeholder (copy-paste of regions heading)
+    schedules/page.tsx Event assignment browser with swap request & approval
     master/           Master data CRUD pages (regions, teams, event-types, ministries, metrics, tasks, configurations)
     users/            Members (list + detail), roles master, role assignments
   tools/              Protected sidebar area (AuthGuard)
@@ -69,6 +69,7 @@ actions/              Root-level server actions (not under app/)
   master/             Master data actions (regions, teams, event-types, ministries, metrics, tasks, configurations)
   users/              Member, role CRUD, and role-assignment actions
   events.ts           DB-backed event CRUD actions
+  schedules.ts        Schedule browser & swap request actions
   audit-trails.ts     Audit log action
   legacy-web/         External SC API actions (auth, events, users)
 components/
@@ -179,7 +180,7 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 | Master Data | `/my/master/*` | Working (regions, teams, event-types, ministries, metrics, tasks, configurations) |
 | Audit Trails | `/my/audit-trails` | Working |
 | Firebase Members | `/tools/members` | Working (requires Firebase) |
-| Schedules | `/my/schedules` | Placeholder (not implemented) |
+| Schedules | `/my/schedules` | Working (event assignments browser, swap requests, SPV/Admin approvals) |
 
 ## Fonts
 

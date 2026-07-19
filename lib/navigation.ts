@@ -67,6 +67,13 @@ export const sidebarMenus: NavigationRootItem[] = [
       },
       {
         type: "link",
+        label: "Schedules",
+        targetLink: "/my/schedules",
+        icon: Users,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
+      },
+      {
+        type: "link",
         label: "Doa Wilayah",
         targetLink: "/tools/doa-wilayah",
         icon: UserCheck,

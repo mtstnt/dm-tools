@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Pencil,
   TriangleAlert,
 } from "lucide-react";
 import { getEventSchedule, getEventScheduleYears, type EventScheduleItem } from "@/actions/events";
@@ -33,6 +34,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { MONTHS_ID } from "@/lib/constants";
+import { useSessionUser, hasPermission } from "@/components/user-session-provider";
 
 const FULL_MONTHS = MONTHS_ID;
 
@@ -56,6 +58,8 @@ export default function EventsPage() {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(() => new Set());
   const [yearOptions, setYearOptions] = useState<number[]>(() => [new Date().getFullYear()]);
+  const session = useSessionUser();
+  const canEdit = hasPermission(session, "events", "update");
 
   useEffect(() => {
     let mounted = true;
@@ -131,6 +135,11 @@ export default function EventsPage() {
     years.add(selectedYear);
     return Array.from(years).sort((a, b) => a - b);
   }, [yearOptions, selectedYear]);
+
+  const incompleteCount = useMemo(() => {
+    const now = new Date();
+    return events.filter((e) => e.status !== "completed" && new Date(e.date) <= now).length;
+  }, [events]);
 
   function moveMonth(direction: -1 | 1) {
     const nextDate = new Date(selectedYear, selectedMonth + direction, 1);
@@ -264,7 +273,19 @@ export default function EventsPage() {
           No events scheduled yet.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <>
+          {incompleteCount > 0 && (
+            <div className="mb-5 flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+              <TriangleAlert className="size-5 shrink-0 text-amber-600" />
+              <span>
+                <span className="font-semibold text-amber-800 dark:text-amber-200">{incompleteCount}</span>
+                <span className="text-amber-700 dark:text-amber-300">
+                  {" "}event data not yet submitted. Please complete them to ensure accurate records.
+                </span>
+              </span>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {groupedEvents.map((group) => (
             <Card
               key={dateKey(group.date)}
@@ -298,11 +319,13 @@ export default function EventsPage() {
                   events={group.events}
                   isExpanded={expandedDateKeys.has(dateKey(group.date))}
                   onToggle={toggleDateGroup}
+                  canEdit={canEdit}
                 />
               </CardContent>
             </Card>
           ))}
         </div>
+        </>
       )}
     </div>
   );
@@ -313,11 +336,13 @@ function DateGroupEvents({
   events,
   isExpanded,
   onToggle,
+  canEdit,
 }: {
   groupKey: string;
   events: EventScheduleItem[];
   isExpanded: boolean;
   onToggle: (key: string) => void;
+  canEdit: boolean;
 }) {
   const visibleEvents = isExpanded ? events : events.slice(0, 3);
   const hiddenCount = events.length - 3;
@@ -325,7 +350,7 @@ function DateGroupEvents({
   return (
     <div className="space-y-2.5">
       {visibleEvents.map((event) => (
-        <EventCard key={event.id} event={event} />
+          <EventCard key={event.id} event={event} canEdit={canEdit} />
       ))}
 
       {hiddenCount > 0 ? (
@@ -355,14 +380,21 @@ function getStatusIcon(event: EventScheduleItem) {
 
 function EventCard({
   event,
+  canEdit,
 }: {
   event: EventScheduleItem;
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const date = new Date(event.date);
 
   function openEvent() {
     router.push(`/my/events/${event.id}`);
+  }
+
+  function handleEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    router.push(`/my/events/${event.id}/edit`);
   }
 
   const statusIcon = getStatusIcon(event);
@@ -390,7 +422,19 @@ function EventCard({
           <CardTitle className={cn("text-base font-semibold tracking-normal", past && "text-muted-foreground")}>
             {event.eventTypeName}
           </CardTitle>
-          {statusIcon}
+          <div className="flex items-center gap-1">
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleEdit}
+                aria-label={`Edit ${event.eventTypeName}`}
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            )}
+            {statusIcon}
+          </div>
         </div>
         <CardDescription className={cn("text-xs font-medium", past && "text-muted-foreground/60")}>
           {event.regionName} | {formatEventDateTime(date)}

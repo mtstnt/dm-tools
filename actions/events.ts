@@ -1,12 +1,16 @@
 "use server";
 
-import { and, asc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import {
+  eventAltarCalls,
+  eventAssignmentChangeRequests,
   eventAssignments,
+  eventMetrics,
   eventTeams,
   eventTypes,
+  eventVolunteers,
   events,
   regions,
   tasks,
@@ -675,6 +679,25 @@ export async function createEvents(
               updatedBy: ctx.userId,
             })),
           );
+
+          const teamMemberRows = await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(inArray(users.teamId, event.teamIds));
+
+          if (teamMemberRows.length > 0) {
+            await tx.insert(eventAssignments).values(
+              teamMemberRows.map((m) => ({
+                eventId: createdEvent.id,
+                userId: m.id,
+                taskId: null,
+                createdAt: now,
+                updatedAt: now,
+                createdBy: ctx.userId,
+                updatedBy: ctx.userId,
+              })),
+            );
+          }
         }
 
         if (event.mode === "members" || event.picIds.length > 0) {
@@ -1035,6 +1058,25 @@ export async function updateEvent(
             updatedBy: ctx.userId,
           })),
         );
+
+        const teamMemberRows = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(inArray(users.teamId, uniqueTeamIds));
+
+        if (teamMemberRows.length > 0) {
+          await tx.insert(eventAssignments).values(
+            teamMemberRows.map((m) => ({
+              eventId,
+              userId: m.id,
+              taskId: null,
+              createdAt: now,
+              updatedAt: now,
+              createdBy: ctx.userId,
+              updatedBy: ctx.userId,
+            })),
+          );
+        }
       }
 
       if (event.mode === "members" || uniquePicIds.length > 0) {
@@ -1084,5 +1126,62 @@ export async function updateEvent(
       success: false,
       error: err instanceof Error ? err.message : "Failed to update event",
     };
+  }
+}
+
+export type DeleteEventResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function deleteEvent(
+  eventId: number,
+): Promise<DeleteEventResult> {
+  const allowed = await checkPermission("events", "delete");
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  if (!Number.isInteger(eventId) || eventId <= 0) {
+    return { success: false, error: "Event not found" };
+  }
+
+  try {
+    const existing = await db
+      .select({
+        id: events.id,
+        name: events.name,
+        date: events.date,
+        regionId: events.regionId,
+        eventTypeId: events.eventTypeId,
+        mode: events.mode,
+        status: events.status,
+      })
+      .from(events)
+      .where(eq(events.id, eventId))
+      .limit(1);
+
+    if (existing.length === 0) {
+      return { success: false, error: "Event not found" };
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(eventTeams).where(eq(eventTeams.eventId, eventId));
+      await tx.delete(eventAssignments).where(eq(eventAssignments.eventId, eventId));
+      await tx.delete(eventMetrics).where(eq(eventMetrics.eventId, eventId));
+      await tx.delete(eventVolunteers).where(eq(eventVolunteers.eventId, eventId));
+      await tx.delete(eventAltarCalls).where(eq(eventAltarCalls.eventId, eventId));
+      await tx.delete(eventAssignmentChangeRequests).where(
+        eq(eventAssignmentChangeRequests.eventId, eventId),
+      );
+      await tx.delete(events).where(eq(events.id, eventId));
+    });
+
+    await logAuditTrail("events", eventId, "delete", existing[0], {});
+
+    return { success: true };
+  } catch (err) {
+    console.error("[deleteEvent] error:", err);
+    return { success: false, error: "Failed to delete event" };
   }
 }

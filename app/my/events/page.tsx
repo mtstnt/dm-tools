@@ -12,9 +12,10 @@ import {
   ChevronRight,
   Filter,
   Pencil,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
-import { getEventSchedule, getEventScheduleYears, type EventScheduleItem } from "@/actions/events";
+import { deleteEvent, getEventSchedule, getEventScheduleYears, type EventScheduleItem } from "@/actions/events";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -24,6 +25,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -60,6 +69,28 @@ export default function EventsPage() {
   const [yearOptions, setYearOptions] = useState<number[]>(() => [new Date().getFullYear()]);
   const session = useSessionUser();
   const canEdit = hasPermission(session, "events", "update");
+  const canDelete = hasPermission(session, "events", "delete");
+  const [deletingEvent, setDeletingEvent] = useState<EventScheduleItem | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteConfirm() {
+    if (!deletingEvent) return;
+    setDeletePending(true);
+    setDeleteError(null);
+
+    const result = await deleteEvent(deletingEvent.id);
+
+    if (!result.success) {
+      setDeleteError(result.error ?? "Failed to delete event");
+      setDeletePending(false);
+      return;
+    }
+
+    setDeletingEvent(null);
+    setDeletePending(false);
+    setEvents((prev) => prev.filter((e) => e.id !== deletingEvent.id));
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -320,6 +351,8 @@ export default function EventsPage() {
                   isExpanded={expandedDateKeys.has(dateKey(group.date))}
                   onToggle={toggleDateGroup}
                   canEdit={canEdit}
+                  canDelete={canDelete}
+                  onDelete={(event) => setDeletingEvent(event)}
                 />
               </CardContent>
             </Card>
@@ -327,6 +360,43 @@ export default function EventsPage() {
         </div>
         </>
       )}
+
+      <Dialog
+        open={deletingEvent !== null}
+        onOpenChange={(open) => !open && setDeletingEvent(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Event</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-medium text-foreground">
+                {deletingEvent?.eventTypeName}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <div className="text-sm text-destructive">{deleteError}</div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeletingEvent(null)}
+              disabled={deletePending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deletePending}
+            >
+              {deletePending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -337,12 +407,16 @@ function DateGroupEvents({
   isExpanded,
   onToggle,
   canEdit,
+  canDelete,
+  onDelete,
 }: {
   groupKey: string;
   events: EventScheduleItem[];
   isExpanded: boolean;
   onToggle: (key: string) => void;
   canEdit: boolean;
+  canDelete: boolean;
+  onDelete: (event: EventScheduleItem) => void;
 }) {
   const visibleEvents = isExpanded ? events : events.slice(0, 3);
   const hiddenCount = events.length - 3;
@@ -350,7 +424,7 @@ function DateGroupEvents({
   return (
     <div className="space-y-2.5">
       {visibleEvents.map((event) => (
-          <EventCard key={event.id} event={event} canEdit={canEdit} />
+          <EventCard key={event.id} event={event} canEdit={canEdit} canDelete={canDelete} onDelete={onDelete} />
       ))}
 
       {hiddenCount > 0 ? (
@@ -381,9 +455,13 @@ function getStatusIcon(event: EventScheduleItem) {
 function EventCard({
   event,
   canEdit,
+  canDelete,
+  onDelete,
 }: {
   event: EventScheduleItem;
   canEdit: boolean;
+  canDelete: boolean;
+  onDelete: (event: EventScheduleItem) => void;
 }) {
   const router = useRouter();
   const date = new Date(event.date);
@@ -395,6 +473,11 @@ function EventCard({
   function handleEdit(e: React.MouseEvent) {
     e.stopPropagation();
     router.push(`/my/events/${event.id}/edit`);
+  }
+
+  function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    onDelete(event);
   }
 
   const statusIcon = getStatusIcon(event);
@@ -431,6 +514,16 @@ function EventCard({
                 aria-label={`Edit ${event.eventTypeName}`}
               >
                 <Pencil className="size-3.5" />
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleDelete}
+                aria-label={`Delete ${event.eventTypeName}`}
+              >
+                <Trash2 className="size-3.5" />
               </Button>
             )}
             {statusIcon}

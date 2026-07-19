@@ -8,6 +8,8 @@
 
 Displays a month-based calendar view of internal events grouped by date. Each date group shows event cards with event type, region, date/time, and assigned teams. Supports month/year navigation and expandable date groups.
 
+Each event card shows an edit button (pencil icon) for users with `events:update` permission, and a delete button (trash icon) for users with `events:delete` permission. Clicking delete opens a confirmation dialog; confirming removes the event and all related data (teams, assignments, metrics, volunteers, altar calls) in a single transaction.
+
 ### Event Creation
 
 **Route**: `/my/events/new`
@@ -275,7 +277,7 @@ Events created and managed within the app's own database (SQLite/Turso via Drizz
 
 | File | Role |
 |------|------|
-| `actions/events.ts` | Server actions: `getEventSchedule`, `getEventScheduleYears`, `getEventDetail`, `getEventConfiguration`, `updateEventConfiguration`, `getEventCreationOptions`, `createEvents` |
+| `actions/events.ts` | Server actions: `getEventSchedule`, `getEventScheduleYears`, `getEventDetail`, `getEventConfiguration`, `updateEventConfiguration`, `getEventCreationOptions`, `createEvents`, `getEventForEdit`, `updateEvent`, `deleteEvent` |
 | `app/my/events/page.tsx` | Events schedule list with month/year filters, date-grouped cards |
 | `app/my/events/[id]/page.tsx` | Event detail with Configuration, Assignment, Seating, Reporting tabs |
 | `app/my/events/[id]/_components/configuration-tab.tsx` | Event configuration editor |

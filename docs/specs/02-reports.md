@@ -118,6 +118,20 @@ The Reporting tab on the Event Detail page (`/my/events/[id]`) saves data to the
 - The tab populates `metricNames`, `metricValues`, `formData.volunteers.byMinistry`, and `formData.altarCalls` from saved data
 - Template is regenerated from saved metric names on load
 
+### Hardcoded Metrics
+
+Two metrics are always present in the reporting tab regardless of selection:
+
+| Metric | Behavior |
+|--------|----------|
+| Seat Counter | Always shown as an input field |
+| Tally Counter | Always shown as an input field |
+
+- The `ensureHardcodedMetrics()` helper in `reporting-tab.tsx` merges `["Seat Counter", "Tally Counter"]` into any `metricNames` array
+- They are always included in the default template (`%Seat Counter% ; %Tally Counter%`)
+- The Metrics dialog cannot remove them — `handleMetricsSave` re-merges on every selection change
+- Other metrics can be freely added/removed via the dialog
+
 ### Event Status Transitions
 
 | Condition | Status |

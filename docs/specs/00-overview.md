@@ -50,10 +50,9 @@ app/
     home/page.tsx     Placeholder home
     audit-trails/     Paginated audit log
     events/           DB-backed event management (schedule, create, detail with tabs)
-    my-events/        Duplicate of events (titled "My Events")
     schedules/page.tsx Placeholder (copy-paste of regions heading)
     master/           Master data CRUD pages (regions, teams, event-types, ministries, metrics, tasks, configurations)
-    users/            Members (list + detail), permissions, roles (list + detail)
+    users/            Members (list + detail), roles master, role assignments
   tools/              Protected sidebar area (AuthGuard)
     utilities/        Reports, Assign, Tally
     doa-wilayah/      Monthly prayer schedule
@@ -68,7 +67,7 @@ actions/              Root-level server actions (not under app/)
     current-user.ts   getCurrentUser(), checkAuth()
     firebase-auth.ts  getFirebaseCredentials() — AES-256-GCM encrypted Firebase credentials
   master/             Master data actions (regions, teams, event-types, ministries, metrics, tasks, configurations)
-  users/              Member/role/permission actions
+  users/              Member, role CRUD, and role-assignment actions
   events.ts           DB-backed event CRUD actions
   audit-trails.ts     Audit log action
   legacy-web/         External SC API actions (auth, events, users)
@@ -173,9 +172,10 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 | Event Schedule | `/my/events` | Working (DB-backed) |
 | Event Create | `/my/events/new` | Working (DB-backed) |
 | Event Detail | `/my/events/[id]` | Working (DB-backed, 4 tabs: Configuration, Assignment, Seating, Reporting) |
-| My Events | `/my/my-events` | Working (duplicate of Event Schedule) |
-| Members | `/my/users/members` | Working |
-| Member Detail | `/my/users/members/[id]` | Working |
+| Members | `/my/users/members` | Working (role badges per user) |
+| Member Detail | `/my/users/members/[id]` | Working (role shown inline) |
+| Roles | `/my/users/roles` | Working (Admin-only, hardcoded warning) |
+| Role Assignments | `/my/users/role-assignments` | Working (inline role dropdown, search, filter, sorted by role/team/name) |
 | Master Data | `/my/master/*` | Working (regions, teams, event-types, ministries, metrics, tasks, configurations) |
 | Audit Trails | `/my/audit-trails` | Working |
 | Firebase Members | `/tools/members` | Working (requires Firebase) |

@@ -4,6 +4,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { roles, teams, users } from "@/db/schema";
 import { getUserRole, getUserContext, logAuditTrail } from "@/actions/master/_shared";
+import { getCurrentUser } from "@/actions/auth/current-user";
 import { ROLES, canAccess } from "@/lib/permissions";
 
 export type UserRoleAssignment = {
@@ -51,6 +52,7 @@ export async function getUserRoleAssignments(): Promise<UserRoleAssignmentsResul
           WHEN 'Member' THEN 5
           ELSE 6
         END`,
+        sql`COALESCE(${teams.number}, 999)`,
         asc(users.fullName),
       );
 
@@ -71,6 +73,15 @@ export async function updateUserRole(
   }
 
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    if (currentUser.id === userId) {
+      return { success: false, error: "Cannot change your own role" };
+    }
+
     const ctx = await getUserContext();
 
     const existingRows = await db
@@ -84,6 +95,16 @@ export async function updateUserRole(
     }
 
     const existing = existingRows[0];
+
+    const adminRoleRows = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(eq(roles.name, "Admin"))
+      .limit(1);
+
+    if (adminRoleRows.length > 0 && existing.roleId === adminRoleRows[0].id) {
+      return { success: false, error: "Cannot change the role of an Admin user" };
+    }
 
     await db
       .update(users)

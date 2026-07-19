@@ -4,11 +4,44 @@ import { useCallback, useEffect, useState } from "react"
 
 type PwaPlatform = "ios" | "android" | "desktop" | "unknown"
 
-interface UsePwaInstallResult {
-  isInstallable: boolean
+interface PwaInstallState {
+  deferredPrompt: BeforeInstallPromptEvent | null
   isInstalled: boolean
-  platform: PwaPlatform
-  promptInstall: () => Promise<"accepted" | "dismissed" | "unavailable">
+}
+
+const state: PwaInstallState = {
+  deferredPrompt: null,
+  isInstalled: false,
+}
+
+const listeners = new Set<() => void>()
+
+function emit() {
+  listeners.forEach((listener) => listener())
+}
+
+let initialized = false
+
+export function initPwaInstallCapture() {
+  if (initialized) return
+  if (typeof window === "undefined") return
+  initialized = true
+
+  state.isInstalled =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault()
+    state.deferredPrompt = event
+    emit()
+  })
+
+  window.addEventListener("appinstalled", () => {
+    state.isInstalled = true
+    state.deferredPrompt = null
+    emit()
+  })
 }
 
 function detectPlatform(): PwaPlatform {
@@ -23,51 +56,40 @@ function detectPlatform(): PwaPlatform {
   return "unknown"
 }
 
-function detectStandalone(): boolean {
-  if (typeof window === "undefined") return false
-  const isStandaloneDisplay = window.matchMedia("(display-mode: standalone)").matches
-  return isStandaloneDisplay || window.navigator.standalone === true
+interface UsePwaInstallResult {
+  isInstallable: boolean
+  isInstalled: boolean
+  platform: PwaPlatform
+  promptInstall: () => Promise<"accepted" | "dismissed" | "unavailable">
 }
 
 export function usePwaInstall(): UsePwaInstallResult {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [isInstalled, setIsInstalled] = useState(false)
   const [platform, setPlatform] = useState<PwaPlatform>("unknown")
+  const [, setTick] = useState(0)
 
   useEffect(() => {
+    initPwaInstallCapture()
     setPlatform(detectPlatform())
-    setIsInstalled(detectStandalone())
 
-    const handleBeforeInstallPrompt = (event: BeforeInstallPromptEvent) => {
-      event.preventDefault()
-      setDeferredPrompt(event)
-    }
-
-    const handleAppInstalled = () => {
-      setIsInstalled(true)
-      setDeferredPrompt(null)
-    }
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-    window.addEventListener("appinstalled", handleAppInstalled)
-
+    const listener = () => setTick((tick) => tick + 1)
+    listeners.add(listener)
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-      window.removeEventListener("appinstalled", handleAppInstalled)
+      listeners.delete(listener)
     }
   }, [])
 
   const promptInstall = useCallback(async () => {
-    if (!deferredPrompt) return "unavailable" as const
-    await deferredPrompt.prompt()
-    const choice = await deferredPrompt.userChoice
-    setDeferredPrompt(null)
+    if (!state.deferredPrompt) return "unavailable" as const
+    await state.deferredPrompt.prompt()
+    const choice = await state.deferredPrompt.userChoice
+    state.deferredPrompt = null
+    emit()
     return choice.outcome
-  }, [deferredPrompt])
+  }, [])
 
   return {
-    isInstallable: deferredPrompt !== null,
-    isInstalled,
+    isInstallable: state.deferredPrompt !== null,
+    isInstalled: state.isInstalled,
     platform,
     promptInstall,
   }

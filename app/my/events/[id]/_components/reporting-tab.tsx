@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Plus, Trash2, Copy, Check, Settings2, Pencil, Loader2 } from "lucide-react"
+
+const HARDCODED_METRICS = ["Seat Counter", "Tally Counter"]
+
+function ensureHardcodedMetrics(names: string[]): string[] {
+  const merged = new Set(names)
+  for (const m of HARDCODED_METRICS) merged.add(m)
+  return Array.from(merged)
+}
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -124,7 +132,7 @@ export function ReportingTab({
   const [copied, setCopied] = useState(false)
   const [clipboardUnavailable, setClipboardUnavailable] = useState(false)
   const [canUseClipboard, setCanUseClipboard] = useState(false)
-  const [metricNames, setMetricNames] = useState<string[]>(initialMetricNames)
+  const [metricNames, setMetricNames] = useState<string[]>(ensureHardcodedMetrics(initialMetricNames))
   const [reportTemplate, setReportTemplate] = useState(DEFAULT_TEMPLATE_BODY)
   const [showTemplateEditor, setShowTemplateEditor] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -133,7 +141,7 @@ export function ReportingTab({
 
   useEffect(() => {
     setCanUseClipboard(window.isSecureContext && Boolean(navigator.clipboard))
-    setReportTemplate(getDefaultTemplate(initialMetricNames))
+    setReportTemplate(getDefaultTemplate(ensureHardcodedMetrics(initialMetricNames)))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [formData, setFormData] = useState<ReportFormData>({
@@ -141,7 +149,7 @@ export function ReportingTab({
       count: "",
       byMinistry: Object.fromEntries(initialMinistries.map((m) => [m.name, ""])),
     },
-    metricValues: Object.fromEntries(initialMetricNames.map((m) => [m, ""])),
+    metricValues: Object.fromEntries(ensureHardcodedMetrics(initialMetricNames).map((m) => [m, ""])),
     altarCalls: [{ description: "", count: "" }],
   })
 
@@ -155,8 +163,8 @@ export function ReportingTab({
       for (const m of metrics) {
         values[m.metricName] = String(m.count)
       }
-      setMetricNames(names)
-      setReportTemplate(getDefaultTemplate(names))
+      setMetricNames(ensureHardcodedMetrics(names))
+      setReportTemplate(getDefaultTemplate(ensureHardcodedMetrics(names)))
       setFormData((prev) => ({ ...prev, metricValues: values }))
     }
 
@@ -258,10 +266,11 @@ export function ReportingTab({
   }
 
   function handleMetricsSave(selected: string[]) {
-    setMetricNames(selected)
+    const merged = ensureHardcodedMetrics(selected)
+    setMetricNames(merged)
     setFormData((prev) => {
       const updatedValues: Record<string, string> = {}
-      for (const name of selected) {
+      for (const name of merged) {
         updatedValues[name] = prev.metricValues[name] ?? ""
       }
       return { ...prev, metricValues: updatedValues }

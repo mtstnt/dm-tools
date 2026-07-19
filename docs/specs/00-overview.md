@@ -11,6 +11,7 @@
 | UI Kit | Shadcn UI (base-nova style, lucide icons) |
 | State/Data | TanStack React Query 5 |
 | Auth/DB | Drizzle ORM + SQLite (`users` table); Firebase 12 only for Firestore |
+| Permissions | Hardcoded role-based (5 roles: Admin, Head Ministry, Regional PIC, SPV, Member) in `lib/permissions.ts` |
 | Theming | next-themes (class strategy, light default) |
 | Package Manager | Bun |
 
@@ -49,10 +50,9 @@ app/
     home/page.tsx     Placeholder home
     audit-trails/     Paginated audit log
     events/           DB-backed event management (schedule, create, detail with tabs)
-    my-events/        Duplicate of events (titled "My Events")
-    schedules/page.tsx Placeholder (copy-paste of regions heading)
+    schedules/page.tsx Event assignment browser with swap request & approval
     master/           Master data CRUD pages (regions, teams, event-types, ministries, metrics, tasks, configurations)
-    users/            Members (list + detail), permissions, roles (list + detail)
+    users/            Members (list + detail), roles master, role assignments
   tools/              Protected sidebar area (AuthGuard)
     utilities/        Reports, Assign, Tally
     doa-wilayah/      Monthly prayer schedule
@@ -63,24 +63,25 @@ app/
 actions/              Root-level server actions (not under app/)
   auth/
     login.ts          login(), logout()
-    session.ts        getUserSession() — full session with roles + permissions
+    session.ts        getUserSession() — session with role, teamId, regionId, Firebase credentials
     current-user.ts   getCurrentUser(), checkAuth()
     firebase-auth.ts  getFirebaseCredentials() — AES-256-GCM encrypted Firebase credentials
   master/             Master data actions (regions, teams, event-types, ministries, metrics, tasks, configurations)
-  users/              Member/role/permission actions
+  users/              Member, role CRUD, and role-assignment actions
   events.ts           DB-backed event CRUD actions
+  schedules.ts        Schedule browser & swap request actions
   audit-trails.ts     Audit log action
   legacy-web/         External SC API actions (auth, events, users)
 components/
   ui/                 Shadcn components (base-nova, @base-ui/react primitives)
   custom/             master-crud-page.tsx, data-table.tsx
-  app-sidebar.tsx     Sidebar driven by lib/navigation.ts; filters by permissions
+  app-sidebar.tsx     Sidebar driven by lib/navigation.ts; filters by role
   auth-guard.tsx      Client-side route guard
   web-auth-guard.tsx  Auth gate for external events API
   providers.tsx       React Query provider (staleTime 5m, gcTime 30m, no refetch on focus)
   theme-provider.tsx  next-themes wrapper
   theme-toggle.tsx    Light/dark theme toggle button
-  user-session-provider.tsx  React Context for session, roles, permissions
+  user-session-provider.tsx  React Context for session and role
   account-info.tsx    User dropdown (local auth)
   logout-button.tsx   Sidebar logout button
   firebase-auth-initializer.tsx  Silently signs in to Firebase Auth using encrypted session credentials
@@ -89,7 +90,8 @@ components/
   refresh-cache-button.tsx  Service worker + cache clearing button
 lib/
   firebase/firebase.ts  Firebase client init (hardcoded config, "use client")
-  navigation.ts       Sidebar menu items: groups + root links/dropdowns with optional resource
+  navigation.ts       Sidebar menu items: groups + root links/dropdowns with optional allowedRoles
+  permissions.ts      Role constants + canAccess() guard (shared frontend/backend)
   queries/            React Query keys + Firestore/legacy action wrappers
   parsers/            Cheerio parsers for external events
   crypto/             AES-256-GCM encryption/decryption for Firebase credentials
@@ -125,7 +127,7 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 
 ### Local SQLite (Drizzle)
 - **Master**: regions, teams, event_types, ministries, metrics, tasks, configurations
-- **Users & permissions**: users, roles, permissions, role_permissions, user_permissions
+- **Users & roles**: users, roles
 - **Events**: events, event_teams, event_assignments, event_metrics, event_volunteers, event_altar_calls, event_assignment_change_requests
 - **Audit**: audit_trails
 
@@ -171,16 +173,14 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 | Event Schedule | `/my/events` | Working (DB-backed) |
 | Event Create | `/my/events/new` | Working (DB-backed) |
 | Event Detail | `/my/events/[id]` | Working (DB-backed, 4 tabs: Configuration, Assignment, Seating, Reporting) |
-| My Events | `/my/my-events` | Working (duplicate of Event Schedule) |
-| Members | `/my/users/members` | Working |
-| Member Detail | `/my/users/members/[id]` | Working |
-| Permissions | `/my/users/permissions` | Working |
-| Roles | `/my/users/roles` | Working |
-| Role Detail | `/my/users/roles/[id]` | Working (permission matrix) |
+| Members | `/my/users/members` | Working (role badges per user) |
+| Member Detail | `/my/users/members/[id]` | Working (role shown inline) |
+| Roles | `/my/users/roles` | Working (Admin-only, hardcoded warning) |
+| Role Assignments | `/my/users/role-assignments` | Working (inline role dropdown, search, filter, sorted by role/team/name) |
 | Master Data | `/my/master/*` | Working (regions, teams, event-types, ministries, metrics, tasks, configurations) |
 | Audit Trails | `/my/audit-trails` | Working |
 | Firebase Members | `/tools/members` | Working (requires Firebase) |
-| Schedules | `/my/schedules` | Placeholder (not implemented) |
+| Schedules | `/my/schedules` | Working (event assignments browser, swap requests, SPV/Admin approvals) |
 
 ## Fonts
 

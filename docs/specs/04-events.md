@@ -8,7 +8,7 @@
 
 Displays a month-based calendar view of internal events grouped by date. Each date group shows event cards with event type, region, date/time, and assigned teams. Supports month/year navigation and expandable date groups.
 
-Each event card shows an edit button (pencil icon) for users with `events:update` permission, and a delete button (trash icon) for users with `events:delete` permission. Clicking delete opens a confirmation dialog; confirming removes the event and all related data (teams, assignments, metrics, volunteers, altar calls) in a single transaction.
+Each event card shows an edit button (pencil icon) for users with Admin, Head Ministry, Regional PIC, or SPV role, and a delete button (trash icon) for users with Admin or Head Ministry role. Checks use `canAccess(role, [...])` from `lib/permissions.ts`. Clicking delete opens a confirmation dialog; confirming removes the event and all related data (teams, assignments, metrics, volunteers, altar calls) in a single transaction.
 
 ### Event Creation
 
@@ -379,12 +379,76 @@ Related tables: `eventTeams`, `eventAssignments`, `eventMetrics`, `eventVoluntee
 ## Queries
 
 ### `getEventSchedule(month, year)`
-- **Authorization**: Requires `events:read` permission.
+- **Authorization**: Requires at least `Member` role. Uses `canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER])`.
 - Returns all events within the given calendar month.
 - Uses `leftJoin` on `eventTeams`/`teams` — events with multiple teams produce multiple rows, deduplicated via a `Map<id, EventScheduleItem>`.
 - Each event includes its `status` for the status indicator logic.
 
 ### `getEventDetail(eventId)`
-- **Authorization**: Requires `events:read` permission.
+- **Authorization**: Requires at least `Member` role.
 - Returns a single event with its status, all system users, and all assignments for that event.
 - Assignments are aggregated by `userId`, collecting `assignedBlockIds` (from `blockName`) and `taskIds`.
+
+---
+
+# Feature: Event Recap
+
+## Overview
+
+A participation summary table that shows how many non-mandatory events each user has participated in within a given year. Excludes AOG TEEN and AOG YOUTH event types.
+
+**Route**: `/my/events/recap`
+
+## Files
+
+| File | Role |
+|------|------|
+| `actions/events/recap.ts` | Server actions: `getEventRecapSummary`, `getUserRecapEvents` |
+| `app/my/events/recap/page.tsx` | Client component with table and year navigation |
+
+## UI
+
+- **Table columns**: Full Name, NIJ, Team, Role, Participations (count)
+- **Sorting**: Descending by participation count, ties broken alphabetically by full name
+- **Year navigation**: Previous/next year buttons; defaults to current year
+- **Expandable rows**: Click a row to expand and show the user's event list
+  - Events are lazy-loaded when the row is first expanded, then cached client-side for the session
+  - Loading state shows a spinner while fetching
+- **Event badges**: Each event renders as a `<Badge variant="secondary">` with format `"<Event Name> / <Event Date>"` where the date uses `"d MMM yyyy"` format (e.g. "24 Jun 2026")
+  - If the user's assignment includes the "Event PIC" task, `(PIC)` is appended to the badge
+  - Badges are clickable links that open `/my/events/[eventId]` in a new tab
+
+## Server Actions
+
+### `getEventRecapSummary(year?)`
+
+- **Authorization**: Requires at least `Member` role
+- **Year**: Defaults to current year; validated range 2020–2100
+- **Query**: Joins `eventAssignments` → `users`, `events`, `eventTypes`, `teams`, `roles`
+- **Filters**: Excludes event types "AOG TEEN" and "AOG YOUTH"; scoped to the target calendar year (`date >= Jan 1 AND date < Jan 1 of next year`)
+- **Aggregation**: `COUNT(DISTINCT eventId)` per user
+- **Returns**: `EventRecapSummaryItem[]` with `userId`, `fullName`, `nij`, `teamNumber`, `roleName`, `participationCount`
+
+### `getUserRecapEvents(userId, year?)`
+
+- **Authorization**: Requires at least `Member` role
+- **Purpose**: Lazy-loaded per-user event list when a row is expanded
+- **Query**: Joins `eventAssignments` → `events`, `eventTypes`, `tasks`; filtered by `userId`, year, and excluded event types
+- **Returns**: `UserRecapEvent[]` with `eventId`, `eventName`, `eventDate`, `isPic`
+- **Deduplication**: Uses a `Map<eventId>` — if a user has multiple assignments for the same event (e.g. PIC + another role), they appear as one entry with `isPic: true`
+- **Caching**: Client-side `useRef<Map<number, UserRecapEvent[]>>()`; cleared on year change
+
+## Data Model
+
+The recap is derived entirely from existing tables:
+
+```
+eventAssignments → users (full_name, nij, team_id, role_id)
+                 → events (date, event_type_id)
+                 → eventTypes (name) — filtered to exclude AOG TEEN / AOG YOUTH
+                 → tasks (name) — checked for "Event PIC"
+
+teams, roles — LEFT JOINed via users for display
+```
+
+No new database tables or columns are required.

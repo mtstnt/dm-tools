@@ -58,9 +58,9 @@ export function AccountInfo() {
               <p className="text-xs leading-none text-muted-foreground">
                 {user.email}
               </p>
-              {user.roles.length > 0 && (
+              {user.role && (
                 <p className="text-[11px] leading-none text-muted-foreground/70">
-                  {user.roles.join(", ")}
+                  {user.role}
                 </p>
               )}
             </div>

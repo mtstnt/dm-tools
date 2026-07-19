@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { configurations } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const configurationSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
@@ -38,7 +39,7 @@ export type ConfigurationMutationResult = {
 };
 
 export async function getConfigurations(): Promise<ConfigurationListResult> {
-  const allowed = await checkPermission("configurations", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -64,7 +65,7 @@ export async function getConfigurations(): Promise<ConfigurationListResult> {
 export async function getConfigurationById(
   id: number,
 ): Promise<ConfigurationDetailResult> {
-  const allowed = await checkPermission("configurations", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -95,7 +96,7 @@ export async function getConfigurationById(
 export async function createConfiguration(
   input: Record<string, string>,
 ): Promise<ConfigurationMutationResult> {
-  const allowed = await checkPermission("configurations", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -146,7 +147,7 @@ export async function updateConfiguration(
   id: number,
   input: Record<string, string>,
 ): Promise<ConfigurationMutationResult> {
-  const allowed = await checkPermission("configurations", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -198,7 +199,7 @@ export async function updateConfiguration(
 export async function deleteConfiguration(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("configurations", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

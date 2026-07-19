@@ -20,10 +20,11 @@ import {
   type EventStatus,
 } from "@/db/schema";
 import {
-  checkPermission,
   getUserContext,
+  getUserRole,
   logAuditTrail,
 } from "@/actions/master/_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 export type EventScheduleItem = {
   id: number;
@@ -170,7 +171,7 @@ export async function getEventSchedule(
   month: number,
   year: number,
 ): Promise<EventScheduleResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -249,7 +250,7 @@ export type EventScheduleYearsResult = {
 };
 
 export async function getEventScheduleYears(): Promise<EventScheduleYearsResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -272,7 +273,7 @@ export async function getEventScheduleYears(): Promise<EventScheduleYearsResult>
 }
 
 export async function getEventDetail(eventId: number): Promise<EventDetailResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -362,7 +363,7 @@ export async function getEventDetail(eventId: number): Promise<EventDetailResult
 export async function getEventConfiguration(
   eventId: number,
 ): Promise<EventConfigurationResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -389,7 +390,7 @@ export async function updateEventConfiguration(
   eventId: number,
   input: EventConfiguration[],
 ): Promise<EventConfigurationResult> {
-  const allowed = await checkPermission("events", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -487,7 +488,7 @@ async function _loadEventCreationOptions(): Promise<EventCreationOptions> {
 }
 
 export async function getEventCreationOptions(): Promise<EventCreationOptionsResult> {
-  const allowed = await checkPermission("events", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -504,7 +505,7 @@ export async function getEventCreationOptions(): Promise<EventCreationOptionsRes
 export async function createEvents(
   input: CreateEventsInput,
 ): Promise<CreateEventsResult> {
-  const allowed = await checkPermission("events", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -523,11 +524,11 @@ export async function createEvents(
     (event) => event.mode === "members" || event.picIds.length > 0,
   );
 
-  if (usesTeams && !(await checkPermission("event_teams", "create"))) {
+  if (usesTeams && !(canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]))) {
     return { success: false, error: "Forbidden" };
   }
 
-  if (usesAssignments && !(await checkPermission("event_assignments", "create"))) {
+  if (usesAssignments && !(canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]))) {
     return { success: false, error: "Forbidden" };
   }
 
@@ -771,7 +772,7 @@ export type EventForEditResult = {
 export async function getEventForEdit(
   eventId: number,
 ): Promise<EventForEditResult> {
-  const allowed = await checkPermission("events", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -868,7 +869,7 @@ export async function updateEvent(
   eventId: number,
   input: CreateEventsInput["events"][number],
 ): Promise<UpdateEventResult> {
-  const allowed = await checkPermission("events", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -884,7 +885,7 @@ export async function updateEvent(
   const event = parseResult.data;
 
   if (event.mode === "teams") {
-    if (!(await checkPermission("event_teams", "create"))) {
+    if (!(canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]))) {
       return { success: false, error: "Forbidden" };
     }
   }
@@ -893,7 +894,7 @@ export async function updateEvent(
     event.mode === "members" ||
     event.picIds.length > 0
   ) {
-    if (!(await checkPermission("event_assignments", "create"))) {
+    if (!(canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]))) {
       return { success: false, error: "Forbidden" };
     }
   }
@@ -1137,7 +1138,7 @@ export type DeleteEventResult = {
 export async function deleteEvent(
   eventId: number,
 ): Promise<DeleteEventResult> {
-  const allowed = await checkPermission("events", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

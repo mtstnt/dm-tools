@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { regions } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const regionSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
@@ -34,7 +35,7 @@ export type RegionMutationResult = {
 };
 
 export async function getRegions(): Promise<RegionListResult> {
-  const allowed = await checkPermission("regions", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -58,7 +59,7 @@ export async function getRegions(): Promise<RegionListResult> {
 export async function getRegionById(
   id: number,
 ): Promise<RegionDetailResult> {
-  const allowed = await checkPermission("regions", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -87,7 +88,7 @@ export async function getRegionById(
 export async function createRegion(
   input: Record<string, string>,
 ): Promise<RegionMutationResult> {
-  const allowed = await checkPermission("regions", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -131,7 +132,7 @@ export async function updateRegion(
   id: number,
   input: Record<string, string>,
 ): Promise<RegionMutationResult> {
-  const allowed = await checkPermission("regions", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -176,7 +177,7 @@ export async function updateRegion(
 export async function deleteRegion(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("regions", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

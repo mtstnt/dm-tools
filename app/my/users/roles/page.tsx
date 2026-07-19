@@ -1,167 +1,85 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import Link from "next/link"
-import { PencilIcon, TrashIcon } from "lucide-react"
-
-import { getRoles, deleteRole, type Role } from "@/actions/users/roles"
-import { DataTable, type DataTableColumnDef } from "@/components/custom/data-table"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { useEffect, useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  getRoles,
+  createRole,
+  updateRole,
+  deleteRole,
+  type Role,
+} from "@/actions/users/roles";
+import { MasterCrudPage, type MutationResult } from "@/components/custom/master-crud-page";
+import type { DataTableColumnDef } from "@/components/custom/data-table";
+import { AlertTriangle } from "lucide-react";
 
-export default function RolesPage() {
-  const [roles, setRoles] = React.useState<Role[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState<string | null>(null)
+const columns: DataTableColumnDef<Role, unknown>[] = [
+  {
+    header: "Name",
+    accessorKey: "name",
+    enableSorting: true,
+  },
+];
 
-  const [deletingRole, setDeletingRole] = React.useState<Role | null>(null)
-  const [deletePending, setDeletePending] = React.useState(false)
+export default function RolesMasterPage() {
+  const [data, setData] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
-    let cancelled = false
-
+  useEffect(() => {
     async function load() {
-      setLoading(true)
-      setError(null)
-
-      const result = await getRoles()
-
-      if (cancelled) return
-
-      if (!result.success || !result.data) {
-        setError(result.error ?? "Failed to load roles")
-        setRoles([])
-      } else {
-        setRoles(result.data)
+      const result = await getRoles();
+      if (result.success && result.data) {
+        setData(result.data);
       }
-
-      setLoading(false)
+      setLoading(false);
     }
+    load();
+  }, []);
 
-    load()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  async function handleDeleteConfirm() {
-    if (!deletingRole) return
-
-    setDeletePending(true)
-    const result = await deleteRole(deletingRole.id)
-    setDeletePending(false)
-
-    if (!result.success) {
-      setError(result.error ?? "Failed to delete role")
-      return
-    }
-
-    setRoles((prev) => prev.filter((role) => role.id !== deletingRole.id))
-    setDeletingRole(null)
+  async function onCreate(values: Record<string, string>): Promise<MutationResult<Role>> {
+    return createRole(values);
   }
 
-  const columns: DataTableColumnDef<Role, unknown>[] = [
-    {
-      accessorKey: "name",
-      header: "Name",
-      meta: { sortMethod: "string" },
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      enableSorting: false,
-      cell: ({ row }) => {
-        const role = row.original
-        return (
-          <div className="flex items-center gap-1">
-            <Link
-              href={`/my/users/roles/${role.id}`}
-              className={buttonVariants({
-                variant: "ghost",
-                size: "icon-sm",
-              })}
-            >
-              <PencilIcon className="size-3.5" />
-              <span className="sr-only">Edit</span>
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeletingRole(role)}
-            >
-              <TrashIcon className="size-3.5" />
-              <span className="sr-only">Delete</span>
-            </Button>
-          </div>
-        )
-      },
-    },
-  ]
+  async function onUpdate(id: number, values: Record<string, string>): Promise<MutationResult<Role>> {
+    return updateRole(id, values);
+  }
+
+  async function onDelete(id: number) {
+    return deleteRole(id);
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl tracking-tight">Roles</h1>
-        <p className="text-muted-foreground mt-2">Manage roles and their permissions.</p>
+      <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+        <div className="text-sm text-amber-800 dark:text-amber-200">
+          <p className="font-semibold">Hardcoded Roles</p>
+          <p>
+            Roles are defined in{" "}
+            <code className="rounded bg-amber-500/20 px-1 py-0.5 text-xs font-mono">
+              lib/permissions.ts
+            </code>
+            . Adding or renaming a role here does <strong>not</strong> grant it any
+            system access. Contact a Developer to update the source code if you need
+            a new system role.
+          </p>
+        </div>
       </div>
 
-      {error && (
-        <p className="text-destructive">
-          {error}
-        </p>
-      )}
-
-      {loading ? (
-        <div className="text-muted-foreground">Loading roles...</div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={roles}
-          searchColumn="name"
-          searchPlaceholder="Search role..."
-          defaultSortColumn="name"
-        />
-      )}
-
-      <Dialog
-        open={deletingRole !== null}
-        onOpenChange={(open) => !open && setDeletingRole(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Role</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the role &quot;{deletingRole?.name}&quot;?
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeletingRole(null)}
-              disabled={deletePending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              disabled={deletePending}
-            >
-              {deletePending ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MasterCrudPage
+        title="Roles"
+        description="Manage role entries in the database."
+        resourceLabel="Role"
+        columns={columns}
+        data={data}
+        fields={[{ name: "name", label: "Name", required: true }]}
+        searchColumn="name"
+        defaultSortColumn="name"
+        defaultSortDirection="asc"
+        onCreateAction={onCreate}
+        onUpdateAction={onUpdate}
+        onDeleteAction={onDelete}
+        loading={loading}
+      />
     </div>
-  )
+  );
 }

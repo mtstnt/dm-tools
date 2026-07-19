@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { metrics } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const metricSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
@@ -36,7 +37,7 @@ export type MetricMutationResult = {
 };
 
 export async function getMetrics(): Promise<MetricListResult> {
-  const allowed = await checkPermission("metrics", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -61,7 +62,7 @@ export async function getMetrics(): Promise<MetricListResult> {
 export async function getMetricById(
   id: number,
 ): Promise<MetricDetailResult> {
-  const allowed = await checkPermission("metrics", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -91,7 +92,7 @@ export async function getMetricById(
 export async function createMetric(
   input: Record<string, string>,
 ): Promise<MetricMutationResult> {
-  const allowed = await checkPermission("metrics", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -140,7 +141,7 @@ export async function updateMetric(
   id: number,
   input: Record<string, string>,
 ): Promise<MetricMutationResult> {
-  const allowed = await checkPermission("metrics", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -190,7 +191,7 @@ export async function updateMetric(
 export async function deleteMetric(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("metrics", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

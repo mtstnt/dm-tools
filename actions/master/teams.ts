@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/connection";
 import { teams, regions } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "./_shared";
+import { getUserRole, getUserContext, logAuditTrail } from "./_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const teamSchema = z.object({
   number: z.coerce.number().int().positive("Team number is required"),
@@ -37,7 +38,7 @@ export type TeamMutationResult = {
 };
 
 export async function getTeams(): Promise<TeamListResult> {
-  const allowed = await checkPermission("teams", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -64,7 +65,7 @@ export async function getTeams(): Promise<TeamListResult> {
 export async function getTeamById(
   id: number,
 ): Promise<TeamDetailResult> {
-  const allowed = await checkPermission("teams", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -94,7 +95,7 @@ export async function getTeamById(
 export async function createTeam(
   input: Record<string, string>,
 ): Promise<TeamMutationResult> {
-  const allowed = await checkPermission("teams", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -143,7 +144,7 @@ export async function updateTeam(
   id: number,
   input: Record<string, string>,
 ): Promise<TeamMutationResult> {
-  const allowed = await checkPermission("teams", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -193,7 +194,7 @@ export async function updateTeam(
 export async function deleteTeam(
   id: number,
 ): Promise<{ success: boolean; error?: string }> {
-  const allowed = await checkPermission("teams", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

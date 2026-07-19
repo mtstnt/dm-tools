@@ -559,7 +559,7 @@ function UserRow({ user, openEdit, openDelete }: Readonly<UserRowProps>) {
             )}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {user.isSpv ? "SPV" : "Member"} | {user.nij}
+            {user.roleName ?? "Member"} | {user.nij}
           </p>
         </div>
       </div>

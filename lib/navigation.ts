@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Calculator,
   Calendar,
   Calendar1,
@@ -10,7 +11,6 @@ import {
   Hash,
   History,
   Home,
-  Key,
   ScrollText,
   Settings,
   SquareUser,
@@ -19,6 +19,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
+import { ROLES, type Role } from "@/lib/permissions";
 
 export type NavigationLink = {
   type: "link";
@@ -26,7 +27,7 @@ export type NavigationLink = {
   targetLink: string;
   icon?: LucideIcon;
   badge?: string;
-  resource?: string;
+  allowedRoles?: Role[];
 };
 
 export type NavigationDropdown = {
@@ -34,7 +35,7 @@ export type NavigationDropdown = {
   label: string;
   icon?: LucideIcon;
   children: NavigationChild[];
-  resource?: string;
+  allowedRoles?: Role[];
 };
 
 export type NavigationChild = NavigationLink | NavigationDropdown;
@@ -60,23 +61,30 @@ export const sidebarMenus: NavigationRootItem[] = [
     children: [
       {
         type: "link",
-        label: "My Events",
+        label: "Events",
         targetLink: "/my/events",
         icon: Calendar,
-        resource: "events",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
         type: "link",
-        label: "All Events",
-        targetLink: "/my/events",
-        icon: CalendarDays,
-        resource: "events",
+        label: "Schedules",
+        targetLink: "/my/schedules",
+        icon: Users,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
         type: "link",
         label: "Doa Wilayah",
         targetLink: "/tools/doa-wilayah",
         icon: UserCheck,
+      },
+      {
+        type: "link",
+        label: "Event Recap",
+        targetLink: "/my/events/recap",
+        icon: BarChart3,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
     ],
   },
@@ -89,56 +97,56 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Regions",
         targetLink: "/my/master/regions",
         icon: Globe,
-        resource: "regions",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY],
       },
       {
         type: "link",
         label: "Teams",
         targetLink: "/my/master/teams",
         icon: Users,
-        resource: "teams",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Event Types",
         targetLink: "/my/master/event-types",
         icon: Calendar1,
-        resource: "event_types",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Ministries",
         targetLink: "/my/master/ministries",
         icon: Church,
-        resource: "ministries",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Metrics",
         targetLink: "/my/master/metrics",
         icon: Calculator,
-        resource: "metrics",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Tasks",
         targetLink: "/my/master/tasks",
         icon: Workflow,
-        resource: "tasks",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
       {
         type: "link",
         label: "Configurations",
         targetLink: "/my/master/configurations",
         icon: Settings,
-        resource: "configurations",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY],
       },
       {
         type: "link",
         label: "Audit Trails",
         targetLink: "/my/audit-trails",
         icon: ScrollText,
-        resource: "audit_trails",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY],
       },
     ],
   },
@@ -151,21 +159,21 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Members",
         targetLink: "/my/users/members",
         icon: User,
-        resource: "users",
-      },
-      {
-        type: "link",
-        label: "Permissions",
-        targetLink: "/my/users/permissions",
-        icon: Key,
-        resource: "permissions",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV],
       },
       {
         type: "link",
         label: "Roles",
         targetLink: "/my/users/roles",
         icon: SquareUser,
-        resource: "roles",
+        allowedRoles: [ROLES.ADMIN],
+      },
+      {
+        type: "link",
+        label: "Role Assignments",
+        targetLink: "/my/users/role-assignments",
+        icon: UserCheck,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
       },
     ],
   },
@@ -208,7 +216,7 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Events (Web SC)",
         targetLink: "/tools/legacy/events",
         icon: CalendarDays,
-        resource: "events",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER],
       },
       {
         type: "link",
@@ -221,7 +229,7 @@ export const sidebarMenus: NavigationRootItem[] = [
         label: "Members (Firebase)",
         targetLink: "/tools/members",
         icon: UserCheck,
-        resource: "users",
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV],
       },
     ],
   },

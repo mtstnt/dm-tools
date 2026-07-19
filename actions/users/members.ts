@@ -2,14 +2,13 @@
 
 import { db } from "@/db/connection";
 import {
-  permissions,
   roles,
   teams,
-  userPermissions,
   users,
 } from "@/db/schema";
 import { getCurrentUser } from "@/actions/auth/current-user";
-import { checkPermission, getUserContext, logAuditTrail } from "@/actions/master/_shared";
+import { getUserContext, getUserRole, logAuditTrail } from "@/actions/master/_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcrypt";
@@ -20,6 +19,7 @@ export type MemberUser = {
   nij: string;
   email: string;
   teamId: number | null;
+  roleName: string | null;
   isSpv: boolean;
 };
 
@@ -50,15 +50,8 @@ export type UserDetail = {
   updatedAt: Date;
   createdBy: string | null;
   updatedBy: string | null;
-  roles: {
-    id: number;
-    name: string;
-  }[];
-  additionalPermissions: {
-    id: number;
-    resource: string;
-    action: string;
-  }[];
+  roleId: number | null;
+  roleName: string | null;
 };
 
 export type UserDetailResult = {
@@ -112,6 +105,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
       nij: u.nij,
       email: u.email,
       teamId: u.teamId,
+      roleName: u.roleName ?? null,
       isSpv: u.roleName === "SPV",
     });
 
@@ -163,7 +157,7 @@ export async function getTeamMembers(): Promise<MembersResult> {
 }
 
 export async function getUserDetail(id: number): Promise<UserDetailResult> {
-  const allowed = await checkPermission("users", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -202,27 +196,15 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
       ),
     );
 
-    const [additionalPermissionRows, auditUserRows] = await Promise.all([
-      db
-        .select({
-          id: permissions.id,
-          resource: permissions.resource,
-          action: permissions.action,
-        })
-        .from(userPermissions)
-        .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-        .where(eq(userPermissions.userId, id))
-        .orderBy(asc(permissions.resource), asc(permissions.action)),
-      auditUserIds.length > 0
-        ? db
-            .select({
-              id: users.id,
-              fullName: users.fullName,
-            })
-            .from(users)
-            .where(inArray(users.id, auditUserIds))
-        : Promise.resolve([]),
-    ]);
+    const auditUserRows = auditUserIds.length > 0
+      ? await db
+          .select({
+            id: users.id,
+            fullName: users.fullName,
+          })
+          .from(users)
+          .where(inArray(users.id, auditUserIds))
+      : [];
 
     const auditUsers = new Map(
       auditUserRows.map((row) => [String(row.id), row.fullName]),
@@ -231,13 +213,19 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
     return {
       success: true,
       data: {
-        ...user,
+        id: user.id,
+        fullName: user.fullName,
+        nij: user.nij,
+        email: user.email,
+        sourceId: user.sourceId,
+        teamId: user.teamId,
+        teamNumber: user.teamNumber,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
         createdBy: auditUsers.get(user.createdBy) ?? null,
         updatedBy: auditUsers.get(user.updatedBy) ?? null,
-        roles: user.roleId && user.roleName
-          ? [{ id: user.roleId, name: user.roleName }]
-          : [],
-        additionalPermissions: additionalPermissionRows,
+        roleId: user.roleId ?? null,
+        roleName: user.roleName ?? null,
       },
     };
   } catch (err) {
@@ -254,7 +242,7 @@ export type UserMutationResult = {
 export async function createUser(
   input: Record<string, string>,
 ): Promise<UserMutationResult> {
-  const allowed = await checkPermission("users", "create");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -331,7 +319,7 @@ export async function updateUser(
   id: number,
   input: Record<string, string>,
 ): Promise<UserMutationResult> {
-  const allowed = await checkPermission("users", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -417,7 +405,7 @@ export async function updateUser(
 }
 
 export async function deleteUser(id: number): Promise<UserMutationResult> {
-  const allowed = await checkPermission("users", "delete");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -441,7 +429,6 @@ export async function deleteUser(id: number): Promise<UserMutationResult> {
 
     const existing = existingRows[0];
 
-    await db.delete(userPermissions).where(eq(userPermissions.userId, id));
     await db.delete(users).where(eq(users.id, id));
 
     await logAuditTrail("users", id, "delete", existing, {});

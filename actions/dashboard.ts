@@ -5,7 +5,8 @@ import { z } from "zod";
 import { startOfMonth, subMonths, endOfMonth, eachMonthOfInterval, format } from "date-fns";
 import { db } from "@/db/connection";
 import { events, eventMetrics, eventTypes, metrics, regions } from "@/db/schema";
-import { checkPermission } from "@/actions/master/_shared";
+import { getUserRole } from "@/actions/master/_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 export type SeatCounterDataPoint = {
   month: string;
@@ -49,7 +50,7 @@ const seatCounterInputSchema = z.object({
 });
 
 export async function getDashboardFilterOptions(): Promise<GetFilterOptionsResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -88,7 +89,7 @@ export async function getDashboardFilterOptions(): Promise<GetFilterOptionsResul
 export async function getSeatCounterData(
   input: GetSeatCounterDataInput,
 ): Promise<GetSeatCounterDataResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

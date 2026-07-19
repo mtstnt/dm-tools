@@ -11,7 +11,8 @@ import {
   metrics,
   ministries,
 } from "@/db/schema";
-import { checkPermission, getUserContext, logAuditTrail } from "@/actions/master/_shared";
+import { getUserContext, getUserRole, logAuditTrail } from "@/actions/master/_shared";
+import { ROLES, canAccess } from "@/lib/permissions";
 
 const saveReportingSchema = z.object({
   metrics: z.array(
@@ -57,7 +58,7 @@ export type SaveReportingResult = {
 export async function getEventReportingData(
   eventId: number,
 ): Promise<EventReportingResult> {
-  const allowed = await checkPermission("events", "read");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -133,7 +134,7 @@ export async function saveEventReportingData(
   eventId: number,
   input: SaveReportingInput,
 ): Promise<SaveReportingResult> {
-  const allowed = await checkPermission("events", "update");
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

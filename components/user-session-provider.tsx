@@ -6,11 +6,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type {
-  UserSession,
-  UserPermission,
-} from "@/actions/auth/session";
-import type { Action } from "@/db/schema";
+import type { UserSession } from "@/actions/auth/session";
+import { ROLES } from "@/lib/permissions";
 
 type UserSessionContextValue = {
   session: UserSession | null;
@@ -52,21 +49,53 @@ export function useSetSessionUser(): (
   return ctx.setSession;
 }
 
+const rolePermissionMap: Record<string, Record<string, Record<string, boolean>>> = {
+  [ROLES.HEAD_MINISTRY]: {
+    events: { read: true, create: true, update: true, delete: true },
+    regions: { read: true, create: true, update: true, delete: true },
+    teams: { read: true, create: true, update: true, delete: true },
+    event_types: { read: true, create: true, update: true, delete: true },
+    ministries: { read: true, create: true, update: true, delete: true },
+    metrics: { read: true, create: true, update: true, delete: true },
+    tasks: { read: true, create: true, update: true, delete: true },
+    configurations: { read: true, create: true, update: true, delete: true },
+    users: { read: true, create: true, update: true, delete: true },
+    roles: { read: true },
+    schedules: { read: true },
+  },
+  [ROLES.REGIONAL_PIC]: {
+    events: { read: true, create: true, update: true, delete: true },
+    teams: { read: true },
+    users: { read: true },
+    event_teams: { read: true },
+    event_assignments: { read: true },
+    schedules: { read: true },
+  },
+  [ROLES.SPV]: {
+    events: { read: true, update: true },
+    users: { read: true },
+    teams: { read: true },
+    event_teams: { read: true },
+    event_assignments: { read: true, create: true, update: true, delete: true },
+    event_volunteers: { read: true, create: true, update: true, delete: true },
+    event_metrics: { read: true, create: true, update: true, delete: true },
+    event_altar_calls: { read: true, create: true, update: true, delete: true },
+    event_assignment_change_requests: { read: true, create: true, update: true, delete: true },
+    schedules: { read: true },
+  },
+  [ROLES.MEMBER]: {
+    events: { read: true },
+    event_teams: { read: true },
+    schedules: { read: true },
+  },
+};
+
 export function hasPermission(
-  session: UserSession | null | undefined,
+  session: UserSession | null,
   resource: string,
-  action: Action,
+  action: string,
 ): boolean {
-  if (!session) {
-    return false;
-  }
-
-  if (session.roles.includes("ADMIN")) {
-    return true;
-  }
-
-  return session.permissions.some(
-    (permission: UserPermission) =>
-      permission.resource === resource && permission.action === action,
-  );
+  if (!session) return false;
+  if (session.role === ROLES.ADMIN) return true;
+  return rolePermissionMap[session.role ?? ""]?.[resource]?.[action] ?? false;
 }

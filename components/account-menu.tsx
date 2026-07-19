@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useState, type ReactElement, type ReactNode } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,18 +13,24 @@ import { Settings } from "lucide-react"
 import { SettingsSheet } from "@/components/settings-sheet"
 
 interface AccountMenuProps {
-  trigger: ReactNode
+  trigger: ReactElement
+  triggerIsNativeButton?: boolean
   label?: string
   children?: ReactNode
 }
 
-export function AccountMenu({ trigger, label, children }: AccountMenuProps) {
+export function AccountMenu({
+  trigger,
+  triggerIsNativeButton = true,
+  label,
+  children,
+}: AccountMenuProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuTrigger render={trigger} nativeButton={triggerIsNativeButton} />
         <DropdownMenuContent align="end" className="w-56">
           {label ? (
             <>
@@ -34,7 +40,7 @@ export function AccountMenu({ trigger, label, children }: AccountMenuProps) {
               <DropdownMenuSeparator />
             </>
           ) : null}
-          <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+          <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
             <Settings className="mr-2 h-4 w-4" />
             Pengaturan
           </DropdownMenuItem>

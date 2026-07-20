@@ -33,6 +33,7 @@ import {
 } from "@/actions/dashboard";
 import { dashboardKeys } from "@/lib/queries/dashboard";
 import { ThisWeekWidget } from "@/components/calendar-widget";
+import { InstallAppBanner } from "@/components/install-app-banner";
 
 function formatMonthLabel(monthKey: string): string {
   const [year, month] = monthKey.split("-");
@@ -156,6 +157,8 @@ export default function DashboardPage() {
           View congregation attendance trends across events.
         </p>
       </div>
+
+      <InstallAppBanner />
 
       <ThisWeekWidget />
 

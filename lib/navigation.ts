@@ -11,6 +11,7 @@ import {
   Hash,
   History,
   Home,
+  LayoutDashboard,
   ScrollText,
   Settings,
   SquareUser,
@@ -59,6 +60,13 @@ export const sidebarMenus: NavigationRootItem[] = [
     type: "group",
     title: "Data Entry",
     children: [
+      {
+        type: "link",
+        label: "Dashboard",
+        targetLink: "/my/dashboard",
+        icon: LayoutDashboard,
+        allowedRoles: [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC],
+      },
       {
         type: "link",
         label: "Events",

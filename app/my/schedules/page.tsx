@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isPast } from "date-fns";
 import { id } from "date-fns/locale";
 import {
@@ -10,9 +10,10 @@ import {
   ChevronRight,
   Crown,
   Loader,
+  Plus,
   X,
 } from "lucide-react";
-import { getSchedules, getSwapRequests, approveSwap, rejectSwap, requestSwap, getAvailableReplacements, type ScheduleEvent, type ScheduleMember, type SwapRequestItem, type ReplacementUser } from "@/actions/schedules";
+import { getSchedules, getChangeRequests, approveChange, rejectChange, requestChange, getAvailableReplacements, getAvailableHelpers, type ScheduleEvent, type ScheduleMember, type ChangeRequestItem, type ReplacementUser } from "@/actions/schedules";
 import { getEventScheduleYears } from "@/actions/events";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,11 +57,11 @@ export default function SchedulesPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [yearOptions, setYearOptions] = useState<number[]>(() => [new Date().getFullYear()]);
-  const [activeTab, setActiveTab] = useState<"assignments" | "swaps">("assignments");
+  const [activeTab, setActiveTab] = useState<"assignments" | "changes">("assignments");
 
   const session = useSessionUser();
-  const canSwap = session?.role === ROLES.ADMIN || session?.role === ROLES.REGIONAL_PIC || session?.role === ROLES.SPV;
-  const canApprove = session?.role === ROLES.ADMIN || session?.role === ROLES.SPV;
+  const canRequest = session?.role === ROLES.ADMIN || session?.role === ROLES.REGIONAL_PIC || session?.role === ROLES.SPV;
+  const canApprove = session?.role === ROLES.ADMIN || session?.role === ROLES.REGIONAL_PIC || session?.role === ROLES.SPV;
 
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [swappingMember, setSwappingMember] = useState<{ eventId: number; member: ScheduleMember } | null>(null);
@@ -70,8 +71,16 @@ export default function SchedulesPage() {
   const [swapPending, setSwapPending] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
 
-  const [swapRequests, setSwapRequests] = useState<SwapRequestItem[]>([]);
-  const [swapRequestsLoading, setSwapRequestsLoading] = useState(false);
+  const [helperDialogOpen, setHelperDialogOpen] = useState(false);
+  const [helperEventId, setHelperEventId] = useState<number | null>(null);
+  const [helpers, setHelpers] = useState<ReplacementUser[]>([]);
+  const [selectedHelper, setSelectedHelper] = useState<string>("");
+  const [helpersLoading, setHelpersLoading] = useState(false);
+  const [helperPending, setHelperPending] = useState(false);
+  const [helperError, setHelperError] = useState<string | null>(null);
+
+  const [changeRequests, setChangeRequests] = useState<ChangeRequestItem[]>([]);
+  const [changeRequestsLoading, setChangeRequestsLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -106,18 +115,18 @@ export default function SchedulesPage() {
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
-    if (activeTab !== "swaps") return;
+    if (activeTab !== "changes") return;
     let mounted = true;
-    async function loadSwapRequests() {
-      setSwapRequestsLoading(true);
-      const result = await getSwapRequests(selectedMonth, selectedYear);
+    async function loadChangeRequests() {
+      setChangeRequestsLoading(true);
+      const result = await getChangeRequests(selectedMonth, selectedYear);
       if (!mounted) return;
       if (result.success && result.data) {
-        setSwapRequests(result.data);
+        setChangeRequests(result.data);
       }
-      setSwapRequestsLoading(false);
+      setChangeRequestsLoading(false);
     }
-    loadSwapRequests();
+    loadChangeRequests();
     return () => { mounted = false; };
   }, [activeTab, selectedMonth, selectedYear]);
 
@@ -159,18 +168,19 @@ export default function SchedulesPage() {
     setReplacementsLoading(false);
   }
 
-  async function handleSwap() {
-    if (!swappingMember || !selectedReplacement) return;
+  async function handleSwapSubmit() {
+    if (!swappingMember) return;
     setSwapPending(true);
     setSwapError(null);
-    const result = await requestSwap(
+    const userToId = selectedReplacement === "none" ? null : Number(selectedReplacement);
+    const result = await requestChange(
       swappingMember.eventId,
       swappingMember.member.userId,
-      Number(selectedReplacement),
+      userToId,
     );
     setSwapPending(false);
     if (!result.success) {
-      setSwapError(result.error ?? "Failed to request swap");
+      setSwapError(result.error ?? "Failed to create request");
       return;
     }
     setSwapDialogOpen(false);
@@ -181,19 +191,51 @@ export default function SchedulesPage() {
     }
   }
 
-  async function refreshSwapRequests() {
-    const result = await getSwapRequests(selectedMonth, selectedYear);
+  async function openHelperDialog(eventId: number) {
+    setHelperEventId(eventId);
+    setSelectedHelper("");
+    setHelperError(null);
+    setHelpers([]);
+    setHelpersLoading(true);
+    setHelperDialogOpen(true);
+    const result = await getAvailableHelpers(eventId);
     if (result.success && result.data) {
-      setSwapRequests(result.data);
+      setHelpers(result.data);
+    }
+    setHelpersLoading(false);
+  }
+
+  async function handleHelperSubmit() {
+    if (!helperEventId || !selectedHelper) return;
+    setHelperPending(true);
+    setHelperError(null);
+    const result = await requestChange(helperEventId, null, Number(selectedHelper));
+    setHelperPending(false);
+    if (!result.success) {
+      setHelperError(result.error ?? "Failed to create request");
+      return;
+    }
+    setHelperDialogOpen(false);
+    setHelperEventId(null);
+    const refreshed = await getSchedules(selectedMonth, selectedYear);
+    if (refreshed.success && refreshed.data) {
+      setEvents(refreshed.data);
     }
   }
 
+  const refreshChangeRequests = useCallback(async () => {
+    const result = await getChangeRequests(selectedMonth, selectedYear);
+    if (result.success && result.data) {
+      setChangeRequests(result.data);
+    }
+  }, [selectedMonth, selectedYear]);
+
   async function handleApprove(requestId: number) {
-    const result = await approveSwap(requestId);
+    const result = await approveChange(requestId);
     if (!result.success) return;
     const [schedulesResult] = await Promise.all([
       getSchedules(selectedMonth, selectedYear),
-      refreshSwapRequests(),
+      refreshChangeRequests(),
     ]);
     if (schedulesResult.success && schedulesResult.data) {
       setEvents(schedulesResult.data);
@@ -201,9 +243,9 @@ export default function SchedulesPage() {
   }
 
   async function handleReject(requestId: number) {
-    const result = await rejectSwap(requestId);
+    const result = await rejectChange(requestId);
     if (!result.success) return;
-    await refreshSwapRequests();
+    await refreshChangeRequests();
   }
 
   return (
@@ -212,7 +254,7 @@ export default function SchedulesPage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Schedules</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            View event assignments and manage member swaps.
+            View event assignments and manage change requests.
           </p>
         </div>
       </div>
@@ -279,15 +321,15 @@ export default function SchedulesPage() {
           Assignments
         </button>
         <button
-          onClick={() => setActiveTab("swaps")}
+          onClick={() => setActiveTab("changes")}
           className={cn(
             "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
-            activeTab === "swaps"
+            activeTab === "changes"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground",
           )}
         >
-          Swap Requests
+          Change Requests
         </button>
       </div>
 
@@ -311,6 +353,7 @@ export default function SchedulesPage() {
                   <th className="px-3 py-2.5 w-36">Tanggal</th>
                   <th className="px-3 py-2.5 w-40">Event</th>
                   <th className="px-3 py-2.5">Members</th>
+                  <th className="px-3 py-2.5 w-10" />
                 </tr>
               </thead>
               <tbody>
@@ -346,16 +389,16 @@ export default function SchedulesPage() {
                               <div
                                 key={member.userId}
                                 onClick={() => {
-                                  if (canSwap && !member.hasPendingSwap) {
+                                  if (canRequest && !member.pendingRequestType) {
                                     openSwapDialog(event.id, member);
                                   }
                                 }}
                                 className={cn(
                                   "flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 transition-colors",
-                                  canSwap && !member.hasPendingSwap
+                                  canRequest && !member.pendingRequestType
                                     ? "cursor-pointer hover:bg-muted hover:shadow-sm"
                                     : "cursor-default",
-                                  member.hasPendingSwap && "opacity-40",
+                                  member.pendingRequestType && "opacity-40",
                                 )}
                               >
                                 <div className="flex min-w-0 items-center gap-1.5">
@@ -377,17 +420,39 @@ export default function SchedulesPage() {
                                     PIC
                                   </span>
                                 )}
-                                {member.hasPendingSwap && (
+                                {member.pendingRequestType === "switch" && (
                                   <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                    SWAPPED
+                                    SWITCH PENDING
                                   </span>
                                 )}
-                                {canSwap && !member.hasPendingSwap && (
+                                {member.pendingRequestType === "cancellation" && (
+                                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    CANCEL PENDING
+                                  </span>
+                                )}
+                                {member.pendingRequestType === "helper" && (
+                                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    HELPER PENDING
+                                  </span>
+                                )}
+                                {canRequest && !member.pendingRequestType && (
                                   <ArrowLeftRight className="size-3 shrink-0 text-muted-foreground" />
                                 )}
                               </div>
                             ))}
                           </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        {canRequest && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => openHelperDialog(event.id)}
+                            aria-label="Add helper"
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
                         )}
                       </td>
                     </tr>
@@ -399,10 +464,10 @@ export default function SchedulesPage() {
         )
       )}
 
-      {activeTab === "swaps" && (
-        <SwapsTab
-          swaps={swapRequests}
-          loading={swapRequestsLoading}
+      {activeTab === "changes" && (
+        <ChangeRequestsTab
+          requests={changeRequests}
+          loading={changeRequestsLoading}
           canApprove={canApprove}
           onApprove={handleApprove}
           onReject={handleReject}
@@ -412,9 +477,9 @@ export default function SchedulesPage() {
       <Dialog open={swapDialogOpen} onOpenChange={setSwapDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Request Swap</DialogTitle>
+            <DialogTitle>Request Change</DialogTitle>
             <DialogDescription>
-              Select a replacement for{" "}
+              Select a replacement or cancel assignment for{" "}
               <span className="font-medium text-foreground">
                 {swappingMember?.member.fullName}
               </span>
@@ -422,28 +487,26 @@ export default function SchedulesPage() {
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-1.5">
-              <label className="text-sm font-medium">Replacement member</label>
+              <label className="text-sm font-medium">Change type</label>
               {replacementsLoading ? (
                 <div className="flex items-center gap-2 py-2">
                   <Loader className="size-4 animate-spin" />
                   <span className="text-sm text-muted-foreground">Loading members...</span>
                 </div>
-              ) : replacements.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">
-                  No available members to swap with.
-                </p>
               ) : (
                 <Select
                   value={selectedReplacement}
                   onValueChange={(value) => setSelectedReplacement(value ?? "")}
-                  items={Object.fromEntries(
-                    replacements.map((u) => [String(u.id), `${u.fullName} (${u.nij})`]),
-                  )}
+                  items={Object.fromEntries([
+                    ["none", "None / Tidak ada"],
+                    ...replacements.map((u) => [String(u.id), `${u.fullName} (${u.nij})`]),
+                  ])}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a member..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">None / Tidak ada</SelectItem>
                     {replacements.map((user) => (
                       <SelectItem key={user.id} value={String(user.id)}>
                         {user.fullName} ({user.nij})
@@ -461,8 +524,64 @@ export default function SchedulesPage() {
             <Button variant="outline" onClick={() => setSwapDialogOpen(false)} disabled={swapPending}>
               Cancel
             </Button>
-            <Button onClick={handleSwap} disabled={swapPending || !selectedReplacement}>
-              {swapPending ? "Requesting..." : "Request Swap"}
+            <Button onClick={handleSwapSubmit} disabled={swapPending || selectedReplacement === ""}>
+              {swapPending ? "Requesting..." : "Request Change"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helperDialogOpen} onOpenChange={setHelperDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Helper</DialogTitle>
+            <DialogDescription>
+              Add a new member to help with this event.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <label className="text-sm font-medium">Member to add</label>
+              {helpersLoading ? (
+                <div className="flex items-center gap-2 py-2">
+                  <Loader className="size-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Loading members...</span>
+                </div>
+              ) : helpers.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No available members to add.
+                </p>
+              ) : (
+                <Select
+                  value={selectedHelper}
+                  onValueChange={(value) => setSelectedHelper(value ?? "")}
+                  items={Object.fromEntries(
+                    helpers.map((u) => [String(u.id), `${u.fullName} (${u.nij})`]),
+                  )}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a member..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {helpers.map((user) => (
+                      <SelectItem key={user.id} value={String(user.id)}>
+                        {user.fullName} ({user.nij})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            {helperError && (
+              <p className="text-sm text-destructive">{helperError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHelperDialogOpen(false)} disabled={helperPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleHelperSubmit} disabled={helperPending || !selectedHelper}>
+              {helperPending ? "Requesting..." : "Request Helper"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -471,14 +590,14 @@ export default function SchedulesPage() {
   );
 }
 
-function SwapsTab({
-  swaps,
+function ChangeRequestsTab({
+  requests,
   loading,
   canApprove,
   onApprove,
   onReject,
 }: {
-  swaps: SwapRequestItem[];
+  requests: ChangeRequestItem[];
   loading: boolean;
   canApprove: boolean;
   onApprove: (id: number) => void;
@@ -497,10 +616,10 @@ function SwapsTab({
     );
   }
 
-  if (swaps.length === 0) {
+  if (requests.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">
-        No swap requests for this period.
+        No change requests for this period.
       </div>
     );
   }
@@ -512,6 +631,7 @@ function SwapsTab({
           <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
             <th className="px-3 py-2.5">Event</th>
             <th className="px-3 py-2.5">Date</th>
+            <th className="px-3 py-2.5">Type</th>
             <th className="px-3 py-2.5">From</th>
             <th className="px-3 py-2.5">From Team</th>
             <th className="px-3 py-2.5">To</th>
@@ -521,47 +641,57 @@ function SwapsTab({
           </tr>
         </thead>
         <tbody>
-          {swaps.map((swap) => (
-            <tr key={swap.id} className="border-b last:border-b-0">
-              <td className="px-3 py-2.5 font-medium">{swap.eventName}</td>
+          {requests.map((req) => (
+            <tr key={req.id} className="border-b last:border-b-0">
+              <td className="px-3 py-2.5 font-medium">{req.eventName}</td>
               <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                {format(new Date(swap.eventDate), "d MMM yyyy", { locale: id })}
-              </td>
-              <td className="px-3 py-2.5">{swap.userFromName}</td>
-              <td className="px-3 py-2.5 text-muted-foreground">
-                {swap.fromTeamNumber ? `Team ${swap.fromTeamNumber}` : "-"}
-              </td>
-              <td className="px-3 py-2.5">{swap.userToName ?? "-"}</td>
-              <td className="px-3 py-2.5 text-muted-foreground">
-                {swap.toTeamNumber ? `Team ${swap.toTeamNumber}` : "-"}
+                {format(new Date(req.eventDate), "d MMM yyyy", { locale: id })}
               </td>
               <td className="px-3 py-2.5">
                 <Badge className={cn(
                   "h-5 rounded px-2 text-[10px] font-semibold",
-                  swap.status === "pending" && "bg-amber-500/15 text-amber-600 hover:bg-amber-500/15",
-                  swap.status === "approved" && "bg-green-500/15 text-green-600 hover:bg-green-500/15",
-                  swap.status === "rejected" && "bg-destructive/15 text-destructive hover:bg-destructive/15",
+                  req.type === "switch" && "bg-primary/10 text-primary hover:bg-primary/10",
+                  req.type === "cancellation" && "bg-destructive/10 text-destructive hover:bg-destructive/10",
+                  req.type === "helper" && "bg-green-500/10 text-green-600 hover:bg-green-500/10",
                 )}>
-                  {swap.status.charAt(0).toUpperCase() + swap.status.slice(1)}
+                  {req.type === "switch" ? "Switch" : req.type === "cancellation" ? "Cancellation" : "Helper"}
+                </Badge>
+              </td>
+              <td className="px-3 py-2.5">{req.userFromName ?? "-"}</td>
+              <td className="px-3 py-2.5 text-muted-foreground">
+                {req.fromTeamNumber ? `Team ${req.fromTeamNumber}` : "-"}
+              </td>
+              <td className="px-3 py-2.5">{req.userToName ?? "-"}</td>
+              <td className="px-3 py-2.5 text-muted-foreground">
+                {req.toTeamNumber ? `Team ${req.toTeamNumber}` : "-"}
+              </td>
+              <td className="px-3 py-2.5">
+                <Badge className={cn(
+                  "h-5 rounded px-2 text-[10px] font-semibold",
+                  req.status === "pending" && "bg-amber-500/15 text-amber-600 hover:bg-amber-500/15",
+                  req.status === "approved" && "bg-green-500/15 text-green-600 hover:bg-green-500/15",
+                  req.status === "rejected" && "bg-destructive/15 text-destructive hover:bg-destructive/15",
+                )}>
+                  {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
                 </Badge>
               </td>
               {canApprove && (
                 <td className="px-3 py-2.5 text-center">
-                  {swap.status === "pending" ? (
+                  {req.status === "pending" ? (
                     <div className="flex items-center justify-center gap-1">
                       <Button
                         variant="ghost"
                         size="icon-xs"
                         className="text-green-600 hover:text-green-700"
-                        disabled={approvingId === swap.id || rejectingId === swap.id}
+                        disabled={approvingId === req.id || rejectingId === req.id}
                         onClick={async () => {
-                          setApprovingId(swap.id);
-                          await onApprove(swap.id);
+                          setApprovingId(req.id);
+                          await onApprove(req.id);
                           setApprovingId(null);
                         }}
                         aria-label="Approve"
                       >
-                        {approvingId === swap.id ? (
+                        {approvingId === req.id ? (
                           <Loader className="size-3.5 animate-spin" />
                         ) : (
                           <Check className="size-3.5" />
@@ -571,15 +701,15 @@ function SwapsTab({
                         variant="ghost"
                         size="icon-xs"
                         className="text-destructive hover:text-destructive"
-                        disabled={approvingId === swap.id || rejectingId === swap.id}
+                        disabled={approvingId === req.id || rejectingId === req.id}
                         onClick={async () => {
-                          setRejectingId(swap.id);
-                          await onReject(swap.id);
+                          setRejectingId(req.id);
+                          await onReject(req.id);
                           setRejectingId(null);
                         }}
                         aria-label="Reject"
                       >
-                        {rejectingId === swap.id ? (
+                        {rejectingId === req.id ? (
                           <Loader className="size-3.5 animate-spin" />
                         ) : (
                           <X className="size-3.5" />

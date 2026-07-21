@@ -50,7 +50,7 @@ const seatCounterInputSchema = z.object({
 });
 
 export async function getDashboardFilterOptions(): Promise<GetFilterOptionsResult> {
-  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }
@@ -89,7 +89,7 @@ export async function getDashboardFilterOptions(): Promise<GetFilterOptionsResul
 export async function getSeatCounterData(
   input: GetSeatCounterDataInput,
 ): Promise<GetSeatCounterDataResult> {
-  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC]);
   if (!allowed) {
     return { success: false, error: "Forbidden" };
   }

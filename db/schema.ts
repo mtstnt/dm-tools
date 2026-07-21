@@ -362,9 +362,7 @@ export const eventAssignmentChangeRequests = sqliteTable(
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
 
-    userFromId: integer("user_from_id")
-      .notNull()
-      .references(() => users.id),
+    userFromId: integer("user_from_id").references(() => users.id),
 
     userToId: integer("user_to_id").references(() => users.id),
 

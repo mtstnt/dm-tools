@@ -47,7 +47,8 @@ app/
     login/page.tsx    Email/password login (local users table) + Firebase Auth sign-in
     forget-password/  Disabled — redirects to /auth/login
   my/                 Protected sidebar area (AuthGuard)
-    home/page.tsx     Placeholder home
+    home/page.tsx     Placeholder home + This Week widget
+    dashboard/        Seat Counter trend chart (Admin, Head Ministry, Regional PIC)
     audit-trails/     Paginated audit log
     events/           DB-backed event management (schedule, create, detail with tabs)
     schedules/page.tsx Event assignment browser with swap request & approval
@@ -417,6 +418,7 @@ Unique: (event_id, sequence)
 | Tally Counter | `/tools/utilities/tally` | Working (requires Firebase) |
 | Doa Wilayah | `/tools/doa-wilayah` | Working (requires Firebase) |
 | Calendar | `/tools/calendar` | Sample data only (not connected to live data) |
+| Dashboard | `/my/dashboard` | Working (Admin, Head Ministry, Regional PIC) |
 | Events Browser | `/tools/legacy/events` | Working (requires SC_BASE_URL) |
 | Event Edit | `/tools/legacy/events/[eventId]/edit` | Working |
 | Event Schedule | `/my/events` | Working (DB-backed) |

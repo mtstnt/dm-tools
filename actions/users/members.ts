@@ -2,6 +2,8 @@
 
 import { db } from "@/db/connection";
 import {
+  events,
+  eventAssignments,
   roles,
   teams,
   users,
@@ -9,7 +11,7 @@ import {
 import { getCurrentUser } from "@/actions/auth/current-user";
 import { getUserContext, getUserRole, logAuditTrail } from "@/actions/master/_shared";
 import { ROLES, canAccess } from "@/lib/permissions";
-import { eq, asc, and, ne, inArray } from "drizzle-orm";
+import { eq, asc, and, ne, inArray, desc, lt, gte } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 
@@ -231,6 +233,74 @@ export async function getUserDetail(id: number): Promise<UserDetailResult> {
   } catch (err) {
     console.error("[getUserDetail] error:", err);
     return { success: false, error: "Failed to load user" };
+  }
+}
+
+export type ScheduleItem = {
+  eventId: number;
+  eventName: string;
+  eventDate: Date;
+};
+
+export type UserSchedulesResult = {
+  success: boolean;
+  data?: {
+    past: ScheduleItem[];
+    upcoming: ScheduleItem[];
+    all: ScheduleItem[];
+  };
+  error?: string;
+};
+
+export async function getUserSchedules(userId: number): Promise<UserSchedulesResult> {
+  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV]);
+  if (!allowed) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  try {
+    const now = new Date();
+
+    const [past, upcoming, all] = await Promise.all([
+      db
+        .select({
+          eventId: events.id,
+          eventName: events.name,
+          eventDate: events.date,
+        })
+        .from(eventAssignments)
+        .innerJoin(events, eq(events.id, eventAssignments.eventId))
+        .where(and(eq(eventAssignments.userId, userId), lt(events.date, now)))
+        .orderBy(desc(events.date))
+        .limit(3),
+      db
+        .select({
+          eventId: events.id,
+          eventName: events.name,
+          eventDate: events.date,
+        })
+        .from(eventAssignments)
+        .innerJoin(events, eq(events.id, eventAssignments.eventId))
+        .where(and(eq(eventAssignments.userId, userId), gte(events.date, now)))
+        .orderBy(asc(events.date))
+        .limit(5),
+      db
+        .select({
+          eventId: events.id,
+          eventName: events.name,
+          eventDate: events.date,
+        })
+        .from(eventAssignments)
+        .innerJoin(events, eq(events.id, eventAssignments.eventId))
+        .where(eq(eventAssignments.userId, userId))
+        .orderBy(desc(events.date))
+        .limit(20),
+    ]);
+
+    return { success: true, data: { past, upcoming, all } };
+  } catch (err) {
+    console.error("[getUserSchedules] error:", err);
+    return { success: false, error: "Failed to load schedules" };
   }
 }
 

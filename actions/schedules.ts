@@ -33,7 +33,7 @@ export type ScheduleMember = {
   taskName: string | null;
   taskId: number | null;
   blockName: string | null;
-  hasPendingSwap: boolean;
+  pendingRequestType: "switch" | "cancellation" | "helper" | null;
 };
 
 export type ScheduleEvent = {
@@ -57,13 +57,14 @@ export type SchedulesResult = {
   error?: string;
 };
 
-export type SwapRequestItem = {
+export type ChangeRequestItem = {
   id: number;
   eventId: number;
   eventName: string;
   eventDate: Date;
-  userFromId: number;
-  userFromName: string;
+  type: "switch" | "cancellation" | "helper";
+  userFromId: number | null;
+  userFromName: string | null;
   userToId: number | null;
   userToName: string | null;
   status: ApprovalStatus;
@@ -74,9 +75,9 @@ export type SwapRequestItem = {
   toTeamNumber: number | null;
 };
 
-export type SwapRequestsResult = {
+export type ChangeRequestsResult = {
   success: boolean;
-  data?: SwapRequestItem[];
+  data?: ChangeRequestItem[];
   error?: string;
 };
 
@@ -96,6 +97,15 @@ export type MutationResult = {
   success: boolean;
   error?: string;
 };
+
+function deriveType(
+  userFromId: number | null,
+  userToId: number | null,
+): "switch" | "cancellation" | "helper" {
+  if (userFromId !== null && userToId !== null) return "switch";
+  if (userFromId !== null && userToId === null) return "cancellation";
+  return "helper";
+}
 
 export async function getSchedules(
   month: number,
@@ -153,7 +163,7 @@ export async function getSchedules(
       .limit(1);
     const picTaskId = picTaskRows[0]?.id ?? null;
 
-    const [assignmentRows, teamRows, pendingSwapRows] = await Promise.all([
+    const [assignmentRows, teamRows, pendingChangeRows] = await Promise.all([
       db
         .select({
           eventId: eventAssignments.eventId,
@@ -188,6 +198,7 @@ export async function getSchedules(
         .select({
           eventId: eventAssignmentChangeRequests.eventId,
           userFromId: eventAssignmentChangeRequests.userFromId,
+          userToId: eventAssignmentChangeRequests.userToId,
         })
         .from(eventAssignmentChangeRequests)
         .where(
@@ -198,9 +209,16 @@ export async function getSchedules(
         ),
     ]);
 
-    const pendingSwapSet = new Set(
-      pendingSwapRows.map((r) => `${r.eventId}-${r.userFromId}`),
-    );
+    const pendingMap = new Map<string, "switch" | "cancellation" | "helper">();
+    for (const r of pendingChangeRows) {
+      const type = deriveType(r.userFromId, r.userToId);
+      if (r.userFromId !== null) {
+        pendingMap.set(`${r.eventId}-from-${r.userFromId}`, type);
+      }
+      if (r.userToId !== null) {
+        pendingMap.set(`${r.eventId}-to-${r.userToId}`, type);
+      }
+    }
 
     const assignmentsByEvent = new Map<number, ScheduleMember[]>();
     for (const row of assignmentRows) {
@@ -213,6 +231,8 @@ export async function getSchedules(
         }
         continue;
       }
+      const pendingType =
+        pendingMap.get(`${row.eventId}-from-${row.userId}`) ?? null;
       list.push({
         assignmentId: 0,
         userId: row.userId,
@@ -225,7 +245,7 @@ export async function getSchedules(
         taskName: row.taskName,
         taskId: row.taskId,
         blockName: row.blockName,
-        hasPendingSwap: pendingSwapSet.has(`${row.eventId}-${row.userId}`),
+        pendingRequestType: pendingType,
       });
       assignmentsByEvent.set(row.eventId, list);
     }
@@ -273,27 +293,47 @@ export async function getAvailableReplacements(
   }
 
   try {
-    const assignedUserIds = await db
-      .select({ userId: eventAssignments.userId })
-      .from(eventAssignments)
-      .where(
-        and(
-          eq(eventAssignments.eventId, eventId),
-          isNull(eventAssignments.blockName),
-          isNull(eventAssignments.rating),
+    const [assignedUserIds, fromUserRole] = await Promise.all([
+      db
+        .select({ userId: eventAssignments.userId })
+        .from(eventAssignments)
+        .where(
+          and(
+            eq(eventAssignments.eventId, eventId),
+            isNull(eventAssignments.blockName),
+            isNull(eventAssignments.rating),
+          ),
         ),
-      );
+      db
+        .select({ roleName: roles.name })
+        .from(users)
+        .innerJoin(roles, eq(users.roleId, roles.id))
+        .where(eq(users.id, userFromId))
+        .limit(1),
+    ]);
 
     const assignedIdSet = new Set(assignedUserIds.map((r) => r.userId));
+    const fromIsSpv = fromUserRole[0]?.roleName === ROLES.SPV;
 
-    const rows = await db
-      .select({
-        id: users.id,
-        fullName: users.fullName,
-        nij: users.nij,
-      })
-      .from(users)
-      .orderBy(asc(users.fullName));
+    const rows = fromIsSpv
+      ? await db
+          .select({
+            id: users.id,
+            fullName: users.fullName,
+            nij: users.nij,
+          })
+          .from(users)
+          .innerJoin(roles, eq(users.roleId, roles.id))
+          .where(eq(roles.name, ROLES.SPV))
+          .orderBy(asc(users.fullName))
+      : await db
+          .select({
+            id: users.id,
+            fullName: users.fullName,
+            nij: users.nij,
+          })
+          .from(users)
+          .orderBy(asc(users.fullName));
 
     const data: ReplacementUser[] = rows
       .filter((u) => !assignedIdSet.has(u.id) && u.id !== userFromId)
@@ -310,11 +350,9 @@ export async function getAvailableReplacements(
   }
 }
 
-export async function requestSwap(
+export async function getAvailableHelpers(
   eventId: number,
-  userFromId: number,
-  userToId: number,
-): Promise<MutationResult> {
+): Promise<ReplacementsResult> {
   const allowed = canAccess(await getUserRole(), [
     ROLES.ADMIN,
     ROLES.REGIONAL_PIC,
@@ -325,18 +363,84 @@ export async function requestSwap(
   }
 
   try {
-    const [existingRequest, fromAssignment, toAssignment] = await Promise.all([
-      db
-        .select({ id: eventAssignmentChangeRequests.id })
-        .from(eventAssignmentChangeRequests)
-        .where(
-          and(
-            eq(eventAssignmentChangeRequests.eventId, eventId),
-            eq(eventAssignmentChangeRequests.userFromId, userFromId),
-          ),
-        )
-        .limit(1),
-      db
+    const assignedUserIds = await db
+      .select({ userId: eventAssignments.userId })
+      .from(eventAssignments)
+      .where(eq(eventAssignments.eventId, eventId));
+
+    const assignedIdSet = new Set(assignedUserIds.map((r) => r.userId));
+
+    const rows = await db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        nij: users.nij,
+      })
+      .from(users)
+      .orderBy(asc(users.fullName));
+
+    const data: ReplacementUser[] = rows
+      .filter((u) => !assignedIdSet.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        fullName: u.fullName,
+        nij: u.nij,
+      }));
+
+    return { success: true, data };
+  } catch (err) {
+    console.error("[getAvailableHelpers] error:", err);
+    return { success: false, error: "Failed to load helpers" };
+  }
+}
+
+export async function requestChange(
+  eventId: number,
+  userFromId: number | null,
+  userToId: number | null,
+): Promise<MutationResult> {
+  if (userFromId === null && userToId === null) {
+    return {
+      success: false,
+      error: "At least one of userFromId or userToId must be provided",
+    };
+  }
+
+  const role = await getUserRole();
+  if (!canAccess(role, [ROLES.ADMIN, ROLES.REGIONAL_PIC, ROLES.SPV])) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  try {
+    if (role === ROLES.SPV) {
+      const spvTeamId = await getCurrentUserTeamId();
+      if (spvTeamId === null) {
+        return { success: false, error: "Forbidden" };
+      }
+
+      if (userFromId !== null) {
+        const fromUser = await db
+          .select({ teamId: users.teamId })
+          .from(users)
+          .where(eq(users.id, userFromId))
+          .limit(1);
+        if (fromUser[0]?.teamId !== spvTeamId) {
+          return { success: false, error: "Forbidden" };
+        }
+      } else {
+        const toUser = await db
+          .select({ teamId: users.teamId })
+          .from(users)
+          .where(eq(users.id, userToId!))
+          .limit(1);
+        if (toUser[0]?.teamId !== spvTeamId) {
+          return { success: false, error: "Forbidden" };
+        }
+      }
+    }
+
+    if (userFromId !== null) {
+      const fromAssignment = await db
         .select({ id: eventAssignments.id })
         .from(eventAssignments)
         .where(
@@ -345,8 +449,40 @@ export async function requestSwap(
             eq(eventAssignments.userId, userFromId),
           ),
         )
-        .limit(1),
-      db
+        .limit(1);
+      if (!fromAssignment[0]) {
+        return {
+          success: false,
+          error: "The member is not assigned to this event",
+        };
+      }
+
+      if (userToId !== null) {
+        const fromUserRole = await db
+          .select({ roleName: roles.name })
+          .from(users)
+          .innerJoin(roles, eq(users.roleId, roles.id))
+          .where(eq(users.id, userFromId))
+          .limit(1);
+        if (fromUserRole[0]?.roleName === ROLES.SPV) {
+          const toUserRole = await db
+            .select({ roleName: roles.name })
+            .from(users)
+            .innerJoin(roles, eq(users.roleId, roles.id))
+            .where(eq(users.id, userToId))
+            .limit(1);
+          if (toUserRole[0]?.roleName !== ROLES.SPV) {
+            return {
+              success: false,
+              error: "The replacement member must also be an SPV",
+            };
+          }
+        }
+      }
+    }
+
+    if (userToId !== null) {
+      const toAssignment = await db
         .select({ id: eventAssignments.id })
         .from(eventAssignments)
         .where(
@@ -355,39 +491,45 @@ export async function requestSwap(
             eq(eventAssignments.userId, userToId),
           ),
         )
-        .limit(1),
-    ]);
-
-    if (!fromAssignment[0]) {
-      return {
-        success: false,
-        error: "The member to swap is not assigned to this event",
-      };
+        .limit(1);
+      if (toAssignment[0]) {
+        return {
+          success: false,
+          error: "This member is already assigned to the event",
+        };
+      }
     }
 
-    if (toAssignment[0]) {
-      return {
-        success: false,
-        error: "The replacement member is already assigned to this event",
-      };
-    }
+    const existingConditions = [
+      eq(eventAssignmentChangeRequests.eventId, eventId),
+      eq(eventAssignmentChangeRequests.status, "pending"),
+      userFromId !== null
+        ? eq(eventAssignmentChangeRequests.userFromId, userFromId)
+        : isNull(eventAssignmentChangeRequests.userFromId),
+      userToId !== null
+        ? eq(eventAssignmentChangeRequests.userToId, userToId)
+        : isNull(eventAssignmentChangeRequests.userToId),
+    ];
+
+    const existingRequest = await db
+      .select({ id: eventAssignmentChangeRequests.id })
+      .from(eventAssignmentChangeRequests)
+      .where(and(...existingConditions))
+      .limit(1);
+
+    const ctx = await getUserContext();
 
     if (existingRequest[0]) {
-      const ctx = await getUserContext();
       await db
         .update(eventAssignmentChangeRequests)
         .set({
-          userToId,
-          status: "pending",
           updatedAt: new Date(),
           updatedBy: ctx.userName,
         })
         .where(eq(eventAssignmentChangeRequests.id, existingRequest[0].id));
-
       return { success: true };
     }
 
-    const ctx = await getUserContext();
     await db.insert(eventAssignmentChangeRequests).values({
       eventId,
       userFromId,
@@ -400,8 +542,8 @@ export async function requestSwap(
 
     return { success: true };
   } catch (err) {
-    console.error("[requestSwap] error:", err);
-    return { success: false, error: "Failed to create swap request" };
+    console.error("[requestChange] error:", err);
+    return { success: false, error: "Failed to create change request" };
   }
 }
 
@@ -418,33 +560,44 @@ async function getCurrentUserTeamId(): Promise<number | null> {
   return rows[0]?.teamId ?? null;
 }
 
-async function canApproveSwap(requestRow: {
+async function canApproveChange(requestRow: {
   eventId: number;
-  userFromId: number;
+  userFromId: number | null;
+  userToId: number | null;
 }): Promise<boolean> {
   const role = await getUserRole();
   if (!role) return false;
-  if (role === ROLES.ADMIN) return true;
+  if (role === ROLES.ADMIN || role === ROLES.REGIONAL_PIC) return true;
 
   if (role !== ROLES.SPV) return false;
 
   const spvTeamId = await getCurrentUserTeamId();
   if (spvTeamId === null) return false;
 
-  const fromUser = await db
+  const type = deriveType(requestRow.userFromId, requestRow.userToId);
+
+  if (type === "helper") return false;
+
+  if (type === "cancellation") {
+    const fromUser = await db
+      .select({ teamId: users.teamId })
+      .from(users)
+      .where(eq(users.id, requestRow.userFromId!))
+      .limit(1);
+    return fromUser[0]?.teamId === spvTeamId;
+  }
+
+  const toUser = await db
     .select({ teamId: users.teamId })
     .from(users)
-    .where(eq(users.id, requestRow.userFromId))
+    .where(eq(users.id, requestRow.userToId!))
     .limit(1);
-
-  return fromUser[0]?.teamId === spvTeamId;
+  return toUser[0]?.teamId === spvTeamId;
 }
 
-export async function getPendingSwaps(): Promise<SwapRequestsResult> {
+export async function getPendingChanges(): Promise<ChangeRequestsResult> {
   const role = await getUserRole();
-  if (
-    !canAccess(role, [ROLES.ADMIN, ROLES.REGIONAL_PIC, ROLES.SPV])
-  ) {
+  if (!canAccess(role, [ROLES.ADMIN, ROLES.REGIONAL_PIC, ROLES.SPV])) {
     return { success: false, error: "Forbidden" };
   }
 
@@ -471,7 +624,7 @@ export async function getPendingSwaps(): Promise<SwapRequestsResult> {
 
     const userIds = new Set<number>();
     for (const r of requestRows) {
-      userIds.add(r.userFromId);
+      if (r.userFromId) userIds.add(r.userFromId);
       if (r.userToId) userIds.add(r.userToId);
     }
 
@@ -495,25 +648,29 @@ export async function getPendingSwaps(): Promise<SwapRequestsResult> {
     const userMap = new Map(userRows.map((u) => [u.id, u]));
     const teamMap = new Map(teamRows.map((t) => [t.teamId, t.teamNumber]));
 
-    let data: SwapRequestItem[] = requestRows.map((row) => {
-      const fromUser = userMap.get(row.userFromId);
+    let data: ChangeRequestItem[] = requestRows.map((row) => {
+      const fromUser = row.userFromId ? userMap.get(row.userFromId) : null;
       const toUser = row.userToId ? userMap.get(row.userToId) : null;
       const fromTeamId = fromUser?.teamId ?? null;
       const toTeamId = toUser?.teamId ?? null;
+      const type = deriveType(row.userFromId, row.userToId);
 
       return {
         id: row.id,
         eventId: row.eventId,
         eventName: row.eventName,
         eventDate: row.eventDate,
+        type,
         userFromId: row.userFromId,
-        userFromName: fromUser?.fullName ?? "Unknown",
+        userFromName: fromUser?.fullName ?? null,
         userToId: row.userToId,
         userToName: toUser?.fullName ?? null,
         status: row.status,
         createdAt: row.createdAt,
         fromTeamId,
-        fromTeamNumber: fromTeamId ? (teamMap.get(fromTeamId) ?? null) : null,
+        fromTeamNumber: fromTeamId
+          ? (teamMap.get(fromTeamId) ?? null)
+          : null,
         toTeamId,
         toTeamNumber: toTeamId ? (teamMap.get(toTeamId) ?? null) : null,
       };
@@ -524,24 +681,24 @@ export async function getPendingSwaps(): Promise<SwapRequestsResult> {
       if (spvTeamId === null) {
         return { success: true, data: [] };
       }
-      data = data.filter((r) => r.fromTeamId === spvTeamId);
+      data = data.filter(
+        (r) => r.fromTeamId === spvTeamId || r.toTeamId === spvTeamId,
+      );
     }
 
     return { success: true, data };
   } catch (err) {
-    console.error("[getPendingSwaps] error:", err);
-    return { success: false, error: "Failed to load swap requests" };
+    console.error("[getPendingChanges] error:", err);
+    return { success: false, error: "Failed to load change requests" };
   }
 }
 
-export async function getSwapRequests(
+export async function getChangeRequests(
   month: number,
   year: number,
-): Promise<SwapRequestsResult> {
+): Promise<ChangeRequestsResult> {
   const role = await getUserRole();
-  if (
-    !canAccess(role, [ROLES.ADMIN, ROLES.REGIONAL_PIC, ROLES.SPV])
-  ) {
+  if (!canAccess(role, [ROLES.ADMIN, ROLES.REGIONAL_PIC, ROLES.SPV])) {
     return { success: false, error: "Forbidden" };
   }
 
@@ -570,12 +727,7 @@ export async function getSwapRequests(
       })
       .from(eventAssignmentChangeRequests)
       .innerJoin(events, eq(eventAssignmentChangeRequests.eventId, events.id))
-      .where(
-        and(
-          gte(events.date, startDate),
-          lt(events.date, endDate),
-        ),
-      )
+      .where(and(gte(events.date, startDate), lt(events.date, endDate)))
       .orderBy(asc(eventAssignmentChangeRequests.createdAt));
 
     if (requestRows.length === 0) {
@@ -584,7 +736,7 @@ export async function getSwapRequests(
 
     const userIds = new Set<number>();
     for (const r of requestRows) {
-      userIds.add(r.userFromId);
+      if (r.userFromId) userIds.add(r.userFromId);
       if (r.userToId) userIds.add(r.userToId);
     }
 
@@ -601,25 +753,29 @@ export async function getSwapRequests(
     const userMap = new Map(userRows.map((u) => [u.id, u]));
     const teamMap = new Map(teamRows.map((t) => [t.teamId, t.teamNumber]));
 
-    let data: SwapRequestItem[] = requestRows.map((row) => {
-      const fromUser = userMap.get(row.userFromId);
+    let data: ChangeRequestItem[] = requestRows.map((row) => {
+      const fromUser = row.userFromId ? userMap.get(row.userFromId) : null;
       const toUser = row.userToId ? userMap.get(row.userToId) : null;
       const fromTeamId = fromUser?.teamId ?? null;
       const toTeamId = toUser?.teamId ?? null;
+      const type = deriveType(row.userFromId, row.userToId);
 
       return {
         id: row.id,
         eventId: row.eventId,
         eventName: row.eventName,
         eventDate: row.eventDate,
+        type,
         userFromId: row.userFromId,
-        userFromName: fromUser?.fullName ?? "Unknown",
+        userFromName: fromUser?.fullName ?? null,
         userToId: row.userToId,
         userToName: toUser?.fullName ?? null,
         status: row.status,
         createdAt: row.createdAt,
         fromTeamId,
-        fromTeamNumber: fromTeamId ? (teamMap.get(fromTeamId) ?? null) : null,
+        fromTeamNumber: fromTeamId
+          ? (teamMap.get(fromTeamId) ?? null)
+          : null,
         toTeamId,
         toTeamNumber: toTeamId ? (teamMap.get(toTeamId) ?? null) : null,
       };
@@ -630,17 +786,19 @@ export async function getSwapRequests(
       if (spvTeamId === null) {
         return { success: true, data: [] };
       }
-      data = data.filter((r) => r.fromTeamId === spvTeamId);
+      data = data.filter(
+        (r) => r.fromTeamId === spvTeamId || r.toTeamId === spvTeamId,
+      );
     }
 
     return { success: true, data };
   } catch (err) {
-    console.error("[getSwapRequests] error:", err);
-    return { success: false, error: "Failed to load swap requests" };
+    console.error("[getChangeRequests] error:", err);
+    return { success: false, error: "Failed to load change requests" };
   }
 }
 
-export async function approveSwap(
+export async function approveChange(
   requestId: number,
 ): Promise<MutationResult> {
   try {
@@ -658,49 +816,78 @@ export async function approveSwap(
 
     const request = requestRows[0];
     if (!request) {
-      return { success: false, error: "Swap request not found" };
+      return { success: false, error: "Change request not found" };
     }
 
     if (request.status !== "pending") {
-      return { success: false, error: "This request has already been processed" };
+      return {
+        success: false,
+        error: "This request has already been processed",
+      };
     }
 
-    if (!request.userToId) {
-      return { success: false, error: "No replacement member has been selected" };
+    const type = deriveType(request.userFromId, request.userToId);
+
+    if (type === "switch" && !request.userToId) {
+      return {
+        success: false,
+        error: "No replacement member has been selected",
+      };
     }
 
-    const mayApprove = await canApproveSwap(request);
+    const mayApprove = await canApproveChange({
+      eventId: request.eventId,
+      userFromId: request.userFromId,
+      userToId: request.userToId,
+    });
     if (!mayApprove) {
       return { success: false, error: "Forbidden" };
     }
 
-    const assignmentRows = await db
-      .select({
-        id: eventAssignments.id,
-        taskId: eventAssignments.taskId,
-        blockName: eventAssignments.blockName,
-        rating: eventAssignments.rating,
-      })
-      .from(eventAssignments)
-      .where(
-        and(
-          eq(eventAssignments.eventId, request.eventId),
-          eq(eventAssignments.userId, request.userFromId),
-        ),
-      );
-
     const ctx = await getUserContext();
 
     await db.transaction(async (tx) => {
-      for (const assignment of assignmentRows) {
+      if (type === "helper") {
+        await tx.insert(eventAssignments).values({
+          eventId: request.eventId,
+          userId: request.userToId!,
+          taskId: null,
+          blockName: null,
+          createdBy: ctx.userName,
+          updatedBy: ctx.userName,
+        });
+      } else if (type === "cancellation") {
         await tx
-          .update(eventAssignments)
-          .set({
-            userId: request.userToId!,
-            updatedAt: new Date(),
-            updatedBy: ctx.userName,
+          .delete(eventAssignments)
+          .where(
+            and(
+              eq(eventAssignments.eventId, request.eventId),
+              eq(eventAssignments.userId, request.userFromId!),
+            ),
+          );
+      } else {
+        const assignmentRows = await db
+          .select({
+            id: eventAssignments.id,
           })
-          .where(eq(eventAssignments.id, assignment.id));
+          .from(eventAssignments)
+          .where(
+            and(
+              eq(eventAssignments.eventId, request.eventId),
+              eq(eventAssignments.userId, request.userFromId!),
+            ),
+          );
+
+        for (const assignment of assignmentRows) {
+          await tx
+            .update(eventAssignments)
+            .set({
+              userId: request.userToId!,
+              updatedAt: new Date(),
+              updatedBy: ctx.userName,
+            })
+            .where(eq(eventAssignments.id, assignment.id));
+        }
       }
 
       await tx
@@ -717,12 +904,12 @@ export async function approveSwap(
 
     return { success: true };
   } catch (err) {
-    console.error("[approveSwap] error:", err);
-    return { success: false, error: "Failed to approve swap request" };
+    console.error("[approveChange] error:", err);
+    return { success: false, error: "Failed to approve change request" };
   }
 }
 
-export async function rejectSwap(
+export async function rejectChange(
   requestId: number,
 ): Promise<MutationResult> {
   try {
@@ -731,6 +918,7 @@ export async function rejectSwap(
         id: eventAssignmentChangeRequests.id,
         eventId: eventAssignmentChangeRequests.eventId,
         userFromId: eventAssignmentChangeRequests.userFromId,
+        userToId: eventAssignmentChangeRequests.userToId,
         status: eventAssignmentChangeRequests.status,
       })
       .from(eventAssignmentChangeRequests)
@@ -739,14 +927,21 @@ export async function rejectSwap(
 
     const request = requestRows[0];
     if (!request) {
-      return { success: false, error: "Swap request not found" };
+      return { success: false, error: "Change request not found" };
     }
 
     if (request.status !== "pending") {
-      return { success: false, error: "This request has already been processed" };
+      return {
+        success: false,
+        error: "This request has already been processed",
+      };
     }
 
-    const mayApprove = await canApproveSwap(request);
+    const mayApprove = await canApproveChange({
+      eventId: request.eventId,
+      userFromId: request.userFromId,
+      userToId: request.userToId,
+    });
     if (!mayApprove) {
       return { success: false, error: "Forbidden" };
     }
@@ -765,7 +960,7 @@ export async function rejectSwap(
 
     return { success: true };
   } catch (err) {
-    console.error("[rejectSwap] error:", err);
-    return { success: false, error: "Failed to reject swap request" };
+    console.error("[rejectChange] error:", err);
+    return { success: false, error: "Failed to reject change request" };
   }
 }

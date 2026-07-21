@@ -14,6 +14,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -78,6 +79,7 @@ function NavigationNode({
   nested?: boolean;
 }) {
   const session = useSessionUser();
+  const { setOpenMobile } = useSidebar();
 
   if (!isNodeVisible(session, node)) {
     return null;
@@ -87,7 +89,10 @@ function NavigationNode({
     if (nested) {
       return (
         <SidebarMenuSubItem>
-          <SidebarMenuSubButton render={<Link href={node.targetLink} />}>
+          <SidebarMenuSubButton
+            render={<Link href={node.targetLink} />}
+            onClick={() => setOpenMobile(false)}
+          >
             {node.icon && (
               <node.icon className="size-4 text-muted-foreground" />
             )}
@@ -107,6 +112,7 @@ function NavigationNode({
         <SidebarMenuButton
           render={<Link href={node.targetLink} />}
           className="gap-3 rounded-md transition-colors hover:bg-accent/60"
+          onClick={() => setOpenMobile(false)}
         >
           {node.icon && <node.icon className="size-4 text-muted-foreground" />}
           <span className="text-sm">{node.label}</span>
@@ -160,6 +166,7 @@ function NavigationNode({
 
 export function AppSidebar() {
   const session = useSessionUser();
+  const { setOpenMobile } = useSidebar();
 
   function isGroupVisible(group: NavigationGroup): boolean {
     return group.children.some((child) => isNodeVisible(session, child));
@@ -170,7 +177,7 @@ export function AppSidebar() {
       <SidebarHeader className="pb-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/tools" />}>
+                  <SidebarMenuButton size="lg" render={<Link href="/tools" />} onClick={() => setOpenMobile(false)}>
               <div className="flex aspect-square size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
                 <LayoutGrid className="size-4" />
               </div>

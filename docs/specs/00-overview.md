@@ -126,10 +126,259 @@ proxy.ts              Middleware function (exported but NOT wired to middleware.
 ## Data Model
 
 ### Local SQLite (Drizzle)
-- **Master**: regions, teams, event_types, ministries, metrics, tasks, configurations
-- **Users & roles**: users, roles
-- **Events**: events, event_teams, event_assignments, event_metrics, event_volunteers, event_altar_calls, event_assignment_change_requests
-- **Audit**: audit_trails
+
+#### Master Tables
+
+**regions**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**teams**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `number` | integer | no | — | unique |
+| `region_id` | integer | no | — | FK → regions.id |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**event_types**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**ministries**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**metrics**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | |
+| `notes` | text | yes | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**tasks**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**configurations**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | unique |
+| `value` | text | no | — | |
+| `notes` | text | yes | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+#### Users & Roles
+
+**users**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `full_name` | text | no | — | |
+| `nij` | text | no | — | unique |
+| `email` | text | no | — | unique |
+| `cg_code` | text | yes | — | |
+| `password` | text | yes | — | bcrypt hash |
+| `source_id` | integer | yes | — | |
+| `team_id` | integer | yes | — | FK → teams.id |
+| `role_id` | integer | yes | — | FK → roles.id |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**roles**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `name` | text | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+#### Events
+
+**events**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `region_id` | integer | no | — | FK → regions.id |
+| `event_type_id` | integer | no | — | FK → event_types.id |
+| `date` | timestamp | no | — | |
+| `name` | text | no | — | |
+| `mode` | text | no | `teams` | enum: teams, members, manual_apply |
+| `configuration` | json | no | `[]` | `{ field: string; value: string }[]` |
+| `source_id` | integer | yes | — | |
+| `status` | text | no | `pending` | enum: pending, incomplete, completed |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+**event_teams**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `event_id` | integer | no | — | FK → events.id (cascade) |
+| `team_id` | integer | no | — | FK → teams.id |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+Unique: (event_id, team_id)
+
+**event_assignments**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `event_id` | integer | no | — | FK → events.id (cascade) |
+| `user_id` | integer | no | — | FK → users.id |
+| `task_id` | integer | yes | — | FK → tasks.id |
+| `block_name` | text | yes | — | |
+| `rating` | integer | yes | — | |
+| `technical_notes` | text | yes | — | |
+| `non_technical_notes` | text | yes | — | |
+| `rated_by_user_id` | integer | yes | — | FK → users.id |
+| `rated_by` | text | yes | — | |
+| `rated_at` | timestamp | yes | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+Unique: (user_id, event_id, task_id, block_name)
+
+**event_assignment_change_requests**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `event_id` | integer | no | — | FK → events.id (cascade) |
+| `user_from_id` | integer | no | — | FK → users.id |
+| `user_to_id` | integer | yes | — | FK → users.id |
+| `status` | text | no | `pending` | enum: pending, approved, rejected |
+| `approved_by` | integer | yes | — | FK → users.id |
+| `approved_at` | timestamp | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+Unique: (event_id, user_from_id, user_to_id)
+
+**event_metrics**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `event_id` | integer | no | — | FK → events.id (cascade) |
+| `metric_id` | integer | no | — | FK → metrics.id |
+| `count` | integer | no | — | |
+| `notes` | text | yes | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+Unique: (event_id, metric_id)
+
+**event_volunteers**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `event_id` | integer | no | — | FK → events.id (cascade) |
+| `ministry_id` | integer | no | — | FK → ministries.id |
+| `count` | integer | no | — | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+Unique: (event_id, ministry_id)
+
+**event_altar_calls**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `event_id` | integer | no | — | FK → events.id (cascade) |
+| `description` | text | no | — | |
+| `count` | integer | no | — | |
+| `sequence` | integer | no | `0` | |
+| `created_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `updated_at` | timestamp | no | `CURRENT_TIMESTAMP` | |
+| `created_by` | text | no | — | |
+| `updated_by` | text | no | — | |
+
+Unique: (event_id, sequence)
+
+#### Audit
+
+**audit_trails**
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | integer | no | auto | PK |
+| `resource` | text | no | — | |
+| `record_id` | integer | no | — | |
+| `action` | text | no | — | |
+| `user_id` | integer | yes | — | FK → users.id |
+| `user_name` | text | no | — | |
+| `old_data` | text | no | — | |
+| `new_data` | text | no | — | |
+| `changed_at` | timestamp | no | — | |
+
+#### Relationships
+
+- regions → teams (one to many)
+- teams → region (many to one), users (one to many)
+- users → team (many to one), role (many to one), event_assignments (one to many), event_assignment_change_requests (one to many)
+- roles → users (one to many)
+- event_types → events (one to many)
+- ministries → event_volunteers (one to many)
+- metrics → event_metrics (one to many)
+- tasks → event_assignments (one to many)
+- events → region (many to one), event_type (many to one), teams (many to many via event_teams), assignments (one to many), change_requests (one to many), metrics (many to many via event_metrics), volunteers (many to many via event_volunteers), altar_calls (one to many)
+- event_teams → event (many to one), team (many to one)
+- event_assignments → event (many to one), user (many to one), task (many to one), rated_by_user (many to one)
+- event_assignment_change_requests → event (many to one), user_from (many to one), user_to (many to one), approver (many to one)
+- event_metrics → event (many to one), metric (many to one)
+- event_volunteers → event (many to one), ministry (many to one)
+- event_altar_calls → event (many to one)
+- audit_trails → user (many to one)
 
 ### Firestore `reports` collection
 - `title`, `type` (AOG_YOUTH, AOG_TEEN, EVENT), `date` (Indonesian format "DD Month YYYY")

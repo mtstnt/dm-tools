@@ -9,16 +9,19 @@ import {
   Loader,
   Pencil,
   Trash2,
+  Upload,
   UserPlus,
 } from "lucide-react";
 
 import type { MemberUser, TeamWithMembers } from "@/actions/users/members";
 import {
-  createUser,
   updateUser,
   deleteUser,
   getTeamMembers,
 } from "@/actions/users/members";
+import { useSessionUser } from "@/components/user-session-provider";
+import { ROLES } from "@/lib/permissions";
+import { CreateMemberDialog } from "./_components/create-member-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -78,6 +81,12 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const session = useSessionUser();
+  const canImport =
+    session?.role === ROLES.ADMIN ||
+    session?.role === ROLES.HEAD_MINISTRY ||
+    session?.role === ROLES.REGIONAL_PIC;
+
   async function loadData() {
     setDataLoading(true);
     setDataError(null);
@@ -108,12 +117,6 @@ export default function MembersPage() {
     loadData();
   }, []);
 
-  function openCreate() {
-    setForm(emptyForm);
-    setError(null);
-    setCreateOpen(true);
-  }
-
   function openEdit(user: MemberUser) {
     setSelectedUser(user);
     setForm({
@@ -140,24 +143,6 @@ export default function MembersPage() {
     setSelectedUser(null);
     setError(null);
     setForm(emptyForm);
-  }
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const result = await createUser(form);
-    setLoading(false);
-
-    if (!result.success) {
-      setError(result.error ?? "Failed to create user");
-      return;
-    }
-
-    closeAll();
-    router.refresh();
-    await loadData();
   }
 
   async function handleUpdate(e: React.FormEvent) {
@@ -351,7 +336,16 @@ export default function MembersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={openCreate} className="h-10 rounded-lg px-5">
+          {canImport && (
+            <Link
+              href="/my/users/members/import"
+              className={buttonVariants({ className: "h-10 rounded-lg px-5" })}
+            >
+              <Upload className="size-4" />
+              Import
+            </Link>
+          )}
+          <Button onClick={() => setCreateOpen(true)} className="h-10 rounded-lg px-5">
             <UserPlus className="size-4" />
             Add Member
           </Button>
@@ -381,32 +375,15 @@ export default function MembersPage() {
         />
       </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <form onSubmit={handleCreate}>
-            <DialogHeader>
-              <DialogTitle>Create user</DialogTitle>
-              <DialogDescription>
-                Add a new member to the system.
-              </DialogDescription>
-            </DialogHeader>
-            {renderFormFields()}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCreateOpen(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? "Creating..." : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <CreateMemberDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        teamOptions={teamOptions}
+        onComplete={async () => {
+          router.refresh();
+          await loadData();
+        }}
+      />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>

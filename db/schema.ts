@@ -175,6 +175,8 @@ export const users = sqliteTable(
 
     email: text("email").notNull(),
 
+    cgCode: text("cg_code"),
+
     password: text("password"),
 
     sourceId: integer("source_id"),
@@ -195,7 +197,10 @@ export const users = sqliteTable(
     createdBy: text("created_by").notNull(),
     updatedBy: text("updated_by").notNull(),
   },
-  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+  (table) => [
+    uniqueIndex("users_email_unique").on(table.email),
+    uniqueIndex("users_nij_unique").on(table.nij),
+  ],
 );
 
 export const roles = sqliteTable("roles", {

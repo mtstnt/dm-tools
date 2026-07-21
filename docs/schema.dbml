@@ -124,11 +124,14 @@ Table users {
 
   full_name varchar [not null]
 
-  // NIJ (Nomor Induk Jemaat) — mandatory identifier.
-  nij varchar [not null]
+  // NIJ (Nomor Induk Jemaat) — mandatory identifier, unique.
+  nij varchar [not null, unique]
 
   // Used to map against the legacy application.
   email varchar [not null, unique]
+
+  // Community group code (optional).
+  cg_code varchar [null]
 
   // Bcrypt-hashed password. Nullable for users imported from the legacy system
   // before they are activated.
@@ -139,36 +142,14 @@ Table users {
 
   team_id int [ref: > teams.id, null]
 
-  created_at timestamp [not null]
-  updated_at timestamp [not null]
-
-  created_by varchar [not null]
-  updated_by varchar [not null]
-}
-
-Enum actions {
-  create
-  read
-  update
-  delete
-  execute
-}
-
-Table permissions {
-  id serial [pk, increment]
-
-  resource varchar [not null]
-  action actions [not null]
+  // RBAC: each user has exactly one role (hardcoded in lib/permissions.ts).
+  role_id int [ref: > roles.id, null]
 
   created_at timestamp [not null]
   updated_at timestamp [not null]
 
   created_by varchar [not null]
   updated_by varchar [not null]
-
-  indexes {
-    (resource, action) [unique]
-  }
 }
 
 Table roles {
@@ -181,58 +162,6 @@ Table roles {
 
   created_by varchar [not null]
   updated_by varchar [not null]
-}
-
-Table role_permissions {
-  id serial [pk, increment]
-
-  role_id int [ref: > roles.id, not null]
-  permission_id int [ref: > permissions.id, not null]
-  scope varchar [null] // all, self, team, region
-
-  created_at timestamp [not null]
-  updated_at timestamp [not null]
-
-  created_by varchar [not null]
-  updated_by varchar [not null]
-
-  indexes {
-    (role_id, permission_id) [unique]
-  }
-}
-
-Table user_permissions {
-  id serial [pk, increment]
-
-  user_id int [ref: > users.id, not null]
-  permission_id int [ref: > permissions.id, not null]
-
-  created_at timestamp [not null]
-  updated_at timestamp [not null]
-
-  created_by varchar [not null]
-  updated_by varchar [not null]
-
-  indexes {
-    (user_id, permission_id) [unique]
-  }
-}
-
-Table user_roles {
-  id serial [pk, increment]
-
-  user_id int [ref: > users.id, not null]
-  role_id int [ref: > roles.id, not null]
-
-  created_at timestamp [not null]
-  updated_at timestamp [not null]
-
-  created_by varchar [not null]
-  updated_by varchar [not null]
-
-  indexes {
-    (user_id, role_id) [unique]
-  }
 }
 
 // ##### END USERS & PERMISSIONS #####
@@ -253,10 +182,12 @@ Table events {
   region_id int [ref: > regions.id, not null]
   event_type_id int [ref: > event_types.id, not null]
 
-  // Stored as integer timestamp (seconds/milliseconds depending on driver).
-  date int [not null]
+  date timestamp [not null]
   name varchar [not null]
   mode varchar [not null, default: "teams"] // teams, members, manual_apply
+
+  // JSON array of { field, value } pairs — event-specific configuration overrides.
+  configuration json [not null, default: "[]"]
 
   // Legacy event id.
   source_id int [null]

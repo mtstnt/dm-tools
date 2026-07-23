@@ -10,6 +10,8 @@ import {
   eventMetrics,
   eventTeams,
   eventTypes,
+  eventVisibilityRegions,
+  eventVisibilityTeams,
   eventVolunteers,
   events,
   regions,
@@ -24,7 +26,17 @@ import {
   getUserRole,
   logAuditTrail,
 } from "@/actions/master/_shared";
-import { ROLES, canAccess } from "@/lib/permissions";
+import { getUserSession } from "@/actions/auth/session";
+import {
+  EVENT_VISIBILITY_SCOPES,
+  ROLES,
+  canAccess,
+  canEventVisibilityScopePickMultipleRegions,
+  getCreatableEventVisibilityScopes,
+  isEventRegionChoiceLocked,
+  isEventTeamChoiceLocked,
+  type EventVisibilityScope,
+} from "@/lib/permissions";
 
 export type EventScheduleItem = {
   id: number;
@@ -35,6 +47,7 @@ export type EventScheduleItem = {
   eventTypeName: string;
   mode?: EventMode;
   requiresApplication: boolean;
+  visibilityScope: EventVisibilityScope;
   teams: {
     id: number;
     number: number;
@@ -171,8 +184,9 @@ export async function getEventSchedule(
   month: number,
   year: number,
 ): Promise<EventScheduleResult> {
-  const allowed = canAccess(await getUserRole(), [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
-  if (!allowed) {
+  const session = await getUserSession();
+  const allowed = canAccess(session?.role, [ROLES.ADMIN, ROLES.HEAD_MINISTRY, ROLES.REGIONAL_PIC, ROLES.SPV, ROLES.MEMBER]);
+  if (!session || !allowed) {
     return { success: false, error: "Forbidden" };
   }
 
@@ -197,6 +211,7 @@ export async function getEventSchedule(
         regionName: regions.name,
         eventTypeName: eventTypes.name,
         mode: events.mode,
+        visibilityScope: events.visibilityScope,
         teamId: teams.id,
         teamNumber: teams.number,
       })
@@ -229,6 +244,7 @@ export async function getEventSchedule(
         eventTypeName: row.eventTypeName,
         mode: row.mode,
         requiresApplication: row.mode === "manual_apply",
+        visibilityScope: row.visibilityScope,
         teams:
           row.teamId !== null && row.teamNumber !== null
             ? [{ id: row.teamId, number: row.teamNumber }]
@@ -236,7 +252,110 @@ export async function getEventSchedule(
       });
     }
 
-    return { success: true, data: Array.from(eventMap.values()) };
+    const scheduleRows = Array.from(eventMap.values());
+
+    if (session.role === ROLES.ADMIN) {
+      return { success: true, data: scheduleRows };
+    }
+
+    const regionScopedIds = scheduleRows
+      .filter((row) => row.visibilityScope === "region" || row.visibilityScope === "region_spv")
+      .map((row) => row.id);
+
+    const teamScopedIds = scheduleRows
+      .filter((row) => row.visibilityScope === "team")
+      .map((row) => row.id);
+
+    const visibilityRegionMap = new Map<number, number[]>();
+
+    if (regionScopedIds.length > 0) {
+      const regionRows = await db
+        .select({
+          eventId: eventVisibilityRegions.eventId,
+          regionId: eventVisibilityRegions.regionId,
+        })
+        .from(eventVisibilityRegions)
+        .where(inArray(eventVisibilityRegions.eventId, regionScopedIds));
+
+      for (const row of regionRows) {
+        const list = visibilityRegionMap.get(row.eventId) ?? [];
+        list.push(row.regionId);
+        visibilityRegionMap.set(row.eventId, list);
+      }
+    }
+
+    const visibilityTeamMap = new Map<number, number[]>();
+    const teamRegionMap = new Map<number, number[]>();
+
+    if (teamScopedIds.length > 0) {
+      const teamRows = await db
+        .select({
+          eventId: eventVisibilityTeams.eventId,
+          teamId: eventVisibilityTeams.teamId,
+          teamRegionId: teams.regionId,
+        })
+        .from(eventVisibilityTeams)
+        .innerJoin(teams, eq(eventVisibilityTeams.teamId, teams.id))
+        .where(inArray(eventVisibilityTeams.eventId, teamScopedIds));
+
+      for (const row of teamRows) {
+        const teamList = visibilityTeamMap.get(row.eventId) ?? [];
+        teamList.push(row.teamId);
+        visibilityTeamMap.set(row.eventId, teamList);
+
+        const regionList = teamRegionMap.get(row.eventId) ?? [];
+        if (!regionList.includes(row.teamRegionId)) {
+          regionList.push(row.teamRegionId);
+        }
+        teamRegionMap.set(row.eventId, regionList);
+      }
+    }
+
+    const visibleRows = scheduleRows.filter((row) => {
+      switch (row.visibilityScope) {
+        case "all":
+          return true;
+
+        case "region": {
+          if (session.role === ROLES.HEAD_MINISTRY) return true;
+          if (!session.regionId) return false;
+          const regionIds = visibilityRegionMap.get(row.id) ?? [];
+          return regionIds.includes(session.regionId);
+        }
+
+        case "region_spv": {
+          if (session.role !== ROLES.SPV) return false;
+          if (!session.regionId) return false;
+          const regionIds = visibilityRegionMap.get(row.id) ?? [];
+          return regionIds.includes(session.regionId);
+        }
+
+        case "team": {
+          if (session.role === ROLES.MEMBER || session.role === ROLES.SPV) {
+            if (!session.teamId) return false;
+            const teamIds = visibilityTeamMap.get(row.id) ?? [];
+            return teamIds.includes(session.teamId);
+          }
+          if (session.role === ROLES.REGIONAL_PIC) {
+            if (!session.regionId) return false;
+            const teamRegionIds = teamRegionMap.get(row.id) ?? [];
+            return teamRegionIds.includes(session.regionId);
+          }
+          return false;
+        }
+
+        case "all_spv_pic":
+          return session.role === ROLES.SPV || session.role === ROLES.REGIONAL_PIC;
+
+        case "all_pic":
+          return session.role === ROLES.REGIONAL_PIC;
+
+        default:
+          return false;
+      }
+    });
+
+    return { success: true, data: visibleRows };
   } catch (err) {
     console.error("[getEventSchedule] error:", err);
     return { success: false, error: "Failed to load events" };
@@ -746,6 +865,292 @@ export async function createEvents(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to create events",
+    };
+  }
+}
+
+const calendarVisibilityScopeSchema = z.enum(EVENT_VISIBILITY_SCOPES);
+
+const createCalendarEventSchema = z.object({
+  regionId: z.coerce.number().int().positive("Region is required"),
+  eventTypeId: z.coerce.number().int().positive("Event type is required"),
+  customName: z.string().trim().optional(),
+  date: z.string().min(1, "Event date is required"),
+  visibilityScope: calendarVisibilityScopeSchema,
+  visibilityRegionIds: z.array(z.coerce.number().int().positive()).default([]),
+  visibilityTeamIds: z.array(z.coerce.number().int().positive()).default([]),
+});
+
+export type CreateCalendarEventInput = z.input<typeof createCalendarEventSchema>;
+
+export type CreateCalendarEventResult = {
+  success: boolean;
+  eventId?: number;
+  error?: string;
+};
+
+export type CalendarEventOptionsData = {
+  regions: EventCreationOptions["regions"];
+  eventTypes: EventCreationOptions["eventTypes"];
+  teams: EventCreationOptions["teams"];
+  allowedScopes: EventVisibilityScope[];
+  regionChoiceLocked: boolean;
+  teamChoiceLocked: boolean;
+  canPickMultipleRegions: boolean;
+  ownRegion: { id: number; name: string } | null;
+  ownTeam: { id: number; number: number } | null;
+};
+
+export type CalendarEventOptionsResult = {
+  success: boolean;
+  data?: CalendarEventOptionsData;
+  error?: string;
+};
+
+export async function getCalendarEventOptions(): Promise<CalendarEventOptionsResult> {
+  const session = await getUserSession();
+  if (!session) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  const allowedScopes = getCreatableEventVisibilityScopes(session.role);
+  if (allowedScopes.length === 0) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  try {
+    const options = await _loadEventCreationOptions();
+
+    const ownRegion = session.regionId
+      ? options.regions.find((region) => region.id === session.regionId) ?? null
+      : null;
+
+    const ownTeamRow = session.teamId
+      ? options.teams.find((team) => team.id === session.teamId) ?? null
+      : null;
+
+    return {
+      success: true,
+      data: {
+        regions: options.regions,
+        eventTypes: options.eventTypes,
+        teams: options.teams,
+        allowedScopes,
+        regionChoiceLocked: isEventRegionChoiceLocked(session.role),
+        teamChoiceLocked: isEventTeamChoiceLocked(session.role),
+        canPickMultipleRegions: canEventVisibilityScopePickMultipleRegions(session.role),
+        ownRegion,
+        ownTeam: ownTeamRow ? { id: ownTeamRow.id, number: ownTeamRow.number } : null,
+      },
+    };
+  } catch (err) {
+    console.error("[getCalendarEventOptions] error:", err);
+    return { success: false, error: "Failed to load event creation options" };
+  }
+}
+
+export async function createCalendarEvent(
+  input: CreateCalendarEventInput,
+): Promise<CreateCalendarEventResult> {
+  const session = await getUserSession();
+  if (!session) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  const allowedScopes = getCreatableEventVisibilityScopes(session.role);
+  if (allowedScopes.length === 0) {
+    return { success: false, error: "Forbidden" };
+  }
+
+  const parseResult = createCalendarEventSchema.safeParse(input);
+  if (!parseResult.success) {
+    return {
+      success: false,
+      error: parseResult.error.issues.map((issue) => issue.message).join(", "),
+    };
+  }
+
+  const data = parseResult.data;
+
+  if (!allowedScopes.includes(data.visibilityScope)) {
+    return {
+      success: false,
+      error: "You are not allowed to create this visibility type.",
+    };
+  }
+
+  const regionLocked = isEventRegionChoiceLocked(session.role);
+  const teamLocked = isEventTeamChoiceLocked(session.role);
+
+  try {
+    let eventRegionId = data.regionId;
+
+    if (regionLocked) {
+      if (!session.regionId) {
+        return { success: false, error: "Your account is not assigned to a region." };
+      }
+      eventRegionId = session.regionId;
+    }
+
+    const [regionRow] = await db
+      .select({ id: regions.id })
+      .from(regions)
+      .where(eq(regions.id, eventRegionId))
+      .limit(1);
+
+    if (!regionRow) {
+      return { success: false, error: "Selected region was not found" };
+    }
+
+    const [eventTypeRow] = await db
+      .select({ id: eventTypes.id, name: eventTypes.name })
+      .from(eventTypes)
+      .where(eq(eventTypes.id, data.eventTypeId))
+      .limit(1);
+
+    if (!eventTypeRow) {
+      return { success: false, error: "Selected event type was not found" };
+    }
+
+    const eventDate = new Date(data.date);
+    if (Number.isNaN(eventDate.getTime())) {
+      return { success: false, error: "Event date is invalid" };
+    }
+
+    const isCustomEvent = eventTypeRow.name.trim().toUpperCase() === "CUSTOM";
+    const eventName = isCustomEvent
+      ? data.customName?.trim()
+      : eventTypeRow.name.trim();
+
+    if (!eventName || eventName.length === 0) {
+      return {
+        success: false,
+        error: isCustomEvent
+          ? "Custom event name is required"
+          : "Event type has no name",
+      };
+    }
+
+    let visibilityRegionIds: number[] = [];
+    let visibilityTeamIds: number[] = [];
+
+    if (data.visibilityScope === "region" || data.visibilityScope === "region_spv") {
+      if (regionLocked) {
+        if (!session.regionId) {
+          return { success: false, error: "Your account is not assigned to a region." };
+        }
+        visibilityRegionIds = [session.regionId];
+      } else {
+        const uniqueRegionIds = Array.from(new Set(data.visibilityRegionIds));
+        if (uniqueRegionIds.length === 0) {
+          return { success: false, error: "Select at least one region." };
+        }
+
+        const regionRows = await db
+          .select({ id: regions.id })
+          .from(regions)
+          .where(inArray(regions.id, uniqueRegionIds));
+
+        if (regionRows.length !== uniqueRegionIds.length) {
+          return { success: false, error: "One or more selected regions were not found" };
+        }
+
+        visibilityRegionIds = uniqueRegionIds;
+      }
+    }
+
+    if (data.visibilityScope === "team") {
+      if (teamLocked) {
+        if (!session.teamId) {
+          return { success: false, error: "Your account is not assigned to a team." };
+        }
+        visibilityTeamIds = [session.teamId];
+      } else {
+        const uniqueTeamIds = Array.from(new Set(data.visibilityTeamIds));
+        if (uniqueTeamIds.length === 0) {
+          return { success: false, error: "Select at least one team." };
+        }
+
+        const teamRows = await db
+          .select({ id: teams.id })
+          .from(teams)
+          .where(inArray(teams.id, uniqueTeamIds));
+
+        if (teamRows.length !== uniqueTeamIds.length) {
+          return { success: false, error: "One or more selected teams were not found" };
+        }
+
+        visibilityTeamIds = uniqueTeamIds;
+      }
+    }
+
+    const ctx = await getUserContext();
+    const now = new Date();
+
+    const [createdEvent] = await db
+      .insert(events)
+      .values({
+        regionId: eventRegionId,
+        eventTypeId: data.eventTypeId,
+        date: eventDate,
+        name: eventName,
+        mode: "manual_apply",
+        visibilityScope: data.visibilityScope,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: ctx.userId,
+        updatedBy: ctx.userId,
+      })
+      .returning({ id: events.id });
+
+    if (visibilityRegionIds.length > 0) {
+      await db.insert(eventVisibilityRegions).values(
+        visibilityRegionIds.map((regionId) => ({
+          eventId: createdEvent.id,
+          regionId,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })),
+      );
+    }
+
+    if (visibilityTeamIds.length > 0) {
+      await db.insert(eventVisibilityTeams).values(
+        visibilityTeamIds.map((teamId) => ({
+          eventId: createdEvent.id,
+          teamId,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })),
+      );
+    }
+
+    await logAuditTrail(
+      "events",
+      createdEvent.id,
+      "create",
+      {},
+      {
+        regionId: eventRegionId,
+        eventTypeId: data.eventTypeId,
+        date: eventDate,
+        name: eventName,
+        visibilityScope: data.visibilityScope,
+        visibilityRegionIds,
+        visibilityTeamIds,
+      },
+    );
+
+    return { success: true, eventId: createdEvent.id };
+  } catch (err) {
+    console.error("[createCalendarEvent] error:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to create event",
     };
   }
 }

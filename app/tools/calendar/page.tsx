@@ -1,19 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { CalendarPlus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { getEventSchedule, type EventScheduleItem } from "@/actions/events"
+import { useSessionUser } from "@/components/user-session-provider"
+import { ROLES, canAccess } from "@/lib/permissions"
+import { AddEventDialog } from "@/app/tools/calendar/_components/add-event-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-
-type CalendarEvent = {
-  id: number
-  eventTypeName: string
-  regionName: string
-  date: Date
-}
 
 type CalendarCell = {
   date: Date
@@ -52,96 +51,69 @@ function buildMonthGrid(year: number, monthIndex: number): CalendarCell[] {
   return cells
 }
 
-function buildSampleEvents(year: number, monthIndex: number, today: Date): CalendarEvent[] {
-  if (year !== today.getFullYear() || monthIndex !== today.getMonth()) {
-    return []
-  }
-
-  const region = "GMS Surabaya Selatan"
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
-  const sundays: Date[] = []
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, monthIndex, d)
-    if (date.getDay() === 0) {
-      sundays.push(date)
-    }
-  }
-
-  const events: CalendarEvent[] = []
-
-  sundays.forEach((date, index) => {
-    events.push({
-      id: index * 10 + 1,
-      eventTypeName: "AOG TEEN",
-      regionName: region,
-      date: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0),
-    })
-    events.push({
-      id: index * 10 + 2,
-      eventTypeName: "AOG YOUTH",
-      regionName: region,
-      date: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 17, 0),
-    })
-
-    if (index === 1) {
-      events.push({
-        id: index * 10 + 3,
-        eventTypeName: "CT YOUTH",
-        regionName: region,
-        date: new Date(date.getFullYear(), date.getMonth(), date.getDate(), 19, 30),
-      })
-    }
-  })
-
-  const prayerAnchor = sundays[2]
-  if (prayerAnchor) {
-    const prayerDate = new Date(
-      prayerAnchor.getFullYear(),
-      prayerAnchor.getMonth(),
-      prayerAnchor.getDate() - 3,
-      19,
-      0,
-    )
-    events.push({
-      id: 900,
-      eventTypeName: "DOA WILAYAH",
-      regionName: region,
-      date: prayerDate,
-    })
-  }
-
-  return events
-}
-
 export default function CalendarPage() {
+  const session = useSessionUser()
+  const canAddEvent = canAccess(session?.role, [
+    ROLES.ADMIN,
+    ROLES.HEAD_MINISTRY,
+    ROLES.REGIONAL_PIC,
+    ROLES.SPV,
+  ])
+
   const today = useMemo(() => new Date(), [])
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDate, setSelectedDate] = useState(today)
+  const [events, setEvents] = useState<EventScheduleItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isAddEventOpen, setIsAddEventOpen] = useState(false)
 
   const viewDate = useMemo(() => new Date(viewYear, viewMonth, 1), [viewYear, viewMonth])
   const cells = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
-  const events = useMemo(
-    () => buildSampleEvents(viewYear, viewMonth, today),
-    [viewYear, viewMonth, today],
-  )
+
+  const requestIdRef = useRef(0)
+
+  const loadEvents = useCallback(async () => {
+    const requestId = ++requestIdRef.current
+    setIsLoading(true)
+    const result = await getEventSchedule(viewMonth, viewYear)
+
+    if (requestIdRef.current !== requestId) return
+
+    setIsLoading(false)
+
+    if (!result.success) {
+      setError(result.error ?? "Failed to load events")
+      setEvents([])
+      return
+    }
+
+    setError(null)
+    setEvents(result.data ?? [])
+  }, [viewMonth, viewYear])
+
+  useEffect(() => {
+    loadEvents()
+  }, [loadEvents])
 
   const eventsByDate = useMemo(() => {
-    const map: Record<string, CalendarEvent[]> = {}
+    const map: Record<string, EventScheduleItem[]> = {}
+
     events.forEach((event) => {
-      const key = dateKey(event.date)
+      const key = dateKey(new Date(event.date))
       if (!map[key]) {
         map[key] = []
       }
       map[key].push(event)
     })
+
     return map
   }, [events])
 
   const selectedDayEvents = (eventsByDate[dateKey(selectedDate)] ?? [])
     .slice()
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   function goToMonth(year: number, monthIndex: number) {
     const next = new Date(year, monthIndex, 1)
@@ -172,10 +144,27 @@ export default function CalendarPage() {
             Browse the monthly service and event schedule.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleToday}>
-          Today
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleToday}>
+            Today
+          </Button>
+          {canAddEvent ? (
+            <Button size="sm" onClick={() => setIsAddEventOpen(true)}>
+              <CalendarPlus className="size-4" />
+              Add Event
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {canAddEvent ? (
+        <AddEventDialog
+          open={isAddEventOpen}
+          onOpenChange={setIsAddEventOpen}
+          defaultDate={selectedDate}
+          onCreated={loadEvents}
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <div className="xl:col-span-3">
@@ -296,7 +285,16 @@ export default function CalendarPage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                {selectedDayEvents.length === 0 ? (
+                {isLoading ? (
+                  <>
+                    <Skeleton className="h-16 rounded-lg" />
+                    <Skeleton className="h-16 rounded-lg" />
+                  </>
+                ) : error ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-6 text-center text-sm text-destructive">
+                    {error}
+                  </div>
+                ) : selectedDayEvents.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center">
                     <p className="text-sm text-muted-foreground">
                       No events scheduled for this date.
@@ -304,9 +302,10 @@ export default function CalendarPage() {
                   </div>
                 ) : (
                   selectedDayEvents.map((event) => (
-                    <div
+                    <Link
                       key={event.id}
-                      className="flex items-center gap-3 rounded-lg border border-border p-3"
+                      href={`/my/events/${event.id}`}
+                      className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted"
                     >
                       <span className="size-2 shrink-0 rounded-full bg-primary" />
                       <div className="min-w-0 flex-1">
@@ -318,16 +317,12 @@ export default function CalendarPage() {
                         </p>
                       </div>
                       <span className="font-mono shrink-0 text-xs text-muted-foreground">
-                        {format(event.date, "HH:mm")}
+                        {format(new Date(event.date), "HH:mm")}
                       </span>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>
-
-              <p className="text-center text-xs text-muted-foreground/50">
-                Sample data for preview — not yet connected to the live schedule.
-              </p>
             </CardContent>
           </Card>
         </div>

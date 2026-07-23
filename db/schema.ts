@@ -5,6 +5,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { defineRelations, sql } from "drizzle-orm";
+import { EVENT_VISIBILITY_SCOPES } from "@/lib/permissions";
 
 /* ============================================================================
  * ENUMS
@@ -16,6 +17,8 @@ export const eventModes = ["teams", "members", "manual_apply"] as const;
 export type EventMode = (typeof eventModes)[number];
 export const approvalStatusEnum = ["pending", "approved", "rejected"] as const;
 export type ApprovalStatus = (typeof approvalStatusEnum)[number];
+export const eventVisibilityScopeEnum = EVENT_VISIBILITY_SCOPES;
+export type EventVisibilityScope = (typeof eventVisibilityScopeEnum)[number];
 
 /* ============================================================================
  * MASTER TABLES
@@ -258,6 +261,12 @@ export const events = sqliteTable("events", {
     .notNull()
     .default("pending"),
 
+  visibilityScope: text("visibility_scope", {
+    enum: eventVisibilityScopeEnum,
+  })
+    .notNull()
+    .default("all"),
+
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
@@ -269,6 +278,70 @@ export const events = sqliteTable("events", {
   createdBy: text("created_by").notNull(),
   updatedBy: text("updated_by").notNull(),
 });
+
+export const eventVisibilityRegions = sqliteTable(
+  "event_visibility_regions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+
+    eventId: integer("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+
+    regionId: integer("region_id")
+      .notNull()
+      .references(() => regions.id),
+
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+
+    createdBy: text("created_by").notNull(),
+    updatedBy: text("updated_by").notNull(),
+  },
+  (table) => [
+    uniqueIndex("event_visibility_regions_event_region_unique").on(
+      table.eventId,
+      table.regionId,
+    ),
+  ],
+);
+
+export const eventVisibilityTeams = sqliteTable(
+  "event_visibility_teams",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+
+    eventId: integer("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id),
+
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+
+    createdBy: text("created_by").notNull(),
+    updatedBy: text("updated_by").notNull(),
+  },
+  (table) => [
+    uniqueIndex("event_visibility_teams_event_team_unique").on(
+      table.eventId,
+      table.teamId,
+    ),
+  ],
+);
 
 export const eventTeams = sqliteTable(
   "event_teams",
@@ -540,6 +613,8 @@ export const schemaRelations = defineRelations(
     roles,
     events,
     eventTeams,
+    eventVisibilityRegions,
+    eventVisibilityTeams,
     eventAssignments,
     eventAssignmentChangeRequests,
     eventMetrics,
@@ -616,6 +691,14 @@ export const schemaRelations = defineRelations(
         from: r.events.id.through(r.eventTeams.eventId),
         to: r.teams.id.through(r.eventTeams.teamId),
       }),
+      visibilityRegions: r.many.regions({
+        from: r.events.id.through(r.eventVisibilityRegions.eventId),
+        to: r.regions.id.through(r.eventVisibilityRegions.regionId),
+      }),
+      visibilityTeams: r.many.teams({
+        from: r.events.id.through(r.eventVisibilityTeams.eventId),
+        to: r.teams.id.through(r.eventVisibilityTeams.teamId),
+      }),
       assignments: r.many.eventAssignments({
         from: r.events.id,
         to: r.eventAssignments.eventId,
@@ -640,6 +723,32 @@ export const schemaRelations = defineRelations(
       }),
       team: r.one.teams({
         from: r.eventTeams.teamId,
+        to: r.teams.id,
+        optional: false,
+      }),
+    },
+
+    eventVisibilityRegions: {
+      event: r.one.events({
+        from: r.eventVisibilityRegions.eventId,
+        to: r.events.id,
+        optional: false,
+      }),
+      region: r.one.regions({
+        from: r.eventVisibilityRegions.regionId,
+        to: r.regions.id,
+        optional: false,
+      }),
+    },
+
+    eventVisibilityTeams: {
+      event: r.one.events({
+        from: r.eventVisibilityTeams.eventId,
+        to: r.events.id,
+        optional: false,
+      }),
+      team: r.one.teams({
+        from: r.eventVisibilityTeams.teamId,
         to: r.teams.id,
         optional: false,
       }),

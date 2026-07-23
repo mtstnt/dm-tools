@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react"
+import { getEventSchedule, type EventScheduleItem } from "@/actions/events"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -13,13 +14,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-
-type ScheduleItem = {
-  id: number
-  eventTypeName: string
-  regionName: string
-  date: Date
-}
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const MONTH_LABELS = [
@@ -72,55 +66,69 @@ function formatWeekRangeLabel(weekStart: Date, weekEnd: Date): string {
   return `${weekStart.getDate()} ${MONTH_LABELS[weekStart.getMonth()]} ${weekStart.getFullYear()} \u2013 ${weekEnd.getDate()} ${MONTH_LABELS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`
 }
 
-function buildSampleEvents(weekStart: Date, today: Date): Record<string, ScheduleItem[]> {
-  const map: Record<string, ScheduleItem[]> = {}
-  const isCurrentWeek = isSameDay(weekStart, startOfWeek(today))
+function getNeededMonths(weekStart: Date, weekEnd: Date): { month: number; year: number }[] {
+  const months = new Map<string, { month: number; year: number }>()
+  const start = { month: weekStart.getMonth(), year: weekStart.getFullYear() }
+  const end = { month: weekEnd.getMonth(), year: weekEnd.getFullYear() }
 
-  if (!isCurrentWeek) {
-    return map
-  }
+  months.set(`${start.year}-${start.month}`, start)
+  months.set(`${end.year}-${end.month}`, end)
 
-  const saturday = addDays(weekStart, 5)
-  const sunday = addDays(weekStart, 6)
-  const region = "GMS Surabaya Selatan"
-
-  map[dateKey(saturday)] = [
-    {
-      id: 1,
-      eventTypeName: "DOA WILAYAH",
-      regionName: region,
-      date: new Date(saturday.getFullYear(), saturday.getMonth(), saturday.getDate(), 19, 0),
-    },
-  ]
-
-  map[dateKey(sunday)] = [
-    {
-      id: 2,
-      eventTypeName: "AOG TEEN",
-      regionName: region,
-      date: new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 9, 0),
-    },
-    {
-      id: 3,
-      eventTypeName: "AOG YOUTH",
-      regionName: region,
-      date: new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 17, 0),
-    },
-  ]
-
-  return map
+  return Array.from(months.values())
 }
 
 export function ThisWeekWidget() {
   const today = useMemo(() => new Date(), [])
   const [weekStart, setWeekStart] = useState(() => startOfWeek(today))
+  const [events, setEvents] = useState<EventScheduleItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
     [weekStart],
   )
   const weekEnd = weekDays[6]
-  const eventsByDate = useMemo(() => buildSampleEvents(weekStart, today), [weekStart, today])
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadEvents() {
+      setIsLoading(true)
+      const months = getNeededMonths(weekStart, weekEnd)
+      const results = await Promise.all(
+        months.map(({ month, year }) => getEventSchedule(month, year)),
+      )
+
+      if (!mounted) return
+
+      const merged = results.flatMap((result) => (result.success ? result.data ?? [] : []))
+      setEvents(merged)
+      setIsLoading(false)
+    }
+
+    loadEvents()
+
+    return () => {
+      mounted = false
+    }
+  }, [weekStart, weekEnd])
+
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, EventScheduleItem[]> = {}
+
+    events.forEach((event) => {
+      const eventDate = new Date(event.date)
+      if (eventDate < weekStart || eventDate > weekEnd) return
+
+      const key = dateKey(eventDate)
+      if (!map[key]) {
+        map[key] = []
+      }
+      map[key].push(event)
+    })
+
+    return map
+  }, [events, weekStart, weekEnd])
 
   function goToPrevWeek() {
     setWeekStart((current) => addDays(current, -7))
@@ -213,23 +221,28 @@ export function ThisWeekWidget() {
                     </PopoverTitle>
                   </PopoverHeader>
 
-                  {dayEvents.length === 0 ? (
+                  {isLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading...</p>
+                  ) : dayEvents.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No events scheduled.</p>
                   ) : (
                     <div className="flex flex-col gap-1.5">
-                      {dayEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="flex items-center justify-between gap-3 text-xs"
-                        >
-                          <span className="truncate font-medium text-foreground">
-                            {event.eventTypeName}
-                          </span>
-                          <span className="font-mono shrink-0 text-muted-foreground">
-                            {formatTime(event.date)}
-                          </span>
-                        </div>
-                      ))}
+                      {dayEvents
+                        .slice()
+                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                        .map((event) => (
+                          <div
+                            key={event.id}
+                            className="flex items-center justify-between gap-3 text-xs"
+                          >
+                            <span className="truncate font-medium text-foreground">
+                              {event.eventTypeName}
+                            </span>
+                            <span className="font-mono shrink-0 text-muted-foreground">
+                              {formatTime(new Date(event.date))}
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   )}
 
